@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 14
 
+    # Auth Cookie
+    refresh_token_cookie_name: str = "refresh_token"
+    refresh_token_cookie_secure: bool = False
+    refresh_token_cookie_samesite: str = "lax"
+
 
 # 전역 싱글톤
 settings = Settings()

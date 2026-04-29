@@ -26,25 +26,30 @@
 ## 기술 스택
 
 ### Backend
-- **FastAPI** (Python 3.11+)
+- **FastAPI** (Python 3.12+)
 - **SQLAlchemy 2.0** + Alembic
 - **PostgreSQL 16**
 - **Pydantic v2**
-- **PyJWT** + passlib[bcrypt]
+- **python-jose** + passlib[bcrypt]
 - **httpx** (외부 API 비동기 호출)
 
 ### AI / ML
-- **Anthropic / OpenAI API** (LLM 호출)
+- **Anthropic Claude API** (LLM 호출)
 - **sentence-transformers** (한국어 임베딩)
-- **ChromaDB** 또는 Qdrant (벡터 저장소)
+- **pgvector** 또는 ChromaDB (벡터 저장소)
 - **MCP Python SDK**
 
 ### Frontend
 - **React 19** + TypeScript
 - **Vite**
-- **Material-UI (MUI) v7**
+- **Tailwind CSS v4**
+- **shadcn/ui** (Radix UI 기반)
 - **axios** + TanStack Query
-- **React Router**
+- **React Router v7**
+- **React Hook Form** + Zod
+- **TanStack Table**
+- **Recharts**
+- **lucide-react**
 
 ### Infrastructure
 - **Docker** + Docker Compose
@@ -62,7 +67,7 @@
 - [ ] 공고 수집 파이프라인
 - [ ] 벡터 임베딩 + 매칭 알고리즘
 - [ ] LLM 분석 레이어
-- [ ] React + MUI 프론트엔드
+- [ ] React + Tailwind CSS + shadcn/ui 프론트엔드
 - [ ] MCP 서버 구현
 - [ ] Docker Compose 통합 배포
 - [ ] 데모 영상 및 문서화

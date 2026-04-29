@@ -6,6 +6,7 @@ from fastapi import Depends, FastAPI
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.api import auth_router
 from app.core.database import get_db
 from app.core.config import settings
 
@@ -15,6 +16,8 @@ app = FastAPI(
     description="AI 기반 이력서-채용공고 매칭 플랫폼",
     version="0.1.0",
 )
+
+app.include_router(auth_router)
 
 
 @app.get("/")

@@ -64,11 +64,10 @@ class SoftDeleteMixin:
     실제 DELETE 대신 is_deleted=True로 마킹
     """
 
-
-is_deleted: Mapped[bool] = mapped_column(
-    Boolean,
-    default=False,
-    server_default="false",  # ← 추가
-    nullable=False,
-    comment="삭제 여부 (소프트 삭제)",
-)
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+        nullable=False,
+        comment="삭제 여부 (소프트 삭제)",
+    )
