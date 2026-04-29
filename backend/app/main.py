@@ -3,6 +3,7 @@ FastAPI 앱 진입점
 """
 
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,14 @@ app = FastAPI(
     title=settings.app_name,
     description="AI 기반 이력서-채용공고 매칭 플랫폼",
     version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 register_exception_handlers(app)

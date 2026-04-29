@@ -1,0 +1,36 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply font-sans antialiased;
+    background-color: #fafafa;
+    color: #0a0a0a;
+  }
+}
+
+@layer components {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #d4d4d4 transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #d4d4d4;
+    border-radius: 999px;
+  }
+}

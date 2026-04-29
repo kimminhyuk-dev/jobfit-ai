@@ -1,5 +1,3 @@
-# AGENTS.md
-
 AI 에이전트(Claude Code, Gemini CLI, ChatGPT 등)가 이 프로젝트에서 작업할 때 따라야 할 규칙과 컨텍스트 문서다.
 **CLAUDE.md**와 **GEMINI.md**는 이 파일의 동일 복사본이다. 내용을 변경할 때는 세 파일을 동시에 갱신한다.
 

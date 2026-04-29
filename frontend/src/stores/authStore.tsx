@@ -1,0 +1,84 @@
+import { createContext, useContext, useReducer, useEffect, type ReactNode } from 'react';
+import { authApi } from '../api/auth';
+import type { User } from '../api/types';
+
+interface AuthState {
+  user: User | null;
+  token: string | null;
+  loading: boolean;
+}
+
+type AuthAction =
+  | { type: 'SET_USER'; user: User; token: string }
+  | { type: 'LOGOUT' }
+  | { type: 'SET_LOADING'; loading: boolean };
+
+function authReducer(state: AuthState, action: AuthAction): AuthState {
+  switch (action.type) {
+    case 'SET_USER':
+      return { user: action.user, token: action.token, loading: false };
+    case 'LOGOUT':
+      return { user: null, token: null, loading: false };
+    case 'SET_LOADING':
+      return { ...state, loading: action.loading };
+    default:
+      return state;
+  }
+}
+
+interface AuthContextValue extends AuthState {
+  login: (token: string, user: User) => void;
+  logout: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [state, dispatch] = useReducer(authReducer, {
+    user: null,
+    token: localStorage.getItem('access_token'),
+    loading: true,
+  });
+
+  // 앱 시작 시 저장된 토큰으로 사용자 정보 복원
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      dispatch({ type: 'SET_LOADING', loading: false });
+      return;
+    }
+    authApi
+      .me()
+      .then((user) => dispatch({ type: 'SET_USER', user, token }))
+      .catch(() => {
+        localStorage.removeItem('access_token');
+        dispatch({ type: 'LOGOUT' });
+      });
+  }, []);
+
+  const login = (token: string, user: User) => {
+    localStorage.setItem('access_token', token);
+    dispatch({ type: 'SET_USER', user, token });
+  };
+
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } finally {
+      localStorage.removeItem('access_token');
+      dispatch({ type: 'LOGOUT' });
+    }
+  };
+
+  return (
+    <AuthContext.Provider value={{ ...state, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
+}
