@@ -2,11 +2,13 @@
 카테고리 API 라우터
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin_user
 from app.core.database import get_db
+from app.core.error_codes import ErrorCode
+from app.core.exceptions import AppException
 from app.models.user import User
 from app.schemas.category import CategoryCreate, CategoryResponse, CategoryUpdate
 from app.services.category_service import (
@@ -46,9 +48,10 @@ def create_category(
             actor_id=current_user.user_id,
         )
     except DuplicateCategorySlugError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="이미 사용 중인 카테고리 slug입니다.",
+            code=ErrorCode.DUPLICATE_CATEGORY_SLUG,
+            message="이미 사용 중인 카테고리 slug입니다.",
         )
     return CategoryResponse.model_validate(category)
 
@@ -62,9 +65,10 @@ def get_category(
     try:
         category = category_service.get_category(category_id)
     except CategoryNotFoundError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="카테고리를 찾을 수 없습니다.",
+            code=ErrorCode.CATEGORY_NOT_FOUND,
+            message="카테고리를 찾을 수 없습니다.",
         )
     return CategoryResponse.model_validate(category)
 
@@ -84,14 +88,16 @@ def update_category(
             actor_id=current_user.user_id,
         )
     except CategoryNotFoundError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="카테고리를 찾을 수 없습니다.",
+            code=ErrorCode.CATEGORY_NOT_FOUND,
+            message="카테고리를 찾을 수 없습니다.",
         )
     except DuplicateCategorySlugError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="이미 사용 중인 카테고리 slug입니다.",
+            code=ErrorCode.DUPLICATE_CATEGORY_SLUG,
+            message="이미 사용 중인 카테고리 slug입니다.",
         )
     return CategoryResponse.model_validate(category)
 
@@ -106,8 +112,9 @@ def delete_category(
     try:
         category_service.delete_category(category_id, actor_id=current_user.user_id)
     except CategoryNotFoundError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="카테고리를 찾을 수 없습니다.",
+            code=ErrorCode.CATEGORY_NOT_FOUND,
+            message="카테고리를 찾을 수 없습니다.",
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

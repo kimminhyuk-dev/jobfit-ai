@@ -2,11 +2,13 @@
 FastAPI 의존성 모음
 """
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.error_codes import ErrorCode
+from app.core.exceptions import AppException
 from app.core.security import decode_token
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
@@ -20,25 +22,19 @@ def get_current_user(
     db: Session = Depends(get_db),
 ) -> User:
     """Access Token으로 현재 로그인 사용자를 조회한다."""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="인증 정보가 유효하지 않습니다.",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
     if credentials is None:
-        raise credentials_exception
+        raise _invalid_credentials_exception()
 
     try:
         token = credentials.credentials
         payload = decode_token(token, expected_type="access")
         user_id = int(payload["sub"])
     except (ValueError, TypeError):
-        raise credentials_exception
+        raise _invalid_credentials_exception()
 
     user = UserRepository(db).get_by_id(user_id)
     if user is None or user.status != "ACTIVE":
-        raise credentials_exception
+        raise _invalid_credentials_exception()
     return user
 
 
@@ -47,8 +43,18 @@ def get_current_admin_user(
 ) -> User:
     """현재 사용자가 관리자 권한인지 확인한다."""
     if current_user.role != "ADMIN":
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="관리자 권한이 필요합니다.",
+            code=ErrorCode.FORBIDDEN,
+            message="관리자 권한이 필요합니다.",
         )
     return current_user
+
+
+def _invalid_credentials_exception() -> AppException:
+    return AppException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        code=ErrorCode.UNAUTHORIZED,
+        message="인증 정보가 유효하지 않습니다.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )

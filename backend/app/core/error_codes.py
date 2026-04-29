@@ -1,0 +1,28 @@
+"""
+Application-wide error codes.
+"""
+
+from enum import StrEnum
+
+
+class ErrorCode(StrEnum):
+    """Stable error codes used by the backend and frontend."""
+
+    VALIDATION_ERROR = "COMMON_001"
+    NOT_FOUND = "COMMON_404"
+    METHOD_NOT_ALLOWED = "COMMON_405"
+    INTERNAL_SERVER_ERROR = "COMMON_500"
+
+    UNAUTHORIZED = "AUTH_001"
+    FORBIDDEN = "AUTH_002"
+    DUPLICATE_EMAIL = "AUTH_003"
+    INVALID_CREDENTIALS = "AUTH_004"
+    INACTIVE_USER = "AUTH_005"
+    REFRESH_TOKEN_MISSING = "AUTH_006"
+    INVALID_REFRESH_TOKEN = "AUTH_007"
+
+    CATEGORY_NOT_FOUND = "CATEGORY_001"
+    DUPLICATE_CATEGORY_SLUG = "CATEGORY_002"
+
+    POST_NOT_FOUND = "POST_001"
+    POST_CATEGORY_NOT_FOUND = "POST_002"

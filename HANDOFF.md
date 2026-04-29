@@ -1,5 +1,3 @@
-# HANDOFF
-
 이 문서는 ChatGPT, Claude, Claude Code 등 다른 AI에게 프로젝트 상태를 한 번에 전달하기 위한 최신 브리핑 문서다.
 프로젝트의 AI 인수인계 기준본은 루트의 이 `HANDOFF.md` 하나로 관리한다.
 
@@ -42,6 +40,7 @@
 - 카테고리 기반 Q&A 게시판 CRUD API 구현 완료
 - 카테고리/게시글 생성·수정·삭제는 ADMIN만 가능
 - 일반 USER는 카테고리/게시글 조회만 가능
+- 공통 에러코드 기반 API 에러 응답 체계 구현 완료
 - 루트 AI 에이전트 지시 문서 생성 완료 (AGENTS.md / CLAUDE.md / GEMINI.md)
 - AI 인수인계 문서는 루트 `HANDOFF.md`로 단일화 완료
 
@@ -74,6 +73,12 @@
 - `PATCH /posts/{post_id}` — 관리자 Q&A 게시글 수정
 - `DELETE /posts/{post_id}` — 관리자 Q&A 게시글 소프트 삭제
 
+### 공통 에러 처리
+
+- API 에러 응답은 기본적으로 `{ "code": "...", "message": "..." }` 형태로 통일
+- 입력값 검증 오류는 `COMMON_001` 코드와 함께 `details` 배열을 추가로 응답
+- 인증/권한/카테고리/게시글 도메인 오류는 `AUTH_*`, `CATEGORY_*`, `POST_*` 에러코드로 구분
+
 ## 주요 파일
 
 - `backend/app/main.py`
@@ -83,6 +88,9 @@
 - `backend/app/api/posts.py`
 - `backend/app/core/config.py`
 - `backend/app/core/database.py`
+- `backend/app/core/error_codes.py`
+- `backend/app/core/exception_handlers.py`
+- `backend/app/core/exceptions.py`
 - `backend/app/core/security.py`
 - `backend/app/models/base.py`
 - `backend/app/models/category.py`
@@ -122,6 +130,13 @@
   - 일반 USER 카테고리/게시글 생성 403
   - ADMIN 카테고리 생성/조회 및 게시글 생성/수정/삭제 성공
 - 루트 `HANDOFF.md` 기준으로 AI 인수인계 문서 단일화 확인
+- Swagger 기반 카테고리/Q&A 게시글 수동 테스트 완료 확인
+- `.\.venv\Scripts\python.exe -m compileall app` 통과
+- FastAPI TestClient로 공통 에러 응답 확인 완료
+  - `GET /auth/me` 401 → `AUTH_001`
+  - `GET /not-found` 404 → `COMMON_404`
+  - `PUT /health` 405 → `COMMON_405`
+  - `POST /auth/login` 검증 실패 422 → `COMMON_001`
 
 ## 참고 사항
 
@@ -138,10 +153,11 @@ cd C:\Users\USER\jobfit-ai\backend
 
 ## 다음 작업
 
-1. 인증/카테고리/Q&A 게시글 API를 실제 서버 Swagger에서 수동 테스트
-2. 프론트엔드 로그인/회원가입 화면 연결
-3. 프론트엔드 카테고리/Q&A 게시글 목록·상세 화면 연결
-4. 관리자용 카테고리/Q&A 게시글 작성·수정 화면 연결
+1. 프론트엔드 프로젝트 초기 구성
+2. 프론트엔드 공통 API 클라이언트와 에러코드 기반 에러 처리 연결
+3. 프론트엔드 로그인/회원가입 화면 연결
+4. 프론트엔드 카테고리/Q&A 게시글 목록·상세 화면 연결
+5. 관리자용 카테고리/Q&A 게시글 작성·수정 화면 연결
 
 ## 다른 AI에게 요청할 때 사용할 프롬프트
 

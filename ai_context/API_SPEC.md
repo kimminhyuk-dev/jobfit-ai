@@ -1,5 +1,53 @@
 # API_SPEC
 
+## 공통 에러 응답
+
+API 에러 응답은 공통 에러코드 기반으로 내려준다.
+
+```json
+{
+  "code": "AUTH_001",
+  "message": "인증 정보가 유효하지 않습니다."
+}
+```
+
+입력값 검증 오류는 `details` 배열을 추가로 포함한다.
+
+```json
+{
+  "code": "COMMON_001",
+  "message": "요청 값이 올바르지 않습니다.",
+  "details": [
+    {
+      "type": "string_too_short",
+      "loc": ["body", "password"],
+      "msg": "String should have at least 1 character",
+      "input": "",
+      "ctx": {
+        "min_length": 1
+      }
+    }
+  ]
+}
+```
+
+### 주요 에러코드
+
+- `COMMON_001` — 요청 값 검증 실패
+- `COMMON_404` — 요청한 리소스 없음
+- `COMMON_405` — 허용되지 않은 요청 방식
+- `AUTH_001` — 인증 정보가 없거나 유효하지 않음
+- `AUTH_002` — 접근 권한 없음
+- `AUTH_003` — 이미 가입된 이메일
+- `AUTH_004` — 로그인 정보 불일치
+- `AUTH_005` — 비활성 계정
+- `AUTH_006` — Refresh Token 없음
+- `AUTH_007` — Refresh Token 유효하지 않음
+- `CATEGORY_001` — 카테고리 없음
+- `CATEGORY_002` — 카테고리 slug 중복
+- `POST_001` — 게시글 없음
+- `POST_002` — 활성 카테고리 없음
+
 ## 인증
 
 ### POST /auth/signup

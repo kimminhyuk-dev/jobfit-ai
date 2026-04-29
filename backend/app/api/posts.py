@@ -2,11 +2,13 @@
 게시글 API 라우터
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin_user
 from app.core.database import get_db
+from app.core.error_codes import ErrorCode
+from app.core.exceptions import AppException
 from app.models.user import User
 from app.schemas.post import PostCreate, PostResponse, PostUpdate
 from app.services.post_service import (
@@ -50,9 +52,10 @@ def create_post(
     try:
         post = post_service.create_post(post_create, author_id=current_user.user_id)
     except PostCategoryNotFoundError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="활성 카테고리를 찾을 수 없습니다.",
+            code=ErrorCode.POST_CATEGORY_NOT_FOUND,
+            message="활성 카테고리를 찾을 수 없습니다.",
         )
     return PostResponse.model_validate(post)
 
@@ -66,9 +69,10 @@ def get_post(
     try:
         post = post_service.get_post(post_id)
     except PostNotFoundError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="게시글을 찾을 수 없습니다.",
+            code=ErrorCode.POST_NOT_FOUND,
+            message="게시글을 찾을 수 없습니다.",
         )
     return PostResponse.model_validate(post)
 
@@ -88,14 +92,16 @@ def update_post(
             updater_id=current_user.user_id,
         )
     except PostNotFoundError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="게시글을 찾을 수 없습니다.",
+            code=ErrorCode.POST_NOT_FOUND,
+            message="게시글을 찾을 수 없습니다.",
         )
     except PostCategoryNotFoundError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="활성 카테고리를 찾을 수 없습니다.",
+            code=ErrorCode.POST_CATEGORY_NOT_FOUND,
+            message="활성 카테고리를 찾을 수 없습니다.",
         )
     return PostResponse.model_validate(post)
 
@@ -110,8 +116,9 @@ def delete_post(
     try:
         post_service.delete_post(post_id, deleter_id=current_user.user_id)
     except PostNotFoundError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="게시글을 찾을 수 없습니다.",
+            code=ErrorCode.POST_NOT_FOUND,
+            message="게시글을 찾을 수 없습니다.",
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

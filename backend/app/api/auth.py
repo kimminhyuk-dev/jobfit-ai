@@ -2,12 +2,14 @@
 인증 API 라우터
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.error_codes import ErrorCode
+from app.core.exceptions import AppException
 from app.models.user import User
 from app.schemas.auth import LoginRequest, MessageResponse, TokenResponse
 from app.schemas.user import UserCreate, UserResponse
@@ -43,9 +45,10 @@ def signup(
     try:
         user = user_service.signup(user_create, request_ip=_get_client_ip(request))
     except DuplicateEmailError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="이미 가입된 이메일입니다.",
+            code=ErrorCode.DUPLICATE_EMAIL,
+            message="이미 가입된 이메일입니다.",
         )
 
     access_token, refresh_token = user_service.create_token_pair(user)
@@ -63,14 +66,16 @@ def login(
     try:
         user = user_service.login(login_request)
     except InvalidCredentialsError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="이메일 또는 비밀번호가 올바르지 않습니다.",
+            code=ErrorCode.INVALID_CREDENTIALS,
+            message="이메일 또는 비밀번호가 올바르지 않습니다.",
         )
     except InactiveUserError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="활성화되지 않은 계정입니다.",
+            code=ErrorCode.INACTIVE_USER,
+            message="활성화되지 않은 계정입니다.",
         )
 
     access_token, refresh_token = user_service.create_token_pair(user)
@@ -87,22 +92,25 @@ def refresh(
     """Refresh Token을 검증하고 토큰 쌍을 재발급한다."""
     refresh_token = request.cookies.get(settings.refresh_token_cookie_name)
     if not refresh_token:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh Token이 없습니다.",
+            code=ErrorCode.REFRESH_TOKEN_MISSING,
+            message="Refresh Token이 없습니다.",
         )
 
     try:
         user = user_service.refresh(refresh_token)
     except InvalidTokenError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh Token이 유효하지 않습니다.",
+            code=ErrorCode.INVALID_REFRESH_TOKEN,
+            message="Refresh Token이 유효하지 않습니다.",
         )
     except InactiveUserError:
-        raise HTTPException(
+        raise AppException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="활성화되지 않은 계정입니다.",
+            code=ErrorCode.INACTIVE_USER,
+            message="활성화되지 않은 계정입니다.",
         )
 
     new_access_token, new_refresh_token = user_service.create_token_pair(user)

@@ -7,8 +7,9 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api import auth_router, categories_router, posts_router
-from app.core.database import get_db
 from app.core.config import settings
+from app.core.database import get_db
+from app.core.exception_handlers import register_exception_handlers
 
 
 app = FastAPI(
@@ -16,6 +17,8 @@ app = FastAPI(
     description="AI 기반 이력서-채용공고 매칭 플랫폼",
     version="0.1.0",
 )
+
+register_exception_handlers(app)
 
 app.include_router(auth_router)
 app.include_router(categories_router)
