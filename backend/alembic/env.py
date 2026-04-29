@@ -31,6 +31,8 @@ from app.core.database import Base
 
 # 모델 import (Alembic이 감지하려면 반드시 필요)
 from app.models import user  # noqa: F401
+from app.models import category  # noqa: F401
+from app.models import post  # noqa: F401
 
 # ─────────────────────────────────────────────
 # 3) alembic.ini 읽기

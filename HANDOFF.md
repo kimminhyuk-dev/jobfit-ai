@@ -21,6 +21,7 @@
 - 백엔드: FastAPI, SQLAlchemy 2.0, Alembic, PostgreSQL
 - 프론트엔드: React, TypeScript, Vite 기반 예정
 - 인증 방식: JWT Access Token + HttpOnly Refresh Token Cookie
+- 권한 방식: `users.role` 기반 USER / ADMIN
 - 개발 환경: Windows, PowerShell, Python 3.12 계열
 
 ## 현재 상태
@@ -38,6 +39,9 @@
 - `users` 테이블용 User 모델 생성 완료
 - Alembic 첫 마이그레이션 적용 완료
 - 인증 API 구현 완료
+- 카테고리 기반 Q&A 게시판 CRUD API 구현 완료
+- 카테고리/게시글 생성·수정·삭제는 ADMIN만 가능
+- 일반 USER는 카테고리/게시글 조회만 가능
 - 루트 AI 에이전트 지시 문서 생성 완료 (AGENTS.md / CLAUDE.md / GEMINI.md)
 - AI 인수인계 문서는 루트 `HANDOFF.md`로 단일화 완료
 
@@ -57,20 +61,45 @@
 - `POST /auth/logout` — Refresh Token Cookie 삭제
 - `GET /auth/me` — Bearer Access Token으로 현재 사용자 조회
 
+### 게시글
+
+- `GET /categories` — 활성 카테고리 목록 조회
+- `POST /categories` — 관리자 카테고리 생성
+- `GET /categories/{category_id}` — 활성 카테고리 상세 조회
+- `PATCH /categories/{category_id}` — 관리자 카테고리 수정
+- `DELETE /categories/{category_id}` — 관리자 카테고리 소프트 삭제
+- `GET /posts` — Q&A 게시글 목록 조회
+- `POST /posts` — 관리자 Q&A 게시글 생성
+- `GET /posts/{post_id}` — 게시글 상세 조회
+- `PATCH /posts/{post_id}` — 관리자 Q&A 게시글 수정
+- `DELETE /posts/{post_id}` — 관리자 Q&A 게시글 소프트 삭제
+
 ## 주요 파일
 
 - `backend/app/main.py`
 - `backend/app/api/auth.py`
+- `backend/app/api/categories.py`
 - `backend/app/api/deps.py`
+- `backend/app/api/posts.py`
 - `backend/app/core/config.py`
 - `backend/app/core/database.py`
 - `backend/app/core/security.py`
 - `backend/app/models/base.py`
+- `backend/app/models/category.py`
+- `backend/app/models/post.py`
 - `backend/app/models/user.py`
+- `backend/app/repositories/category_repository.py`
+- `backend/app/repositories/post_repository.py`
 - `backend/app/repositories/user_repository.py`
 - `backend/app/schemas/auth.py`
+- `backend/app/schemas/category.py`
+- `backend/app/schemas/post.py`
 - `backend/app/schemas/user.py`
+- `backend/app/services/category_service.py`
+- `backend/app/services/post_service.py`
 - `backend/app/services/user_service.py`
+- `backend/alembic/versions/4f6a7b8c9d10_add_categories_and_admin_role.py`
+- `backend/alembic/versions/3a2b1c4d5e6f_create_posts_table.py`
 - `backend/alembic/versions/8dad372a1f24_create_users_table.py`
 - `backend/.env.example`
 - `AGENTS.md` / `CLAUDE.md` / `GEMINI.md`
@@ -83,13 +112,21 @@
 
 - `python -m compileall app` 통과
 - 인증 라우트 전체 확인 완료 (`/auth/signup`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me`)
-- Alembic current: `8dad372a1f24 (head)`
+- 카테고리 라우트 전체 확인 완료 (`/categories`, `/categories/{category_id}`)
+- 게시글 라우트 전체 확인 완료 (`/posts`, `/posts/{post_id}`)
+- Alembic upgrade head 완료: `4f6a7b8c9d10`
 - bcrypt 해시·검증, Access Token 생성·검증 정상
 - 실제 DB 세션 기반 인증 흐름 검증 완료 (회원가입 → 로그인 → 토큰 재발급 → 로그아웃)
+- 실제 DB 세션 기반 게시글 CRUD 흐름 검증 완료 (생성 → 목록 → 상세 → 수정 → 삭제)
+- 실제 DB 세션 기반 관리자 권한 흐름 검증 완료
+  - 일반 USER 카테고리/게시글 생성 403
+  - ADMIN 카테고리 생성/조회 및 게시글 생성/수정/삭제 성공
 - 루트 `HANDOFF.md` 기준으로 AI 인수인계 문서 단일화 확인
 
 ## 참고 사항
 
+- 관리자 테스트 계정은 DB에서 `users.role = 'ADMIN'`으로 승격해서 사용한다.
+  예: `UPDATE users SET role = 'ADMIN' WHERE email = 'admin@example.com';`
 - 백그라운드 dev server 실행은 현재 도구 환경에서 프로세스가 바로 종료되어 유지되지 않는다.
 - 포그라운드 실행은 정상 확인됨.
 - 서버 실행 명령:
@@ -101,12 +138,10 @@ cd C:\Users\USER\jobfit-ai\backend
 
 ## 다음 작업
 
-1. 인증 API를 실제 서버에서 수동 테스트
-2. 회원정보 수정 API 구현
-3. 게시글 도메인 모델 설계
-4. 게시글 CRUD API 구현
-5. 게시글 페이징 / 검색 구현
-6. 프론트엔드 로그인 화면 연결
+1. 인증/카테고리/Q&A 게시글 API를 실제 서버 Swagger에서 수동 테스트
+2. 프론트엔드 로그인/회원가입 화면 연결
+3. 프론트엔드 카테고리/Q&A 게시글 목록·상세 화면 연결
+4. 관리자용 카테고리/Q&A 게시글 작성·수정 화면 연결
 
 ## 다른 AI에게 요청할 때 사용할 프롬프트
 

@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api import auth_router
+from app.api import auth_router, categories_router, posts_router
 from app.core.database import get_db
 from app.core.config import settings
 
@@ -18,6 +18,8 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(categories_router)
+app.include_router(posts_router)
 
 
 @app.get("/")

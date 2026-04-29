@@ -58,6 +58,13 @@ class User(Base, AuditMixin, SoftDeleteMixin):
         default="ACTIVE",
         comment="계정 상태: ACTIVE / LOCKED / DORMANT",
     )
+    role: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="USER",
+        server_default="USER",
+        comment="권한: USER / ADMIN",
+    )
 
     def __repr__(self) -> str:
         return f"<User(user_id={self.user_id}, email={self.email})>"

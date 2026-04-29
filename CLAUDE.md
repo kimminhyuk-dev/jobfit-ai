@@ -9,7 +9,7 @@ AI 에이전트(Claude Code, Gemini CLI, ChatGPT 등)가 이 프로젝트에서 
 
 - **프로젝트명**: jobfit-ai
 - **목적**: AI 기반 이력서-채용공고 매칭 플랫폼. 벡터 임베딩으로 매칭도를 계산하고 LLM이 강점·약점·개선 제안을 분석한다.
-- **개발 단계**: 백엔드 인증 완료, 게시판/매칭 기능 개발 예정
+- **개발 단계**: 백엔드 인증 및 카테고리 기반 Q&A 게시판 CRUD 완료, 프론트엔드 개발 예정
 - **최신 상태 파악**: 작업 시작 전 반드시 루트의 `HANDOFF.md`를 먼저 읽는다.
 
 ---
@@ -46,7 +46,9 @@ jobfit-ai/
 │   ├── app/
 │   │   ├── api/       # HTTP 라우터 계층
 │   │   │   ├── auth.py
-│   │   │   └── deps.py
+│   │   │   ├── categories.py
+│   │   │   ├── deps.py
+│   │   │   └── posts.py
 │   │   ├── core/      # 설정·DB·보안 공통 모듈
 │   │   │   ├── config.py
 │   │   │   ├── database.py
@@ -101,6 +103,9 @@ api (router) → service → repository → model
 - Access Token: JWT, 만료 15분, `Authorization: Bearer` 헤더
 - Refresh Token: JWT, 기본 만료 14일, HttpOnly Cookie (`refresh_token`)
 - Refresh Rotation: 재발급 시 새 Refresh Token 발급
+- 권한: `users.role` 값으로 USER / ADMIN 구분
+- 카테고리와 Q&A 게시글 생성·수정·삭제는 ADMIN만 가능
+- 일반 USER는 카테고리와 Q&A 게시글 조회만 가능
 
 ---
 

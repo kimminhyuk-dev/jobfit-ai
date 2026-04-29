@@ -33,5 +33,6 @@ class UserResponse(BaseModel):
     email: EmailStr
     name: str | None
     status: str
+    role: str
     created_at: datetime
     updated_at: datetime
