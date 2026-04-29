@@ -7,7 +7,7 @@ AI 에이전트(Claude Code, Gemini CLI, ChatGPT 등)가 이 프로젝트에서 
 
 - **프로젝트명**: jobfit-ai
 - **목적**: AI 기반 이력서-채용공고 매칭 플랫폼. 벡터 임베딩으로 매칭도를 계산하고 LLM이 강점·약점·개선 제안을 분석한다.
-- **개발 단계**: 백엔드 인증 및 카테고리 기반 Q&A 게시판 CRUD 완료, 프론트엔드 개발 예정
+- **개발 단계**: 백엔드 인증 및 카테고리 기반 Q&A 게시판 CRUD 완료, 프론트엔드 초기 구현 및 계획 스택 반영 완료
 - **최신 상태 파악**: 작업 시작 전 반드시 루트의 `HANDOFF.md`를 먼저 읽는다.
 
 ---
@@ -22,8 +22,8 @@ AI 에이전트(Claude Code, Gemini CLI, ChatGPT 등)가 이 프로젝트에서 
 ### AI / ML (예정)
 - Anthropic Claude API, sentence-transformers, pgvector / ChromaDB, MCP Python SDK
 
-### Frontend (예정)
-- React 19 + TypeScript, Vite, Tailwind CSS v4, shadcn/ui
+### Frontend
+- React 19 + TypeScript, Vite 8, Tailwind CSS v4, shadcn/ui
 - axios + TanStack Query, React Router v7, React Hook Form + Zod
 
 ### Infrastructure
@@ -59,7 +59,7 @@ jobfit-ai/
 │   ├── alembic/
 │   ├── .env.example
 │   └── requirements.txt
-├── frontend/          # React 앱 (미착수)
+├── frontend/          # React 앱 (초기 구현 완료)
 └── ai_context/        # 상세 작업 문서
     ├── API_SPEC.md
     ├── ARCHITECTURE.md

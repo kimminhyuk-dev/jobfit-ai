@@ -41,15 +41,13 @@
 
 ### Frontend
 - **React 19** + TypeScript
-- **Vite 4**
-- **Tailwind CSS 3**
+- **Vite 8**
+- **Tailwind CSS v4**
 - **axios**
 - **TanStack Query**
 - **React Router v7**
 - **React Hook Form** + Zod
 - **shadcn/ui 스타일 컴포넌트** (Radix Slot, CVA, tailwind-merge 기반)
-
-> Tailwind CSS v4는 초기 계획 스택이지만, 현재 로컬 Node v16.20.2에서 native binding 문제가 있어 Node 20 이상 업그레이드 후 전환 예정입니다.
 
 ### Infrastructure
 - **Docker** + Docker Compose
@@ -71,7 +69,7 @@
 - [ ] LLM 분석 레이어
 - [x] React 19 + Tailwind CSS 프론트엔드 초기 구현
 - [x] TanStack Query / React Hook Form / Zod / shadcn 스타일 UI 기반 반영
-- [ ] Node 20 이상 업그레이드 후 Tailwind CSS v4 전환
+- [x] Vite 8 / Tailwind CSS v4 전환 및 프론트엔드 도구체인 최신화
 - [ ] 프론트엔드 관리자 카테고리/Q&A 화면 실제 API 연결
 - [ ] MCP 서버 구현
 - [ ] Docker Compose 통합 배포

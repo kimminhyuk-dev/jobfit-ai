@@ -17,7 +17,7 @@
 - 프로젝트명: jobfit-ai
 - 목적: AI 기반 이력서-채용공고 매칭 플랫폼
 - 백엔드: FastAPI, SQLAlchemy 2.0, Alembic, PostgreSQL
-- 프론트엔드: React 19, TypeScript, Vite, Tailwind CSS 3 기반 초기 구현 완료
+- 프론트엔드: React 19, TypeScript, Vite 8, Tailwind CSS v4 기반 초기 구현 완료
 - 인증 방식: JWT Access Token + HttpOnly Refresh Token Cookie
 - 권한 방식: `users.role` 기반 USER / ADMIN
 - 개발 환경: Windows, PowerShell, Python 3.12 계열
@@ -48,11 +48,14 @@
   - 사용자 대시보드/이력서/채용공고/매칭 화면은 mock 데이터 기반 UI 구현
   - 관리자 대시보드/카테고리/Q&A 게시글 화면은 mock 데이터 기반 UI 구현
 - 프론트엔드 공통 API 클라이언트가 백엔드 공통 에러 응답 `{ code, message, details }`를 수신하도록 구성됨
-- 프론트엔드 계획 스택 일부 반영 완료
+- 프론트엔드 계획 스택 반영 완료
   - React 19 적용
+  - Vite 8 적용
+  - Tailwind CSS v4 및 `@tailwindcss/vite` 적용
   - TanStack Query Provider 적용
   - React Hook Form + Zod 기반 로그인/회원가입 폼 검증 적용
   - shadcn/ui 방식의 `Button`, `Input`, `Alert` 공통 컴포넌트 추가
+  - ESLint 9 flat config 기반 프론트엔드 lint 설정 적용
 - 루트 AI 에이전트 지시 문서 생성 완료 (AGENTS.md / CLAUDE.md / GEMINI.md)
 - AI 인수인계 문서는 루트 `HANDOFF.md`로 단일화 완료
 
@@ -94,8 +97,11 @@
 ## 완료된 프론트엔드 기능
 
 - Vite + React + TypeScript 프로젝트 구성
-- Tailwind CSS 기반 전역 스타일과 사용자/관리자 레이아웃 구성
+- Tailwind CSS v4 기반 전역 스타일과 사용자/관리자 레이아웃 구성
 - React 19 기반으로 업그레이드
+- Vite 8 및 `@tailwindcss/vite` 기반 빌드 설정 적용
+- ESLint 9 flat config 기반 lint 설정 적용
+- 개발 중 Vite가 5174 포트로 올라가는 경우를 고려해 백엔드 기본 CORS 허용 origin에 `localhost/127.0.0.1:5174` 추가
 - axios API 클라이언트 구성
   - 기본 API URL: `VITE_API_URL` 또는 `http://localhost:8000`
   - `withCredentials: true`로 Refresh Token Cookie 포함
@@ -186,6 +192,15 @@
 - 프론트엔드 `npm run lint` 통과
 - React 19 / TanStack Query / React Hook Form / Zod / shadcn 스타일 컴포넌트 반영 후 `npm run lint` 통과
 - React 19 / TanStack Query / React Hook Form / Zod / shadcn 스타일 컴포넌트 반영 후 `npm run build` 통과
+- 프론트엔드 Vite 8 / Tailwind CSS v4 / ESLint 9 전환 후 `npm run lint` 통과
+- 프론트엔드 Vite 8 / Tailwind CSS v4 / ESLint 9 전환 후 `npm run build` 통과
+- 프론트엔드 `npm audit` 결과 취약점 0개 확인
+- 프론트엔드 Vite dev server `http://127.0.0.1:5174` 기동 및 HTTP 200 응답 확인
+- Docker PostgreSQL 컨테이너 `jobfit_postgres` healthy 확인
+- 백엔드 `GET /health/db` 실제 HTTP 요청 결과 200 및 DB connected 확인
+- 프론트 origin `http://127.0.0.1:5174` 기준 백엔드 CORS preflight 정상 확인
+- 프론트 origin `http://127.0.0.1:5174` 기준 `GET /categories` 실제 HTTP 요청 200 확인
+- 프론트 origin `http://127.0.0.1:5174` 기준 `GET /auth/me`, `POST /auth/login` 비인증/오인증 요청 401 정상 응답 및 CORS credential 헤더 확인
 
 ## 참고 사항
 
@@ -207,18 +222,17 @@ cd C:\Users\USER\jobfit-ai\frontend
 npm run dev
 ```
 
-- 현재 프론트엔드 구현 스택은 `package.json` 기준 React 19, Vite 4, Tailwind CSS 3이다.
-- TanStack Query, React Hook Form, Zod, shadcn/ui 패턴 기반 공통 컴포넌트는 적용 완료.
-- Tailwind CSS v4는 현재 로컬 Node v16.20.2에서 `@tailwindcss/oxide` native binding 문제로 빌드가 깨져 적용하지 않았다.
-- Tailwind CSS v4 전환은 Node 20 이상으로 업그레이드한 뒤 재시도한다.
+- 현재 프론트엔드 구현 스택은 `package.json` 기준 React 19, Vite 8, Tailwind CSS v4이다.
+- TanStack Query, React Hook Form, Zod, React Router v7, shadcn/ui 패턴 기반 공통 컴포넌트는 적용 완료.
+- 로컬 Node 버전은 `v20.20.2`로 확인되었고, Tailwind CSS v4 native binding 이슈 없이 빌드가 통과한다.
+- `frontend` dev server가 기본 5173 포트를 사용할 수 없을 때 5174로 뜰 수 있으므로, 백엔드 CORS 기본값과 `.env.example`은 5173/5174를 모두 포함한다.
 
 ## 다음 작업
 
-1. Node 20 이상으로 업그레이드 후 Tailwind CSS v4 전환 재시도
-2. 관리자 카테고리 화면을 실제 `/categories` API와 연결
-3. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
-4. 사용자용 Q&A 목록·상세 화면 추가 여부 결정
-5. 프론트엔드 toast/field error 표시 방식 고도화
+1. 관리자 카테고리 화면을 실제 `/categories` API와 연결
+2. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
+3. 사용자용 Q&A 목록·상세 화면 추가 여부 결정
+4. 프론트엔드 toast/field error 표시 방식 고도화
 
 ## 다른 AI에게 요청할 때 사용할 프롬프트
 

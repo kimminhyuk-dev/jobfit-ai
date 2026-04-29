@@ -6,16 +6,14 @@ React 기반 JobFit AI 프론트엔드 애플리케이션이다.
 
 - React 19
 - TypeScript
-- Vite 4
-- Tailwind CSS 3
+- Vite 8
+- Tailwind CSS v4
 - React Router v7
 - axios
 - TanStack Query
 - React Hook Form
 - Zod
 - shadcn/ui 스타일 컴포넌트
-
-> Tailwind CSS v4는 현재 로컬 Node v16.20.2에서 `@tailwindcss/oxide` native binding 문제로 빌드가 깨져 적용하지 않았다. Node 20 이상 업그레이드 후 전환한다.
 
 ## 구현 상태
 
@@ -45,6 +43,8 @@ npm run dev
 VITE_API_URL=http://localhost:8000
 ```
 
+Vite가 기본 포트 `5173`을 사용할 수 없으면 `5174`로 실행할 수 있다. 백엔드 `.env.example`의 CORS 기본 예시는 두 포트를 모두 포함한다.
+
 ## 검증
 
 ```powershell
@@ -56,5 +56,4 @@ npm run build
 
 - 관리자 카테고리 화면을 실제 `/categories` API와 연결
 - 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
-- Node 20 이상 업그레이드 후 Tailwind CSS v4 전환
 - toast와 field error 표시 방식 고도화
