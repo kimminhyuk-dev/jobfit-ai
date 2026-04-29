@@ -1,6 +1,7 @@
 # HANDOFF
 
 이 문서는 ChatGPT, Claude, Claude Code 등 다른 AI에게 프로젝트 상태를 한 번에 전달하기 위한 최신 브리핑 문서다.
+프로젝트의 AI 인수인계 기준본은 루트의 이 `HANDOFF.md` 하나로 관리한다.
 
 ## AI 작업 규칙
 
@@ -38,6 +39,7 @@
 - Alembic 첫 마이그레이션 적용 완료
 - 인증 API 구현 완료
 - 루트 AI 에이전트 지시 문서 생성 완료 (AGENTS.md / CLAUDE.md / GEMINI.md)
+- AI 인수인계 문서는 루트 `HANDOFF.md`로 단일화 완료
 
 ## 완료된 백엔드 기능
 
@@ -72,8 +74,8 @@
 - `backend/alembic/versions/8dad372a1f24_create_users_table.py`
 - `backend/.env.example`
 - `AGENTS.md` / `CLAUDE.md` / `GEMINI.md`
+- `HANDOFF.md`
 - `ai_context/API_SPEC.md`
-- `ai_context/HANDOFF.md`
 
 ## 최근 검증
 
@@ -84,6 +86,7 @@
 - Alembic current: `8dad372a1f24 (head)`
 - bcrypt 해시·검증, Access Token 생성·검증 정상
 - 실제 DB 세션 기반 인증 흐름 검증 완료 (회원가입 → 로그인 → 토큰 재발급 → 로그아웃)
+- 루트 `HANDOFF.md` 기준으로 AI 인수인계 문서 단일화 확인
 
 ## 참고 사항
 

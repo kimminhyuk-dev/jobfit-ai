@@ -40,7 +40,7 @@ jobfit-ai/
 ├── AGENTS.md          # AI 에이전트 지시 문서 (마스터)
 ├── CLAUDE.md          # AGENTS.md 복사본
 ├── GEMINI.md          # AGENTS.md 복사본
-├── HANDOFF.md         # 세션 인수인계 문서
+├── HANDOFF.md         # AI 인수인계 기준 문서
 ├── README.md
 ├── backend/
 │   ├── app/
@@ -63,7 +63,6 @@ jobfit-ai/
 └── ai_context/        # 상세 작업 문서
     ├── API_SPEC.md
     ├── ARCHITECTURE.md
-    ├── HANDOFF.md     # 루트 HANDOFF.md의 상세 버전
     ├── PROJECT_STATE.md
     ├── TASKS.md
     └── WORK_LOG.md
@@ -90,7 +89,7 @@ api (router) → service → repository → model
 
 - Python 파일은 PEP 8 준수.
 - 함수·변수명은 snake_case, 클래스명은 PascalCase.
-- 비동기 엔드포인트는 `async def` 사용.
+- 비동기 I/O가 필요한 엔드포인트는 `async def`를 사용하고, 현재처럼 동기 SQLAlchemy 세션을 쓰는 라우터는 `def`를 유지한다.
 - DB 세션은 `deps.py`의 `get_db` 의존성 주입으로만 사용.
 - 환경 변수는 `core/config.py`의 `Settings` 클래스를 통해서만 접근.
 - `.env` 값, 비밀키, 토큰은 코드나 문서에 절대 기록하지 않는다.
@@ -100,7 +99,7 @@ api (router) → service → repository → model
 ## 6. 인증 방식
 
 - Access Token: JWT, 만료 15분, `Authorization: Bearer` 헤더
-- Refresh Token: JWT, 만료 7일, HttpOnly Cookie (`refresh_token`)
+- Refresh Token: JWT, 기본 만료 14일, HttpOnly Cookie (`refresh_token`)
 - Refresh Rotation: 재발급 시 새 Refresh Token 발급
 
 ---
