@@ -17,7 +17,7 @@
 - 프로젝트명: jobfit-ai
 - 목적: AI 기반 이력서-채용공고 매칭 플랫폼
 - 백엔드: FastAPI, SQLAlchemy 2.0, Alembic, PostgreSQL
-- 프론트엔드: React, TypeScript, Vite 기반 예정
+- 프론트엔드: React 19, TypeScript, Vite, Tailwind CSS 3 기반 초기 구현 완료
 - 인증 방식: JWT Access Token + HttpOnly Refresh Token Cookie
 - 권한 방식: `users.role` 기반 USER / ADMIN
 - 개발 환경: Windows, PowerShell, Python 3.12 계열
@@ -41,6 +41,18 @@
 - 카테고리/게시글 생성·수정·삭제는 ADMIN만 가능
 - 일반 USER는 카테고리/게시글 조회만 가능
 - 공통 에러코드 기반 API 에러 응답 체계 구현 완료
+- 프론트엔드 React 앱 초기 구현 완료
+  - 로그인/회원가입 화면과 인증 API 연결
+  - Access Token은 localStorage, Refresh Token은 HttpOnly Cookie 기반으로 사용
+  - 사용자/관리자 보호 라우트 구성
+  - 사용자 대시보드/이력서/채용공고/매칭 화면은 mock 데이터 기반 UI 구현
+  - 관리자 대시보드/카테고리/Q&A 게시글 화면은 mock 데이터 기반 UI 구현
+- 프론트엔드 공통 API 클라이언트가 백엔드 공통 에러 응답 `{ code, message, details }`를 수신하도록 구성됨
+- 프론트엔드 계획 스택 일부 반영 완료
+  - React 19 적용
+  - TanStack Query Provider 적용
+  - React Hook Form + Zod 기반 로그인/회원가입 폼 검증 적용
+  - shadcn/ui 방식의 `Button`, `Input`, `Alert` 공통 컴포넌트 추가
 - 루트 AI 에이전트 지시 문서 생성 완료 (AGENTS.md / CLAUDE.md / GEMINI.md)
 - AI 인수인계 문서는 루트 `HANDOFF.md`로 단일화 완료
 
@@ -79,6 +91,24 @@
 - 입력값 검증 오류는 `COMMON_001` 코드와 함께 `details` 배열을 추가로 응답
 - 인증/권한/카테고리/게시글 도메인 오류는 `AUTH_*`, `CATEGORY_*`, `POST_*` 에러코드로 구분
 
+## 완료된 프론트엔드 기능
+
+- Vite + React + TypeScript 프로젝트 구성
+- Tailwind CSS 기반 전역 스타일과 사용자/관리자 레이아웃 구성
+- React 19 기반으로 업그레이드
+- axios API 클라이언트 구성
+  - 기본 API URL: `VITE_API_URL` 또는 `http://localhost:8000`
+  - `withCredentials: true`로 Refresh Token Cookie 포함
+  - Access Token을 `Authorization: Bearer` 헤더에 자동 주입
+- TanStack Query `QueryClientProvider` 구성
+- 로그인/회원가입 화면 구현 및 `/auth/login`, `/auth/signup`, `/auth/me`, `/auth/logout` 연결
+- 로그인/회원가입 화면은 React Hook Form + Zod로 클라이언트 검증 처리
+- 공통 에러 응답 타입과 회원가입 validation `details` 필드 매핑 정리
+- shadcn/ui 패턴 기반 공통 UI 컴포넌트 추가 (`Button`, `Input`, `Alert`)
+- 사용자 라우트: `/user/dashboard`, `/user/resumes`, `/user/jobs`, `/user/matches`
+- 관리자 라우트: `/admin/dashboard`, `/admin/categories`, `/admin/posts`
+- 관리자 라우트는 `user.role === 'ADMIN'`일 때만 접근 가능
+
 ## 주요 파일
 
 - `backend/app/main.py`
@@ -110,6 +140,21 @@
 - `backend/alembic/versions/3a2b1c4d5e6f_create_posts_table.py`
 - `backend/alembic/versions/8dad372a1f24_create_users_table.py`
 - `backend/.env.example`
+- `frontend/package.json`
+- `frontend/src/App.tsx`
+- `frontend/src/api/client.ts`
+- `frontend/src/api/auth.ts`
+- `frontend/src/api/types.ts`
+- `frontend/src/lib/utils.ts`
+- `frontend/src/stores/authContext.ts`
+- `frontend/src/stores/authStore.tsx`
+- `frontend/src/components/ui/button.tsx`
+- `frontend/src/components/ui/input.tsx`
+- `frontend/src/components/ui/alert.tsx`
+- `frontend/src/pages/LoginPage.tsx`
+- `frontend/src/pages/SignupPage.tsx`
+- `frontend/src/components/layout/UserLayout.tsx`
+- `frontend/src/components/layout/AdminLayout.tsx`
 - `AGENTS.md` / `CLAUDE.md` / `GEMINI.md`
 - `HANDOFF.md`
 - `ai_context/API_SPEC.md`
@@ -137,6 +182,10 @@
   - `GET /not-found` 404 → `COMMON_404`
   - `PUT /health` 405 → `COMMON_405`
   - `POST /auth/login` 검증 실패 422 → `COMMON_001`
+- 프론트엔드 `npm run build` 통과
+- 프론트엔드 `npm run lint` 통과
+- React 19 / TanStack Query / React Hook Form / Zod / shadcn 스타일 컴포넌트 반영 후 `npm run lint` 통과
+- React 19 / TanStack Query / React Hook Form / Zod / shadcn 스타일 컴포넌트 반영 후 `npm run build` 통과
 
 ## 참고 사항
 
@@ -151,13 +200,25 @@ cd C:\Users\USER\jobfit-ai\backend
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
+- 프론트엔드 실행 명령:
+
+```powershell
+cd C:\Users\USER\jobfit-ai\frontend
+npm run dev
+```
+
+- 현재 프론트엔드 구현 스택은 `package.json` 기준 React 19, Vite 4, Tailwind CSS 3이다.
+- TanStack Query, React Hook Form, Zod, shadcn/ui 패턴 기반 공통 컴포넌트는 적용 완료.
+- Tailwind CSS v4는 현재 로컬 Node v16.20.2에서 `@tailwindcss/oxide` native binding 문제로 빌드가 깨져 적용하지 않았다.
+- Tailwind CSS v4 전환은 Node 20 이상으로 업그레이드한 뒤 재시도한다.
+
 ## 다음 작업
 
-1. 프론트엔드 프로젝트 초기 구성
-2. 프론트엔드 공통 API 클라이언트와 에러코드 기반 에러 처리 연결
-3. 프론트엔드 로그인/회원가입 화면 연결
-4. 프론트엔드 카테고리/Q&A 게시글 목록·상세 화면 연결
-5. 관리자용 카테고리/Q&A 게시글 작성·수정 화면 연결
+1. Node 20 이상으로 업그레이드 후 Tailwind CSS v4 전환 재시도
+2. 관리자 카테고리 화면을 실제 `/categories` API와 연결
+3. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
+4. 사용자용 Q&A 목록·상세 화면 추가 여부 결정
+5. 프론트엔드 toast/field error 표시 방식 고도화
 
 ## 다른 AI에게 요청할 때 사용할 프롬프트
 

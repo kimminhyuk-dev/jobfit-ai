@@ -1,12 +1,7 @@
-import { createContext, useContext, useReducer, useEffect, type ReactNode } from 'react';
+import { useReducer, useEffect, type ReactNode } from 'react';
 import { authApi } from '../api/auth';
 import type { User } from '../api/types';
-
-interface AuthState {
-  user: User | null;
-  token: string | null;
-  loading: boolean;
-}
+import { AuthContext, type AuthState } from './authContext';
 
 type AuthAction =
   | { type: 'SET_USER'; user: User; token: string }
@@ -25,13 +20,6 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
       return state;
   }
 }
-
-interface AuthContextValue extends AuthState {
-  login: (token: string, user: User) => void;
-  logout: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, {
@@ -75,10 +63,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
 }

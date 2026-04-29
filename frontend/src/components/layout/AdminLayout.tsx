@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import Icon from '../ui/Icon';
-import { useAuth } from '../../stores/authStore';
+import { useAuth } from '../../stores/authContext';
 
 const adminNav = [
   { to: '/admin/dashboard', label: '대시보드', icon: 'home' as const },

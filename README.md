@@ -41,15 +41,15 @@
 
 ### Frontend
 - **React 19** + TypeScript
-- **Vite**
-- **Tailwind CSS v4**
-- **shadcn/ui** (Radix UI 기반)
-- **axios** + TanStack Query
+- **Vite 4**
+- **Tailwind CSS 3**
+- **axios**
+- **TanStack Query**
 - **React Router v7**
 - **React Hook Form** + Zod
-- **TanStack Table**
-- **Recharts**
-- **lucide-react**
+- **shadcn/ui 스타일 컴포넌트** (Radix Slot, CVA, tailwind-merge 기반)
+
+> Tailwind CSS v4는 초기 계획 스택이지만, 현재 로컬 Node v16.20.2에서 native binding 문제가 있어 Node 20 이상 업그레이드 후 전환 예정입니다.
 
 ### Infrastructure
 - **Docker** + Docker Compose
@@ -60,14 +60,19 @@
 ## 로드맵
 
 - [x] 프로젝트 기획 및 기술 스택 결정
-- [ ] 개발환경 세팅 (Docker, FastAPI 뼈대)
-- [ ] 회원/인증 시스템 (JWT + Refresh Rotation)
+- [x] 개발환경 세팅 (Docker, FastAPI 뼈대)
+- [x] 회원/인증 시스템 (JWT + Refresh Rotation)
 - [ ] 권한/메뉴 관리 (RBAC + 매트릭스)
+- [x] 관리자 권한 기반 카테고리/Q&A 게시판 CRUD API
+- [x] 공통 에러코드 기반 API 에러 응답
 - [ ] 이력서 파싱 (PDF → 구조화 데이터)
 - [ ] 공고 수집 파이프라인
 - [ ] 벡터 임베딩 + 매칭 알고리즘
 - [ ] LLM 분석 레이어
-- [ ] React + Tailwind CSS + shadcn/ui 프론트엔드
+- [x] React 19 + Tailwind CSS 프론트엔드 초기 구현
+- [x] TanStack Query / React Hook Form / Zod / shadcn 스타일 UI 기반 반영
+- [ ] Node 20 이상 업그레이드 후 Tailwind CSS v4 전환
+- [ ] 프론트엔드 관리자 카테고리/Q&A 화면 실제 API 연결
 - [ ] MCP 서버 구현
 - [ ] Docker Compose 통합 배포
 - [ ] 데모 영상 및 문서화

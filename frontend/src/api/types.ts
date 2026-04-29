@@ -2,7 +2,15 @@
 export interface ApiError {
   code: string;
   message: string;
-  details?: { field: string; message: string }[];
+  details?: ApiValidationDetail[];
+}
+
+export interface ApiValidationDetail {
+  type: string;
+  loc: (string | number)[];
+  msg: string;
+  input?: unknown;
+  ctx?: Record<string, unknown>;
 }
 
 export interface ApiResponse<T> {

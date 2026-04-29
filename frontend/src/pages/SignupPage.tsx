@@ -1,54 +1,77 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 import Icon from '../components/ui/Icon';
+import { Alert } from '../components/ui/alert';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import { authApi } from '../api/auth';
-import { useAuth } from '../stores/authStore';
+import { useAuth } from '../stores/authContext';
 import type { ApiError } from '../api/client';
+
+const signupSchema = z.object({
+  name: z.string().min(1, '이름을 입력하세요.').max(50, '이름은 50자 이하로 입력하세요.'),
+  email: z.string().email('올바른 이메일을 입력하세요.'),
+  password: z.string().min(8, '비밀번호는 8자 이상이어야 합니다.').max(128, '비밀번호는 128자 이하로 입력하세요.'),
+});
+
+type SignupFormValues = z.infer<typeof signupSchema>;
 
 export default function SignupPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
+  const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string>>({});
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<SignupFormValues>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      password: '',
+    },
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (values: SignupFormValues) => {
     setError(null);
-    setFieldErrors({});
-    setLoading(true);
+    setServerFieldErrors({});
     try {
-      const res = await authApi.signup({ name, email, password });
+      const res = await authApi.signup(values);
       login(res.access_token, res.user);
       navigate('/user/resumes');
     } catch (err) {
       const apiErr = err as ApiError;
       if (apiErr.details) {
         const map: Record<string, string> = {};
-        apiErr.details.forEach((d) => { map[d.field] = d.message; });
-        setFieldErrors(map);
+        apiErr.details.forEach((d) => {
+          const field = d.loc[d.loc.length - 1];
+          if (typeof field === 'string') {
+            map[field] = d.msg;
+          }
+        });
+        setServerFieldErrors(map);
       } else {
         setError(apiErr.message ?? '회원가입에 실패했습니다.');
       }
-    } finally {
-      setLoading(false);
     }
   };
 
-  const inputBase =
-    'w-full h-11 rounded-lg border bg-m-surface text-[14px] text-m-text placeholder:text-m-subtle focus:outline-none focus:ring-1 transition-colors';
-
   const inputClass = (field: string) =>
-    `${inputBase} pl-10 ${
-      fieldErrors[field]
+    `pl-10 ${
+      errors[field as keyof SignupFormValues] || serverFieldErrors[field]
         ? 'border-m-danger focus:border-m-danger focus:ring-m-danger'
-        : 'border-m-border focus:border-m-primary focus:ring-m-primary'
+        : ''
     }`;
+
+  const fieldError = (field: keyof SignupFormValues) =>
+    errors[field]?.message || serverFieldErrors[field];
 
   return (
     <div className="min-h-screen bg-m-bg flex items-center justify-center px-4 py-12">
@@ -67,56 +90,52 @@ export default function SignupPage() {
             시작하는 데 1분도 걸리지 않아요.
           </p>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             {/* Name */}
             <div>
               <label className="block text-[12px] font-medium text-m-muted mb-1.5">이름</label>
               <div className="relative">
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                <Input
                   placeholder="홍길동"
-                  required
+                  autoComplete="name"
                   className={inputClass('name')}
+                  {...register('name')}
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-m-subtle">
                   <Icon name="user" size={16} />
                 </div>
               </div>
-              {fieldErrors.name && <p className="mt-1 text-[12px] text-m-danger">{fieldErrors.name}</p>}
+              {fieldError('name') && <p className="mt-1 text-[12px] text-m-danger">{fieldError('name')}</p>}
             </div>
 
             {/* Email */}
             <div>
               <label className="block text-[12px] font-medium text-m-muted mb-1.5">이메일</label>
               <div className="relative">
-                <input
+                <Input
                   type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  required
+                  autoComplete="email"
                   className={inputClass('email')}
+                  {...register('email')}
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-m-subtle">
                   <Icon name="mail" size={16} />
                 </div>
               </div>
-              {fieldErrors.email && <p className="mt-1 text-[12px] text-m-danger">{fieldErrors.email}</p>}
+              {fieldError('email') && <p className="mt-1 text-[12px] text-m-danger">{fieldError('email')}</p>}
             </div>
 
             {/* Password */}
             <div>
               <label className="block text-[12px] font-medium text-m-muted mb-1.5">비밀번호</label>
               <div className="relative">
-                <input
+                <Input
                   type={showPw ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="8자 이상"
-                  required
-                  minLength={8}
+                  autoComplete="new-password"
                   className={`${inputClass('password')} pr-10`}
+                  {...register('password')}
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-m-subtle">
                   <Icon name="lock" size={16} />
@@ -129,22 +148,20 @@ export default function SignupPage() {
                   <Icon name={showPw ? 'eye-off' : 'eye'} size={16} />
                 </button>
               </div>
-              {fieldErrors.password && <p className="mt-1 text-[12px] text-m-danger">{fieldErrors.password}</p>}
+              {fieldError('password') && <p className="mt-1 text-[12px] text-m-danger">{fieldError('password')}</p>}
             </div>
 
             {/* Global error */}
-            {error && (
-              <p className="text-[13px] text-m-danger bg-m-danger-soft px-3 py-2 rounded-lg">{error}</p>
-            )}
+            {error && <Alert variant="danger">{error}</Alert>}
 
-            <button
+            <Button
               type="submit"
-              disabled={loading}
-              className="h-11 mt-1 rounded-lg bg-m-primary text-white text-[14px] font-semibold hover:bg-m-primary-hover transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+              disabled={isSubmitting}
+              className="mt-1"
             >
-              {loading ? '가입 중...' : '시작하기'}
-              {!loading && <Icon name="arrow" size={16} />}
-            </button>
+              {isSubmitting ? '가입 중...' : '시작하기'}
+              {!isSubmitting && <Icon name="arrow" size={16} />}
+            </Button>
           </form>
 
           <p className="text-[13px] text-m-muted text-center mt-6">

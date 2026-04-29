@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import Icon from '../ui/Icon';
-import { useAuth } from '../../stores/authStore';
+import { useAuth } from '../../stores/authContext';
 
 const navItems = [
   { to: '/user/dashboard', label: '홈', icon: 'home' as const },

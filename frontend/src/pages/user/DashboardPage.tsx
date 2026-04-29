@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Gauge from '../../components/ui/Gauge';
 import Icon from '../../components/ui/Icon';
-import { useAuth } from '../../stores/authStore';
+import { useAuth } from '../../stores/authContext';
 import { mockJobs, mockStats, mockApplications } from '../../api/mock/jobs';
 
 const statCards = [

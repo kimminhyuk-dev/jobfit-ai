@@ -1,39 +1,53 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 import Icon from '../components/ui/Icon';
 import Gauge from '../components/ui/Gauge';
+import { Alert } from '../components/ui/alert';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import { authApi } from '../api/auth';
-import { useAuth } from '../stores/authStore';
+import { useAuth } from '../stores/authContext';
 import type { ApiError } from '../api/client';
+
+const loginSchema = z.object({
+  email: z.string().email('올바른 이메일을 입력하세요.'),
+  password: z.string().min(1, '비밀번호를 입력하세요.'),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (values: LoginFormValues) => {
     setError(null);
-    setLoading(true);
     try {
-      const res = await authApi.login({ email, password });
+      const res = await authApi.login(values);
       login(res.access_token, res.user);
       navigate(res.user.role === 'ADMIN' ? '/admin/dashboard' : '/user/dashboard');
     } catch (err) {
       const apiErr = err as ApiError;
       setError(apiErr.message ?? '로그인에 실패했습니다.');
-    } finally {
-      setLoading(false);
     }
   };
-
-  const inputBase =
-    'w-full h-11 rounded-lg border border-m-border bg-m-surface text-[14px] text-m-text placeholder:text-m-subtle focus:outline-none focus:border-m-primary focus:ring-1 focus:ring-m-primary transition-colors';
 
   return (
     <div className="flex h-screen bg-m-bg font-sans">
@@ -54,23 +68,23 @@ export default function LoginPage() {
             이력서를 분석하고 맞춤 채용공고를 추천해 드릴게요.
           </p>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             {/* Email */}
             <div>
               <label className="block text-[12px] font-medium text-m-muted mb-1.5">이메일</label>
               <div className="relative">
-                <input
+                <Input
                   type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  required
-                  className={`${inputBase} pl-10`}
+                  autoComplete="email"
+                  className="pl-10"
+                  {...register('email')}
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-m-subtle">
                   <Icon name="mail" size={16} />
                 </div>
               </div>
+              {errors.email && <p className="mt-1 text-[12px] text-m-danger">{errors.email.message}</p>}
             </div>
 
             {/* Password */}
@@ -82,13 +96,12 @@ export default function LoginPage() {
                 </button>
               </div>
               <div className="relative">
-                <input
+                <Input
                   type={showPw ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="비밀번호 입력"
-                  required
-                  className={`${inputBase} pl-10 pr-10`}
+                  autoComplete="current-password"
+                  className="pl-10 pr-10"
+                  {...register('password')}
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-m-subtle">
                   <Icon name="lock" size={16} />
@@ -101,22 +114,21 @@ export default function LoginPage() {
                   <Icon name={showPw ? 'eye-off' : 'eye'} size={16} />
                 </button>
               </div>
+              {errors.password && <p className="mt-1 text-[12px] text-m-danger">{errors.password.message}</p>}
             </div>
 
             {/* Error */}
-            {error && (
-              <p className="text-[13px] text-m-danger bg-m-danger-soft px-3 py-2 rounded-lg">{error}</p>
-            )}
+            {error && <Alert variant="danger">{error}</Alert>}
 
             {/* Submit */}
-            <button
+            <Button
               type="submit"
-              disabled={loading}
-              className="h-11 mt-1 rounded-lg bg-m-primary text-white text-[14px] font-semibold hover:bg-m-primary-hover transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+              disabled={isSubmitting}
+              className="mt-1"
             >
-              {loading ? '로그인 중...' : '로그인'}
-              {!loading && <Icon name="arrow" size={16} />}
-            </button>
+              {isSubmitting ? '로그인 중...' : '로그인'}
+              {!isSubmitting && <Icon name="arrow" size={16} />}
+            </Button>
 
             {/* Divider */}
             <div className="flex items-center gap-3 text-m-subtle text-[12px]">
@@ -126,13 +138,14 @@ export default function LoginPage() {
             </div>
 
             {/* Google */}
-            <button
+            <Button
               type="button"
-              className="h-11 rounded-lg border border-m-border bg-m-surface text-[14px] font-medium text-m-text hover:bg-m-surface-alt transition-colors flex items-center justify-center gap-2.5"
+              variant="outline"
+              className="font-medium"
             >
               <Icon name="google" size={16} strokeWidth={0} />
               Google로 계속하기
-            </button>
+            </Button>
           </form>
 
           <p className="text-[13px] text-m-muted text-center mt-7">

@@ -25,13 +25,18 @@
 ## 프론트엔드 구조
 - src/pages: 페이지 단위 컴포넌트
 - src/components: 공통 UI 컴포넌트
-- src/services: 백엔드 API 통신 모듈
-- src/hooks: 커스텀 훅
+- src/api: 백엔드 API 통신 모듈과 공통 타입
+- src/stores: 인증 상태와 Context Provider
+- src/lib: 공통 유틸리티
+- src/styles: 전역 스타일
+- src/components/ui: shadcn/ui 패턴 기반 공통 UI 컴포넌트
 
 ## 통신 규칙
 - 프론트엔드는 백엔드 REST API와 통신한다
 - 백엔드는 JSON 형식으로 응답한다
-- 인증 방식은 JWT 기반으로 확장할 예정이다
+- 인증 방식은 JWT Access Token + HttpOnly Refresh Token Cookie 기반이다
+- 프론트엔드는 Access Token을 `Authorization: Bearer` 헤더에 담아 요청한다
+- API 에러 응답은 `{ code, message, details? }` 공통 포맷을 사용한다
 
 ## 설계 원칙
 - model과 schema를 분리한다
