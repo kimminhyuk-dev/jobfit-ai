@@ -35,6 +35,8 @@ from app.models import category  # noqa: F401
 from app.models import post  # noqa: F401
 from app.models import job_posting  # noqa: F401
 from app.models import batch_job_run  # noqa: F401
+from app.models import common_code  # noqa: F401
+from app.models import job_source  # noqa: F401
 
 # ─────────────────────────────────────────────
 # 3) alembic.ini 읽기

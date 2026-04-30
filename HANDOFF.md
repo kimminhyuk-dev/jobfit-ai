@@ -59,6 +59,14 @@
 - 루트 AI 에이전트 지시 문서 생성 완료 (AGENTS.md / CLAUDE.md / GEMINI.md)
 - AI 인수인계 문서는 루트 `HANDOFF.md`로 단일화 완료
 - 워크넷/고용24 채용공고 도메인 DB 스키마 추가 (Phase 1)
+- 워크넷/고용24 채용정보 수집 클라이언트, 저장 서비스, 관리자 수동 수집 API 추가 (Phase 2)
+- Work24/고용24는 키는 발급됐으나 일반 사용자 API 사용 제한으로 `job_sources.status=PENDING_APPROVAL` 보류 처리
+- ALIO 공공기관 채용정보 API를 현재 메인 공공기관 채용 수집원으로 전환
+- 채용공고 수집원 상태 관리를 위한 `job_sources` 테이블 추가
+- `job_postings`를 ALIO/WORK24/SARAMIN/MANUAL 확장형 저장소로 재사용하도록 컬럼 확장
+- ALIO 코드 정의서 기준 `common_code_groups`, `common_codes` 테이블과 마이그레이션 추가
+- `batch_job_runs`를 ALIO 수집 배치 이력까지 기록할 수 있도록 확장
+- 관리자 수동 ALIO 수집 API와 사용자 채용공고 조회 API 추가
 
 ## 완료된 백엔드 기능
 
@@ -98,6 +106,11 @@
 ### 채용공고 도메인
 
 - 채용공고 도메인 모델 (`job_postings`, `batch_job_runs`) - Phase 1 DB 구조
+- Work24 채용정보 수집 (관리자 수동 수집 API)
+- Work24 채용정보 수집은 일반 사용자 API 사용 제한으로 외부 API 호출 없이 `JOB_SOURCE_001` + `BLOCKED` 배치 이력 기록
+- ALIO 공공기관 채용정보 수집 클라이언트와 관리자 수동 수집 API
+- 사용자 채용공고 조회 API `GET /jobs`
+- ALIO 코드 정의서 기반 공통코드 그룹/상세코드 테이블
 
 ## 완료된 프론트엔드 기능
 
@@ -124,6 +137,8 @@
 
 - `backend/app/main.py`
 - `backend/app/api/auth.py`
+- `backend/app/api/admin_jobs.py`
+- `backend/app/api/jobs.py`
 - `backend/app/api/categories.py`
 - `backend/app/api/deps.py`
 - `backend/app/api/posts.py`
@@ -136,19 +151,33 @@
 - `backend/app/models/base.py`
 - `backend/app/models/batch_job_run.py`
 - `backend/app/models/category.py`
+- `backend/app/models/common_code.py`
+- `backend/app/models/job_source.py`
 - `backend/app/models/job_posting.py`
 - `backend/app/models/post.py`
 - `backend/app/models/user.py`
 - `backend/app/repositories/category_repository.py`
+- `backend/app/repositories/batch_job_run_repository.py`
+- `backend/app/repositories/job_source_repository.py`
+- `backend/app/repositories/job_posting_repository.py`
 - `backend/app/repositories/post_repository.py`
 - `backend/app/repositories/user_repository.py`
 - `backend/app/schemas/auth.py`
 - `backend/app/schemas/category.py`
+- `backend/app/schemas/job_collection.py`
 - `backend/app/schemas/post.py`
 - `backend/app/schemas/user.py`
 - `backend/app/services/category_service.py`
+- `backend/app/services/alio_collection_service.py`
+- `backend/app/services/job_source_service.py`
+- `backend/app/services/job_posting_service.py`
 - `backend/app/services/post_service.py`
 - `backend/app/services/user_service.py`
+- `backend/app/services/work24_collection_service.py`
+- `backend/app/services/job_sources/alio_client.py`
+- `backend/app/services/job_sources/work24_client.py`
+- `backend/alembic/versions/c1d2e3f4a5b6_add_alio_job_source_and_common_codes.py`
+- `backend/alembic/versions/d2e3f4a5b6c7_add_job_sources_table.py`
 - `backend/alembic/versions/4f6a7b8c9d10_add_categories_and_admin_role.py`
 - `backend/alembic/versions/b9a9c0967b9a_add_job_postings_and_batch_job_runs_.py`
 - `backend/alembic/versions/3a2b1c4d5e6f_create_posts_table.py`
@@ -184,6 +213,32 @@
 - `uq_job_postings_source` 유니크 제약조건과 주요 인덱스 생성 확인
 - `status`, `collection_status`, `embedding_status`, 카운트 컬럼, `is_deleted` 등 server default 반영 확인
 - `alembic upgrade head`는 이번 작업에서 실행하지 않음 (사용자 검토 후 적용 예정)
+- 워크넷/고용24 Phase 2 추가 후 `.\.venv\Scripts\python.exe -m compileall app` 통과
+- FastAPI 라우트 확인 명령으로 `POST /admin/jobs/sources/work24/collect` 등록 확인
+- 실제 Work24 외부 API 호출 테스트는 자동 실행하지 않음 (사용자 수동 테스트 예정)
+- ALIO 전환 구조 추가 후 `.\.venv\Scripts\python.exe -m compileall app` 통과
+- `.\.venv\Scripts\alembic.exe heads` 결과 `c1d2e3f4a5b6 (head)` 확인
+- FastAPI 라우트 확인 명령으로 `POST /admin/job-sources/alio/collect`, `POST /admin/jobs/sources/work24/collect`, `GET /jobs` 등록 확인
+- Alembic 마이그레이션 `c1d2e3f4a5b6_add_alio_job_source_and_common_codes.py` 생성 확인
+- 실제 ALIO 외부 API 호출 테스트는 API 키가 필요하므로 자동 실행하지 않음
+- `.env`는 `git status --short`에 포함되지 않고, `.env.example`만 변경 대상임을 확인
+- Work24 비활성/보류 처리 수정 후 `.\.venv\Scripts\python.exe -m compileall app` 통과
+- Work24 XML 오류 응답 방어 로직 확인: `resultCode=146`, `resultMsg=권한 제한` 샘플이 `Work24ClientError`로 처리됨
+- FastAPI 라우트 확인 명령으로 `POST /admin/job-sources/alio/collect`, `POST /admin/jobs/sources/work24/collect`, `GET /jobs` 등록 재확인
+- Work24 보류 처리를 환경변수 값과 무관하게 강제하도록 수정 후 `.\.venv\Scripts\python.exe -m compileall app` 통과
+- Work24 보류 처리 단위 확인: 동일 `idempotency_key`가 있어도 기존 성공 run 재사용 없이 차단 결과를 만들고 외부 호출 없음 확인
+- 수집원 상태 관리용 `job_sources` 테이블 마이그레이션 `d2e3f4a5b6c7_add_job_sources_table.py` 생성 확인
+- `.\.venv\Scripts\alembic.exe heads` 결과 `d2e3f4a5b6c7 (head)` 확인
+- `.\.venv\Scripts\alembic.exe upgrade head` 통과
+- `job_sources` seed 확인: `ALIO=ACTIVE`, `WORK24=PENDING_APPROVAL`, `SARAMIN=DISABLED`, `MANUAL=ACTIVE`
+- source 상태 기반 Work24 차단 검증: 실제 DB 세션에서 `source=WORK24`, `status=BLOCKED`, `collected_count=0`, `inserted_count=0`, `updated_count=0`, `skipped_count=1`, `failed_count=0`, `error_code=JOB_SOURCE_001` 확인
+- `GET /jobs?source=ALIO` 조회 경로 확인: 저장 데이터 0건 상태에서 정상 조회 처리 확인
+- `.\.venv\Scripts\python.exe -m compileall app` 재검증 통과
+- 프론트엔드 `npm run lint` 통과
+- 프론트엔드 `npm run build` 통과
+- 프론트엔드 `npm audit` 결과 취약점 0개 확인
+- `git diff --check` 결과 공백 오류 없음
+- `.env`는 `git status --short`에 포함되지 않음 확인
 
 2026-04-29 기준 확인 완료:
 
@@ -247,11 +302,12 @@ npm run dev
 
 ## 다음 작업
 
-1. Phase 2: 워크넷 채용정보 API 클라이언트 + 수집 서비스 + 관리자 수동 수집 API
-2. 관리자 카테고리 화면을 실제 `/categories` API와 연결
-3. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
-4. 사용자용 Q&A 목록·상세 화면 추가 여부 결정
-5. 프론트엔드 toast/field error 표시 방식 고도화
+1. `alembic upgrade head`로 ALIO/공통코드 마이그레이션 적용
+2. 실제 ALIO 응답 필드명 기준으로 `alio_client.py` alias TODO 정리
+3. ALIO 코드 동기화 배치 (`ALIO_CODE_SYNC`) 구현 여부 결정
+4. 관리자 카테고리 화면을 실제 `/categories` API와 연결
+5. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
+6. 프론트엔드 채용공고 화면을 `GET /jobs` API와 연결
 
 ## 다른 AI에게 요청할 때 사용할 프롬프트
 

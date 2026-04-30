@@ -7,7 +7,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api import auth_router, categories_router, posts_router
+from app.api import (
+    admin_jobs_router,
+    auth_router,
+    categories_router,
+    jobs_router,
+    posts_router,
+)
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.exception_handlers import register_exception_handlers
@@ -32,6 +38,8 @@ register_exception_handlers(app)
 app.include_router(auth_router)
 app.include_router(categories_router)
 app.include_router(posts_router)
+app.include_router(admin_jobs_router)
+app.include_router(jobs_router)
 
 
 @app.get("/")

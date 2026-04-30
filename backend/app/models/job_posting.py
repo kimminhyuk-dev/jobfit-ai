@@ -27,7 +27,7 @@ class JobPosting(Base, AuditMixin, SoftDeleteMixin):
     """
     채용공고 테이블
     - source/source_job_id 조합으로 외부 공고를 식별
-    - Work24 XML 응답은 dict 변환 후 raw_response에 보관
+    - Work24 XML/ALIO JSON 응답은 dict 변환 후 raw_response에 보관
     """
 
     __tablename__ = "job_postings"
@@ -45,13 +45,13 @@ class JobPosting(Base, AuditMixin, SoftDeleteMixin):
         String(20),
         nullable=False,
         index=True,
-        comment="공고 출처 (WORK24/SARAMIN/MANUAL)",
+        comment="공고 출처 (ALIO/WORK24/SARAMIN/MANUAL)",
     )
     source_job_id: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         index=True,
-        comment="외부 공고 ID (Work24의 wantedAuthNo)",
+        comment="외부 공고 ID",
     )
     source_url: Mapped[str | None] = mapped_column(
         String(500),
@@ -94,6 +94,12 @@ class JobPosting(Base, AuditMixin, SoftDeleteMixin):
         index=True,
         comment="근무지역 텍스트",
     )
+    location_code: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        index=True,
+        comment="근무지 코드 (ALIO R3000)",
+    )
     location_address: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
@@ -104,12 +110,22 @@ class JobPosting(Base, AuditMixin, SoftDeleteMixin):
         nullable=True,
         comment="경력조건 텍스트",
     )
+    career_level_code: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="채용구분 코드 (ALIO R2000)",
+    )
     min_career_years: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_career_years: Mapped[int | None] = mapped_column(Integer, nullable=True)
     education: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="학력조건",
+    )
+    education_code: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="학력정보 코드 (ALIO R7000)",
     )
     employment_type: Mapped[str | None] = mapped_column(
         String(50),
@@ -119,6 +135,46 @@ class JobPosting(Base, AuditMixin, SoftDeleteMixin):
     employment_type_code: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
+    )
+    ncs_category: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+        comment="NCS 분류명",
+    )
+    ncs_category_code: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="NCS 분류 코드 (ALIO R6000)",
+    )
+    organization_type: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="기관유형",
+    )
+    organization_type_code: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="기관유형 코드 (ALIO A2000)",
+    )
+    organization_category: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="기관분류",
+    )
+    organization_category_code: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+        comment="기관분류 코드 (ALIO INST_CLSF)",
+    )
+    ministry: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="주무부처",
+    )
+    ministry_code: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="주무부처 코드 (ALIO A1000)",
     )
     work_schedule: Mapped[str | None] = mapped_column(
         String(200),
@@ -155,6 +211,11 @@ class JobPosting(Base, AuditMixin, SoftDeleteMixin):
         DateTime(timezone=True),
         nullable=True,
         comment="외부 API 최종수정일 (smodifyDtm)",
+    )
+    updated_from_source_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="외부 출처 기준 최종수정일",
     )
 
     raw_content: Mapped[str | None] = mapped_column(

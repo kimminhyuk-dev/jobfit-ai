@@ -40,6 +40,12 @@ class BatchJobRun(Base, AuditMixin, SoftDeleteMixin):
         nullable=False,
         comment="배치 이름",
     )
+    source: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        index=True,
+        comment="배치 대상 출처 (ALIO/WORK24 등)",
+    )
     idempotency_key: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
@@ -53,7 +59,7 @@ class BatchJobRun(Base, AuditMixin, SoftDeleteMixin):
         default="READY",
         server_default="READY",
         index=True,
-        comment="READY/RUNNING/SUCCESS/FAILED/PARTIAL_SUCCESS/SKIPPED/RATE_LIMITED",
+        comment="READY/RUNNING/SUCCESS/PARTIAL_SUCCESS/FAILED/BLOCKED/SKIPPED/RATE_LIMITED",
     )
     trigger_type: Mapped[str] = mapped_column(
         String(20),
@@ -101,6 +107,12 @@ class BatchJobRun(Base, AuditMixin, SoftDeleteMixin):
         server_default="0",
     )
     skipped_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    success_count: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         default=0,

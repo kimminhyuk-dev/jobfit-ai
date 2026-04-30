@@ -34,11 +34,21 @@ class Settings(BaseSettings):
 
     # Work24 OpenAPI
     work24_base_url: str = "https://www.work24.go.kr"
-    work24_job_api_key: str
+    work24_job_api_key: str = ""
     work24_department_api_key: str = ""
     work24_duty_api_key: str = ""
     work24_common_code_api_key: str = ""
     work24_occupation_api_key: str = ""
+
+    # ALIO / 공공기관 채용정보 API
+    alio_base_url: str = "https://opendata.alio.go.kr"
+    alio_recruit_list_url: str = (
+        "https://opendata.alio.go.kr/v1/recruit/list.do"
+    )
+    alio_recruit_detail_url: str = (
+        "https://opendata.alio.go.kr/v1/recruit/detail.do"
+    )
+    alio_api_key: str = ""
 
     # CORS
     cors_origins: list[str] = [
