@@ -58,6 +58,7 @@
   - ESLint 9 flat config 기반 프론트엔드 lint 설정 적용
 - 루트 AI 에이전트 지시 문서 생성 완료 (AGENTS.md / CLAUDE.md / GEMINI.md)
 - AI 인수인계 문서는 루트 `HANDOFF.md`로 단일화 완료
+- 워크넷/고용24 채용공고 도메인 DB 스키마 추가 (Phase 1)
 
 ## 완료된 백엔드 기능
 
@@ -94,6 +95,10 @@
 - 입력값 검증 오류는 `COMMON_001` 코드와 함께 `details` 배열을 추가로 응답
 - 인증/권한/카테고리/게시글 도메인 오류는 `AUTH_*`, `CATEGORY_*`, `POST_*` 에러코드로 구분
 
+### 채용공고 도메인
+
+- 채용공고 도메인 모델 (`job_postings`, `batch_job_runs`) - Phase 1 DB 구조
+
 ## 완료된 프론트엔드 기능
 
 - Vite + React + TypeScript 프로젝트 구성
@@ -129,7 +134,9 @@
 - `backend/app/core/exceptions.py`
 - `backend/app/core/security.py`
 - `backend/app/models/base.py`
+- `backend/app/models/batch_job_run.py`
 - `backend/app/models/category.py`
+- `backend/app/models/job_posting.py`
 - `backend/app/models/post.py`
 - `backend/app/models/user.py`
 - `backend/app/repositories/category_repository.py`
@@ -143,6 +150,7 @@
 - `backend/app/services/post_service.py`
 - `backend/app/services/user_service.py`
 - `backend/alembic/versions/4f6a7b8c9d10_add_categories_and_admin_role.py`
+- `backend/alembic/versions/b9a9c0967b9a_add_job_postings_and_batch_job_runs_.py`
 - `backend/alembic/versions/3a2b1c4d5e6f_create_posts_table.py`
 - `backend/alembic/versions/8dad372a1f24_create_users_table.py`
 - `backend/.env.example`
@@ -166,6 +174,16 @@
 - `ai_context/API_SPEC.md`
 
 ## 최근 검증
+
+2026-04-30 기준 확인 완료:
+
+- 워크넷/고용24 채용공고 도메인 모델 추가 후 `.\.venv\Scripts\python.exe -m compileall app` 통과
+- Alembic 자동 생성으로 `b9a9c0967b9a_add_job_postings_and_batch_job_runs_.py` 생성 확인
+- 마이그레이션 파일에서 `batch_job_runs`, `job_postings` 테이블 생성 확인
+- `job_postings.collect_run_id` → `batch_job_runs.run_id` 외래키 생성 확인
+- `uq_job_postings_source` 유니크 제약조건과 주요 인덱스 생성 확인
+- `status`, `collection_status`, `embedding_status`, 카운트 컬럼, `is_deleted` 등 server default 반영 확인
+- `alembic upgrade head`는 이번 작업에서 실행하지 않음 (사용자 검토 후 적용 예정)
 
 2026-04-29 기준 확인 완료:
 
@@ -229,10 +247,11 @@ npm run dev
 
 ## 다음 작업
 
-1. 관리자 카테고리 화면을 실제 `/categories` API와 연결
-2. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
-3. 사용자용 Q&A 목록·상세 화면 추가 여부 결정
-4. 프론트엔드 toast/field error 표시 방식 고도화
+1. Phase 2: 워크넷 채용정보 API 클라이언트 + 수집 서비스 + 관리자 수동 수집 API
+2. 관리자 카테고리 화면을 실제 `/categories` API와 연결
+3. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
+4. 사용자용 Q&A 목록·상세 화면 추가 여부 결정
+5. 프론트엔드 toast/field error 표시 방식 고도화
 
 ## 다른 AI에게 요청할 때 사용할 프롬프트
 

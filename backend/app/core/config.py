@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     refresh_token_cookie_secure: bool = False
     refresh_token_cookie_samesite: str = "lax"
 
+    # Work24 OpenAPI
+    work24_base_url: str = "https://www.work24.go.kr"
+    work24_job_api_key: str
+    work24_department_api_key: str = ""
+    work24_duty_api_key: str = ""
+    work24_common_code_api_key: str = ""
+    work24_occupation_api_key: str = ""
+
     # CORS
     cors_origins: list[str] = [
         "http://localhost:5173",
