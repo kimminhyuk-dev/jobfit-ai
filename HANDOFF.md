@@ -67,6 +67,9 @@
 - ALIO 코드 정의서 기준 `common_code_groups`, `common_codes` 테이블과 마이그레이션 추가
 - `batch_job_runs`를 ALIO 수집 배치 이력까지 기록할 수 있도록 확장
 - 관리자 수동 ALIO 수집 API와 사용자 채용공고 조회 API 추가
+- ALIO 설정은 `.env`에서 `ALIO_BASE_URL`, `ALIO_API_KEY`만 관리하고 목록/상세 endpoint path는 코드 상수로 관리
+- 기존 `.env`에 deprecated `ALIO_RECRUIT_LIST_URL`, `ALIO_RECRUIT_DETAIL_URL`이 남아 있어도 클라이언트에서 현재 코드 상수 기반 URL로 보정
+- ALIO 목록 수집은 현재 동작하는 `/new/odaApiMng/recrutInquiryAjaxList.do` 응답 구조 기준으로 매핑
 
 ## 완료된 백엔드 기능
 
@@ -109,6 +112,8 @@
 - Work24 채용정보 수집 (관리자 수동 수집 API)
 - Work24 채용정보 수집은 일반 사용자 API 사용 제한으로 외부 API 호출 없이 `JOB_SOURCE_001` + `BLOCKED` 배치 이력 기록
 - ALIO 공공기관 채용정보 수집 클라이언트와 관리자 수동 수집 API
+- ALIO 기존 `/v1/recruit/list.do` 302 redirect 방어 및 현재 목록 JSON 응답 필드 매핑
+- ALIO endpoint URL 환경 변수 deprecated 처리 및 `ALIO_BASE_URL` + 코드 상수 path 기반 URL 조립
 - 사용자 채용공고 조회 API `GET /jobs`
 - ALIO 코드 정의서 기반 공통코드 그룹/상세코드 테이블
 
@@ -232,6 +237,13 @@
 - `.\.venv\Scripts\alembic.exe upgrade head` 통과
 - `job_sources` seed 확인: `ALIO=ACTIVE`, `WORK24=PENDING_APPROVAL`, `SARAMIN=DISABLED`, `MANUAL=ACTIVE`
 - source 상태 기반 Work24 차단 검증: 실제 DB 세션에서 `source=WORK24`, `status=BLOCKED`, `collected_count=0`, `inserted_count=0`, `updated_count=0`, `skipped_count=1`, `failed_count=0`, `error_code=JOB_SOURCE_001` 확인
+- ALIO 기존 `/v1/recruit/list.do` URL이 `https://opendata.alio.go.kr/new`로 302 redirect되어 HTML을 반환하는 문제 확인
+- ALIO 목록 수집 URL을 현재 동작하는 `/new/odaApiMng/recrutInquiryAjaxList.do`로 보정하고 실제 응답 필드(`recrutPblntSn`, `recrutPbancTtl`, `instNm` 등) 매핑 반영
+- ALIO 클라이언트 직접 검증: `fetch_recruit_list(start_page=1, display=2)` 결과 2건 파싱 확인
+- ALIO 수집 서비스 검증: 실제 DB 세션에서 `run_id=8`, `status=SUCCESS`, `collected_count=2`, `inserted_count=2`, `failed_count=0` 확인
+- ALIO 설정 구조 정리 후 `.env`의 endpoint 전체 URL 의존 제거: `ALIO_BASE_URL` + `RECRUIT_LIST_PATH`/`RECRUIT_DETAIL_PATH` 코드 상수 기반 URL 조립으로 변경
+- ALIO deprecated endpoint env 방어 검증: 기존 `.env`에 구 `ALIO_RECRUIT_LIST_URL`이 남아 있어도 실제 수집 `run_id=9`, `status=SUCCESS`, `collected_count=1`, `skipped_count=1`, `failed_count=0` 확인
+- `GET /jobs?source=ALIO&page=1&size=5` TestClient 검증: HTTP 200, `total=2`, `items_count=2` 확인
 - `GET /jobs?source=ALIO` 조회 경로 확인: 저장 데이터 0건 상태에서 정상 조회 처리 확인
 - `.\.venv\Scripts\python.exe -m compileall app` 재검증 통과
 - 프론트엔드 `npm run lint` 통과
@@ -303,11 +315,10 @@ npm run dev
 ## 다음 작업
 
 1. `alembic upgrade head`로 ALIO/공통코드 마이그레이션 적용
-2. 실제 ALIO 응답 필드명 기준으로 `alio_client.py` alias TODO 정리
-3. ALIO 코드 동기화 배치 (`ALIO_CODE_SYNC`) 구현 여부 결정
-4. 관리자 카테고리 화면을 실제 `/categories` API와 연결
-5. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
-6. 프론트엔드 채용공고 화면을 `GET /jobs` API와 연결
+2. ALIO 코드 동기화 배치 (`ALIO_CODE_SYNC`) 구현 여부 결정
+3. 관리자 카테고리 화면을 실제 `/categories` API와 연결
+4. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
+5. 프론트엔드 채용공고 화면을 `GET /jobs` API와 연결
 
 ## 다른 AI에게 요청할 때 사용할 프롬프트
 

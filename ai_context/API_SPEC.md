@@ -319,8 +319,11 @@ Authorization: Bearer <admin_access_token>
 ### POST /admin/job-sources/alio/collect
 관리자가 ALIO 공공기관 채용정보 목록 API 수집을 수동 실행한다.
 
-ALIO가 현재 메인 공공기관 채용 수집원이다. API 키는 `backend/.env`에서
-`ALIO_API_KEY`로 관리하며, 실제 키 값은 요청/응답/문서에 포함하지 않는다.
+ALIO가 현재 메인 공공기관 채용 수집원이다. ALIO 설정은 `backend/.env`에서
+`ALIO_BASE_URL`, `ALIO_API_KEY`만 관리하며, 실제 키 값은 요청/응답/문서에 포함하지 않는다.
+목록/상세 endpoint path는 코드 상수로 관리한다. `ALIO_RECRUIT_LIST_URL`,
+`ALIO_RECRUIT_DETAIL_URL`처럼 전체 endpoint URL을 환경 변수로 관리하는 방식은 deprecated다.
+기존 로컬 `.env`에 deprecated 값이 남아 있어도 클라이언트에서 현재 코드 상수 기반 URL로 보정한다.
 자동 배치는 추후 GitHub Actions, Jenkins, APScheduler 등으로 확장하고,
 현재는 관리자 수동 수집 API로 먼저 검증한다.
 
@@ -332,10 +335,11 @@ Authorization: Bearer <admin_access_token>
 #### Request
 ```json
 {
-  "keyword": "python",
+  "keyword": "전산",
   "start_page": 1,
-  "max_pages": 3,
-  "display": 10
+  "max_pages": 1,
+  "display": 10,
+  "idempotency_key": "alio-collect-20260430-002"
 }
 ```
 
@@ -347,10 +351,18 @@ Authorization: Bearer <admin_access_token>
   "collected_count": 30,
   "inserted_count": 20,
   "updated_count": 10,
+  "skipped_count": 0,
   "failed_count": 0,
+  "error_code": null,
+  "error_message": null,
   "run_id": 1
 }
 ```
+
+#### Notes
+- 기본 ALIO 목록 path는 `alio_client.py`의 `RECRUIT_LIST_PATH` 상수로 관리한다.
+- 기존 `https://opendata.alio.go.kr/v1/recruit/list.do`는 현재 ALIO 메인 화면으로 302 redirect될 수 있어 클라이언트에서 현재 목록 URL로 보정한다.
+- ALIO 목록 응답의 `recrutPblntSn`, `recrutPbancTtl`, `instNm`, `pbancBgngYmd`, `pbancEndYmd` 등을 내부 채용공고 필드로 매핑한다.
 
 ### POST /admin/jobs/sources/work24/collect
 관리자가 Work24/고용24 채용정보 목록 API 수집을 수동 실행한다.

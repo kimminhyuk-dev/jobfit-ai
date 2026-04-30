@@ -3,6 +3,7 @@
 .env 파일의 환경변수를 타입 안전하게 읽어오는 모듈
 """
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -42,13 +43,11 @@ class Settings(BaseSettings):
 
     # ALIO / 공공기관 채용정보 API
     alio_base_url: str = "https://opendata.alio.go.kr"
-    alio_recruit_list_url: str = (
-        "https://opendata.alio.go.kr/v1/recruit/list.do"
-    )
-    alio_recruit_detail_url: str = (
-        "https://opendata.alio.go.kr/v1/recruit/detail.do"
-    )
     alio_api_key: str = ""
+    # Deprecated: endpoint paths are managed in alio_client.py.
+    # These fields are kept only so old local .env files do not break startup.
+    alio_recruit_list_url: str | None = Field(default=None)
+    alio_recruit_detail_url: str | None = Field(default=None)
 
     # CORS
     cors_origins: list[str] = [

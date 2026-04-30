@@ -60,7 +60,9 @@
 - 현재 메인 공공기관 채용 수집원은 ALIO 공공기관 채용정보 API이며 `ACTIVE` 상태입니다.
 - Work24/고용24는 키는 발급됐으나 일반 사용자 API 사용 제한으로 `PENDING_APPROVAL` 보류 상태이며 기존 코드는 삭제하지 않습니다.
 - 수집원 상태는 `job_sources` 테이블에서 관리하고, `ACTIVE`가 아닌 수집원은 외부 API 호출 전 `BLOCKED`로 기록합니다.
-- ALIO API 키는 `backend/.env`에서 관리하며 실제 키 값은 커밋하지 않습니다.
+- ALIO 설정은 `backend/.env`에서 `ALIO_BASE_URL`, `ALIO_API_KEY`만 관리합니다.
+- ALIO 목록/상세 endpoint path는 코드 상수로 관리하며, `ALIO_RECRUIT_LIST_URL`, `ALIO_RECRUIT_DETAIL_URL` 같은 전체 URL 환경 변수는 deprecated입니다.
+- 기존 로컬 `.env`에 deprecated ALIO endpoint URL이 남아 있어도 클라이언트에서 현재 코드 상수 기반 URL로 보정합니다.
 - 프론트엔드는 외부 ALIO API를 직접 호출하지 않고 백엔드 `GET /jobs`로 DB 저장 공고만 조회합니다.
 - 자동 배치는 추후 GitHub Actions, Jenkins, APScheduler 등으로 확장하고, 현재는 관리자 수동 수집 API로 검증합니다.
 

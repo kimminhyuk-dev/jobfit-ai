@@ -82,7 +82,10 @@ class AlioCollectResponse(BaseModel):
     collected_count: int
     inserted_count: int
     updated_count: int
+    skipped_count: int
     failed_count: int
+    error_code: str | None = None
+    error_message: str | None = None
     run_id: int
 
 
