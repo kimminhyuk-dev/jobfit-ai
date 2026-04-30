@@ -169,6 +169,11 @@
 - 관리자 대시보드 `GET /admin/stats` 연결 완료: 전체 사용자·활성 카테고리·총 게시글·오늘 가입·채용공고 수 실데이터 표시, 로딩 스켈레톤·에러 배너 포함
 - 관리자 채용공고 화면(`/admin/jobs`) 신설: 소스 탭 필터(전체/ALIO/WORK24/SARAMIN/MANUAL), 상태 배지(OPEN/CLOSED/EXPIRED/HIDDEN), 마스터-디테일 레이아웃, 수집 메타 패널 포함
 - 관리자 라우트는 `user.role === 'ADMIN'`일 때만 접근 가능
+- 관리자 카테고리 화면 실제 API 연결 + CRUD 모달 (생성·수정·삭제)
+- 관리자 Q&A 게시글 화면 실제 API 연결 + CRUD 모달 (생성·수정·삭제, 페이지네이션)
+- 사용자 채용공고 화면: ALIO/Mock 소스 탭 + 서버 페이지네이션 추가
+- 회원정보 수정 API (`PATCH /auth/me`) 구현 (이름·비밀번호)
+- 사용자 대시보드 "프로필 수정" 모달 추가
 
 - `frontend/src/api/admin.ts`
 - `frontend/src/pages/admin/AdminJobsPage.tsx`
@@ -246,6 +251,33 @@
 - `ai_context/API_SPEC.md`
 
 ## 최근 검증
+
+2026-04-30 관리자 화면 API 연결·회원 수정 API·채용공고 UX 개선:
+
+- `alembic upgrade head` 실행 완료 (data_source 마이그레이션 `b8050fd5e470` 적용)
+- `backend/data/mock_work24_jobs.json` 생성 (IT 기업 10개 공고 — 카카오·네이버·라인·쿠팡·토스 등)
+- 관리자 카테고리 화면(`/admin/categories`) 실제 API 연결 + CRUD 모달 구현
+  - 카테고리 생성·수정(slug 자동완성 포함)·삭제(확인 다이얼로그) 동작
+  - TanStack Query `invalidateQueries` 기반 즉시 갱신
+- 관리자 Q&A 게시글 화면(`/admin/posts`) 실제 API 연결 + CRUD 모달 구현
+  - 카테고리 드롭다운 동적 조회, 게시글 생성·수정·삭제 구현
+  - 카테고리/offset 기반 서버 페이지네이션 적용 (limit=20)
+- 사용자 채용공고 화면(`/user/jobs`) 개선
+  - 소스 탭 추가: 공공기관(ALIO·data_source=PRODUCTION) / IT 기업(data_source=MOCK)
+  - 서버 페이지네이션 추가 (PAGE_SIZE=20, 탭·페이지 변경 시 selected 초기화)
+- 회원정보 수정 백엔드 API 구현
+  - `UserUpdate` 스키마 추가 (이름, 현재/새 비밀번호 선택적)
+  - `UserRepository.update()`, `UserService.update_me()`, `InvalidCurrentPasswordError` 추가
+  - `PATCH /auth/me` 엔드포인트 추가 (현재 비밀번호 틀리면 400 `AUTH_004`)
+- 회원정보 수정 프론트엔드 구현
+  - `authApi.updateMe()` 추가, `AuthContext.setUser()` 추가
+  - 사용자 대시보드 우상단 "프로필 수정" 버튼 → 이름·비밀번호 변경 모달
+- `frontend/src/api/jobs.ts` `GetJobsParams`에 `data_source` 파라미터 추가
+- `frontend/src/api/admin.ts` 카테고리·게시글 CRUD API 메서드 추가
+- `frontend/src/api/types.ts` Category·Post 관련 타입 추가
+- `python -m compileall app` 통과
+- `npm run lint` 통과 (경고 0개)
+- `npm run build` 통과 (232 modules)
 
 2026-04-30 Mock 데이터 트랙 추가:
 
@@ -373,15 +405,11 @@ npm run dev
 
 ## 다음 작업
 
-1. 마이그레이션 검토 후 `alembic upgrade head` 실행
-2. `backend/data/mock_work24_jobs.json` 파일 준비 후 `POST /admin/jobs/sources/mock/load` Swagger 테스트
-3. DB 확인: `SELECT data_source, COUNT(*) FROM job_postings GROUP BY data_source;`
-4. 프론트엔드: 사용자 채용공고 화면에 data_source 필터 추가 (Mock/실데이터 탭 분리)
-5. 관리자 카테고리 화면을 실제 `/categories` API와 연결
-6. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
-7. 채용공고 페이지에 페이지네이션 추가 (현재 size=50/100 고정)
-8. 매칭 기능(AI 매칭 점수, 스킬 분석) 구현
-9. ALIO 코드 동기화 배치 (`ALIO_CODE_SYNC`) 구현 여부 결정
+1. `POST /admin/jobs/sources/mock/load` Swagger 테스트 (mock_work24_jobs.json 로드 확인)
+2. DB 확인: `SELECT data_source, COUNT(*) FROM job_postings GROUP BY data_source;`
+3. 매칭 기능(AI 매칭 점수, 스킬 분석) 구현
+4. 이력서 도메인 (업로드, 저장, 파싱) 구현
+5. ALIO 코드 동기화 배치 (`ALIO_CODE_SYNC`) 구현 여부 결정
 
 ## 다른 AI에게 요청할 때 사용할 프롬프트
 

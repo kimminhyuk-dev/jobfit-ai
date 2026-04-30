@@ -9,6 +9,7 @@ export interface GetJobsParams {
   education_code?: string;
   career_level_code?: string;
   status?: string;
+  data_source?: string;
   page?: number;
   size?: number;
 }

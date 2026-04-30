@@ -1,9 +1,125 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
 import Gauge from '../../components/ui/Gauge';
 import Icon from '../../components/ui/Icon';
 import { useAuth } from '../../stores/authContext';
+import { authApi } from '../../api/auth';
 import { mockJobs, mockStats, mockApplications } from '../../api/mock/jobs';
+
+function ProfileModal({ onClose }: { onClose: () => void }) {
+  const { user, setUser } = useAuth();
+  const [name, setName] = useState(user?.name ?? '');
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: authApi.updateMe,
+    onSuccess: (updated) => {
+      setUser(updated);
+      setSuccess('저장되었습니다.');
+      setCurrentPw('');
+      setNewPw('');
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      setError(e.response?.data?.message ?? '저장에 실패했습니다.'),
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    const body: Parameters<typeof authApi.updateMe>[0] = {};
+    const trimmedName = name.trim();
+    if (trimmedName !== (user?.name ?? '')) body.name = trimmedName || undefined;
+    if (newPw) {
+      if (!currentPw) { setError('현재 비밀번호를 입력하세요.'); return; }
+      body.current_password = currentPw;
+      body.new_password = newPw;
+    }
+    if (!Object.keys(body).length) { setError('변경할 내용이 없습니다.'); return; }
+    mutation.mutate(body);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-100 p-6">
+        <h2 className="text-[16px] font-bold mb-4" style={{ color: '#0f172a' }}>프로필 수정</h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div>
+            <label className="text-[12px] font-medium block mb-1" style={{ color: '#475569' }}>이메일</label>
+            <input
+              value={user?.email ?? ''}
+              disabled
+              className="w-full h-9 px-3 rounded-lg border text-[13px]"
+              style={{ borderColor: '#e2e8f0', background: '#f8fafc', color: '#94a3b8' }}
+            />
+          </div>
+          <div>
+            <label className="text-[12px] font-medium block mb-1" style={{ color: '#475569' }}>이름</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={50}
+              className="w-full h-9 px-3 rounded-lg border text-[13px] focus:outline-none focus:border-blue-500"
+              style={{ borderColor: '#e2e8f0' }}
+              placeholder="이름"
+            />
+          </div>
+          <hr style={{ borderColor: '#f1f5f9' }} />
+          <p className="text-[12px] font-medium" style={{ color: '#475569' }}>비밀번호 변경 (선택)</p>
+          <div>
+            <label className="text-[12px] font-medium block mb-1" style={{ color: '#475569' }}>현재 비밀번호</label>
+            <input
+              type="password"
+              value={currentPw}
+              onChange={(e) => setCurrentPw(e.target.value)}
+              className="w-full h-9 px-3 rounded-lg border text-[13px] focus:outline-none focus:border-blue-500"
+              style={{ borderColor: '#e2e8f0' }}
+              placeholder="현재 비밀번호"
+            />
+          </div>
+          <div>
+            <label className="text-[12px] font-medium block mb-1" style={{ color: '#475569' }}>새 비밀번호</label>
+            <input
+              type="password"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              minLength={8}
+              className="w-full h-9 px-3 rounded-lg border text-[13px] focus:outline-none focus:border-blue-500"
+              style={{ borderColor: '#e2e8f0' }}
+              placeholder="8자 이상"
+            />
+          </div>
+
+          {error && <p className="text-[12px] text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+          {success && <p className="text-[12px] text-green-700 bg-green-50 px-3 py-2 rounded-lg">{success}</p>}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-9 px-4 rounded-lg text-[13px] font-medium border"
+              style={{ borderColor: '#e2e8f0', color: '#475569' }}
+            >
+              닫기
+            </button>
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="h-9 px-4 rounded-lg text-white text-[13px] font-semibold disabled:opacity-50"
+              style={{ background: '#2563eb' }}
+            >
+              {mutation.isPending ? '저장 중...' : '저장'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 const statCards = [
   { label: '이력서 점수', valueKey: 'resumeScore' as const, suffix: '/100', icon: 'sparkle' as const, delta: '+5' },
@@ -15,10 +131,12 @@ const statCards = [
 export default function DashboardPage() {
   const { user } = useAuth();
   const [selectedJobId, setSelectedJobId] = useState(mockJobs[0].id);
+  const [showProfile, setShowProfile] = useState(false);
   const selectedJob = mockJobs.find((j) => j.id === selectedJobId) ?? mockJobs[0];
   const stats = mockStats;
 
   return (
+    <>
     <div className="p-6 max-w-[1200px] mx-auto">
       {/* Greeting */}
       <div className="flex items-end justify-between mb-5 gap-4 flex-wrap">
@@ -30,13 +148,22 @@ export default function DashboardPage() {
             오늘 새로 매칭된 공고가 <strong className="text-m-text">{stats.weeklyDelta}건</strong> 있어요. 좋은 하루 되세요!
           </p>
         </div>
-        <Link
-          to="/user/matches"
-          className="h-9 px-4 flex items-center gap-1.5 rounded-lg border border-m-border text-[13px] font-medium text-m-muted hover:bg-m-surface-alt transition-colors"
-        >
-          AI 분석 보기
-          <Icon name="chevron" size={13} />
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowProfile(true)}
+            className="h-9 px-4 flex items-center gap-1.5 rounded-lg border border-m-border text-[13px] font-medium text-m-muted hover:bg-m-surface-alt transition-colors"
+          >
+            <Icon name="user" size={13} />
+            프로필 수정
+          </button>
+          <Link
+            to="/user/matches"
+            className="h-9 px-4 flex items-center gap-1.5 rounded-lg border border-m-border text-[13px] font-medium text-m-muted hover:bg-m-surface-alt transition-colors"
+          >
+            AI 분석 보기
+            <Icon name="chevron" size={13} />
+          </Link>
+        </div>
       </div>
 
       {/* Stats row */}
@@ -214,5 +341,8 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+
+    {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+    </>
   );
 }

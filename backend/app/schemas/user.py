@@ -24,6 +24,22 @@ class UserCreate(BaseModel):
         return value or None
 
 
+class UserUpdate(BaseModel):
+    """회원정보 수정 요청"""
+
+    name: str | None = Field(default=None, max_length=50)
+    current_password: str | None = Field(default=None, min_length=1, max_length=128)
+    new_password: str | None = Field(default=None, min_length=8, max_length=128)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
 class UserResponse(BaseModel):
     """회원 응답"""
 

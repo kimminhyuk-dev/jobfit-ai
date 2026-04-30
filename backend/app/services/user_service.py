@@ -15,11 +15,15 @@ from app.core.security import (
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import LoginRequest
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, UserUpdate
 
 
 class DuplicateEmailError(Exception):
     """이미 가입된 이메일"""
+
+
+class InvalidCurrentPasswordError(Exception):
+    """현재 비밀번호 불일치"""
 
 
 class InvalidCredentialsError(Exception):
@@ -77,6 +81,24 @@ class UserService:
             raise InvalidTokenError
         if user.status != "ACTIVE":
             raise InactiveUserError
+        return user
+
+    def update_me(self, user: User, user_update: UserUpdate) -> User:
+        new_hashed: str | None = None
+        if user_update.new_password is not None:
+            if not user_update.current_password or not verify_password(
+                user_update.current_password, user.password
+            ):
+                raise InvalidCurrentPasswordError
+            new_hashed = hash_password(user_update.new_password)
+
+        user = self.user_repository.update(
+            user,
+            name=user_update.name,
+            hashed_password=new_hashed,
+        )
+        self.db.commit()
+        self.db.refresh(user)
         return user
 
     def create_token_pair(self, user: User) -> tuple[str, str]:

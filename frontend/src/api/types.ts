@@ -138,6 +138,57 @@ export interface Application {
   color: string;
 }
 
+// 카테고리
+export interface Category {
+  category_id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CategoryCreate {
+  name: string;
+  slug: string;
+  description?: string;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+export interface CategoryUpdate {
+  name?: string;
+  slug?: string;
+  description?: string;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+// 게시글
+export interface Post {
+  post_id: number;
+  author_id: number;
+  category_id: number;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PostCreate {
+  category_id: number;
+  title: string;
+  content: string;
+}
+
+export interface PostUpdate {
+  category_id?: number;
+  title?: string;
+  content?: string;
+}
+
 // 관리자 대시보드 통계
 export interface AdminStats {
   total_users: number;

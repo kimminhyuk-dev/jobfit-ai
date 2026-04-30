@@ -5,6 +5,7 @@ import { AuthContext, type AuthState } from './authContext';
 
 type AuthAction =
   | { type: 'SET_USER'; user: User; token: string }
+  | { type: 'UPDATE_USER'; user: User }
   | { type: 'LOGOUT' }
   | { type: 'SET_LOADING'; loading: boolean };
 
@@ -12,6 +13,8 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
   switch (action.type) {
     case 'SET_USER':
       return { user: action.user, token: action.token, loading: false };
+    case 'UPDATE_USER':
+      return { ...state, user: action.user };
     case 'LOGOUT':
       return { user: null, token: null, loading: false };
     case 'SET_LOADING':
@@ -44,6 +47,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
+  const setUser = (user: User) => {
+    dispatch({ type: 'UPDATE_USER', user });
+  };
+
   const login = (token: string, user: User) => {
     localStorage.setItem('access_token', token);
     dispatch({ type: 'SET_USER', user, token });
@@ -59,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, login, logout }}>
+    <AuthContext.Provider value={{ ...state, login, logout, setUser }}>
       {children}
     </AuthContext.Provider>
   );

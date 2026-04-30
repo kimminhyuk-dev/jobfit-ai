@@ -12,11 +12,12 @@ from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
 from app.models.user import User
 from app.schemas.auth import LoginRequest, MessageResponse, TokenResponse
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.services.user_service import (
     DuplicateEmailError,
     InactiveUserError,
     InvalidCredentialsError,
+    InvalidCurrentPasswordError,
     InvalidTokenError,
     UserService,
 )
@@ -129,6 +130,24 @@ def logout(response: Response) -> MessageResponse:
 def read_me(current_user: User = Depends(get_current_user)) -> UserResponse:
     """Access Token으로 현재 로그인 사용자를 조회한다."""
     return UserResponse.model_validate(current_user)
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_me(
+    user_update: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
+) -> UserResponse:
+    """현재 로그인 사용자의 이름 또는 비밀번호를 수정한다."""
+    try:
+        user = user_service.update_me(current_user, user_update)
+    except InvalidCurrentPasswordError:
+        raise AppException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code=ErrorCode.INVALID_CREDENTIALS,
+            message="현재 비밀번호가 올바르지 않습니다.",
+        )
+    return UserResponse.model_validate(user)
 
 
 def _build_token_response(user: User, access_token: str) -> TokenResponse:

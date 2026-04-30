@@ -4,6 +4,13 @@ import Icon from '../../components/ui/Icon';
 import { jobsApi } from '../../api/jobs';
 import type { JobPostingItem } from '../../api/types';
 
+const PAGE_SIZE = 20;
+
+const SOURCE_TABS = [
+  { label: '공공기관 (ALIO)', source: 'ALIO', dataSource: 'PRODUCTION' },
+  { label: 'IT 기업 (Mock)', source: undefined, dataSource: 'MOCK' },
+];
+
 const LOGO_COLORS = ['#1d4ed8', '#0f766e', '#7c3aed', '#ea580c', '#0284c7', '#15803d', '#b45309'];
 
 function getInitials(name: string | null): string {
@@ -64,13 +71,26 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 export default function JobsPage() {
   const [selected, setSelected] = useState<JobPostingItem | null>(null);
   const [query, setQuery] = useState('');
+  const [tabIdx, setTabIdx] = useState(0);
+  const [page, setPage] = useState(1);
+
+  const tab = SOURCE_TABS[tabIdx];
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['jobs', 'ALIO'],
-    queryFn: () => jobsApi.getJobs({ source: 'ALIO', size: 50 }),
+    queryKey: ['jobs', tab.source, tab.dataSource, page],
+    queryFn: () =>
+      jobsApi.getJobs({
+        source: tab.source,
+        data_source: tab.dataSource,
+        page,
+        size: PAGE_SIZE,
+      }),
   });
 
   const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
   const filtered = items.filter(
     (j) =>
       !query ||
@@ -78,23 +98,16 @@ export default function JobsPage() {
       (j.company_name ?? '').includes(query),
   );
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full text-m-subtle">
-        <p className="text-[14px]">채용공고를 불러오는 중...</p>
-      </div>
-    );
+  function handleTabChange(idx: number) {
+    setTabIdx(idx);
+    setPage(1);
+    setSelected(null);
+    setQuery('');
   }
 
-  if (isError) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <p className="text-[14px] text-m-muted mb-1">채용공고를 불러올 수 없습니다.</p>
-          <p className="text-[12px] text-m-subtle">잠시 후 다시 시도해 주세요.</p>
-        </div>
-      </div>
-    );
+  function handlePageChange(next: number) {
+    setPage(next);
+    setSelected(null);
   }
 
   return (
@@ -103,12 +116,25 @@ export default function JobsPage() {
       <div className="flex flex-col border-r border-m-border bg-m-surface w-95 shrink-0">
         {/* Header */}
         <div className="p-4 border-b border-m-border">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="text-[16px] font-bold text-m-text">채용공고</h1>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-m-primary-soft text-m-primary font-medium">
-              ALIO 공공기관
-            </span>
+          <h1 className="text-[16px] font-bold text-m-text mb-3">채용공고</h1>
+
+          {/* Source tabs */}
+          <div className="flex gap-1 mb-3 p-1 rounded-lg bg-m-surface-alt">
+            {SOURCE_TABS.map((t, i) => (
+              <button
+                key={i}
+                onClick={() => handleTabChange(i)}
+                className={`flex-1 h-7 rounded-md text-[12px] font-medium transition-colors ${
+                  tabIdx === i
+                    ? 'bg-white text-m-primary shadow-sm'
+                    : 'text-m-subtle hover:text-m-muted'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
+
           <div className="relative">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-m-subtle">
               <Icon name="search" size={14} />
@@ -120,12 +146,22 @@ export default function JobsPage() {
               className="w-full h-9 pl-9 pr-3 rounded-lg border border-m-border bg-m-surface-alt text-[13px] focus:outline-none focus:border-m-primary focus:ring-1 focus:ring-m-primary"
             />
           </div>
-          <p className="text-[11px] text-m-subtle mt-2">{filtered.length}개 공고</p>
+          <p className="text-[11px] text-m-subtle mt-2">
+            {total > 0 ? `전체 ${total}개 · 이 페이지 ${filtered.length}개` : `${filtered.length}개 공고`}
+          </p>
         </div>
 
         {/* Job list */}
         <div className="flex-1 overflow-auto scrollbar-thin divide-y divide-m-border">
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center h-32 text-m-subtle">
+              <p className="text-[13px]">불러오는 중...</p>
+            </div>
+          ) : isError ? (
+            <div className="flex items-center justify-center h-32 text-m-subtle">
+              <p className="text-[13px]">불러올 수 없습니다.</p>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="flex items-center justify-center h-32 text-m-subtle">
               <p className="text-[13px]">공고가 없습니다.</p>
             </div>
@@ -176,6 +212,27 @@ export default function JobsPage() {
             ))
           )}
         </div>
+
+        {/* Pagination */}
+        {!isLoading && !isError && total > PAGE_SIZE && (
+          <div className="p-3 border-t border-m-border flex items-center justify-between">
+            <button
+              onClick={() => handlePageChange(page - 1)}
+              disabled={page === 1}
+              className="h-7 px-3 rounded-lg border text-[12px] font-medium disabled:opacity-40 text-m-muted border-m-border"
+            >
+              이전
+            </button>
+            <span className="text-[12px] text-m-subtle">{page} / {totalPages}</span>
+            <button
+              onClick={() => handlePageChange(page + 1)}
+              disabled={page >= totalPages}
+              className="h-7 px-3 rounded-lg border text-[12px] font-medium disabled:opacity-40 text-m-muted border-m-border"
+            >
+              다음
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Detail panel */}

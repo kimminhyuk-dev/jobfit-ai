@@ -10,6 +10,7 @@ export interface AuthState {
 export interface AuthContextValue extends AuthState {
   login: (token: string, user: User) => void;
   logout: () => Promise<void>;
+  setUser: (user: User) => void;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
