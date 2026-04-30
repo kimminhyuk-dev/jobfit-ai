@@ -3,6 +3,7 @@
 """
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -118,6 +119,7 @@ class JobPostingResponse(BaseModel):
     ministry_code: str | None
     posted_at: datetime | None
     deadline: datetime | None
+    data_source: str
     status: str
     collected_at: datetime
 
@@ -129,3 +131,30 @@ class JobPostingListResponse(BaseModel):
     total: int
     page: int
     size: int
+
+
+class MockLoadRequest(BaseModel):
+    """Mock 채용공고 로드 요청"""
+
+    file_path: str | None = Field(
+        default=None,
+        description="Mock JSON 파일 경로 (없으면 backend/data/mock_work24_jobs.json)",
+    )
+
+
+class MockLoadResponse(BaseModel):
+    """Mock 채용공고 로드 응답"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    job_code: str
+    status: str
+    run_id: int
+    collected_count: int
+    inserted_count: int
+    updated_count: int
+    skipped_count: int
+    failed_count: int
+    error_code: str | None = None
+    error_message: str | None = None
+    data_source: Literal["MOCK"] = "MOCK"

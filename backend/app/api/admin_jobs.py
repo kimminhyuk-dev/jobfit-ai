@@ -14,6 +14,8 @@ from app.models.user import User
 from app.schemas.job_collection import (
     AlioCollectRequest,
     AlioCollectResponse,
+    MockLoadRequest,
+    MockLoadResponse,
     Work24CollectRequest,
     Work24CollectResponse,
 )
@@ -21,6 +23,7 @@ from app.services.alio_collection_service import (
     AlioCollectionError,
     AlioCollectionService,
 )
+from app.services.mock_loader_service import MockLoaderError, MockLoaderService
 from app.services.work24_collection_service import (
     Work24CollectionError,
     Work24CollectionService,
@@ -42,6 +45,13 @@ def get_work24_collection_service(
 ) -> Work24CollectionService:
     """Work24CollectionService 의존성"""
     return Work24CollectionService(db)
+
+
+def get_mock_loader_service(
+    db: Session = Depends(get_db),
+) -> MockLoaderService:
+    """MockLoaderService 의존성"""
+    return MockLoaderService(db)
 
 
 @router.post(
@@ -103,3 +113,27 @@ def collect_work24_jobs(
         )
 
     return Work24CollectResponse.model_validate(run)
+
+
+@router.post(
+    "/jobs/sources/mock/load",
+    response_model=MockLoadResponse,
+)
+def load_mock_jobs(
+    load_request: MockLoadRequest,
+    current_user: User = Depends(get_current_admin_user),
+    mock_loader_service: MockLoaderService = Depends(get_mock_loader_service),
+) -> MockLoadResponse:
+    """관리자가 Mock 채용공고 JSON 파일을 DB에 로드한다."""
+    try:
+        run = mock_loader_service.load_mock_data(
+            file_path=load_request.file_path,
+            triggered_by=str(current_user.user_id),
+        )
+    except MockLoaderError:
+        raise AppException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code=ErrorCode.JOB_COLLECTION_FAILED,
+            message="Mock 데이터 로드에 실패했습니다. 파일 경로와 JSON 구조를 확인하세요.",
+        )
+    return MockLoadResponse.model_validate(run)

@@ -2,7 +2,7 @@
 Category 테이블 DB 접근 계층
 """
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.category import Category
@@ -14,6 +14,15 @@ class CategoryRepository:
 
     def __init__(self, db: Session):
         self.db = db
+
+    def count_active(self) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(Category)
+            .where(Category.is_deleted.is_(False))
+            .where(Category.is_active.is_(True))
+        )
+        return int(self.db.execute(stmt).scalar_one())
 
     def list(self, include_inactive: bool = False) -> list[Category]:
         stmt = select(Category).where(Category.is_deleted.is_(False))

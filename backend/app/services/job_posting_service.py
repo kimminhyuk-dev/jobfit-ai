@@ -32,6 +32,7 @@ class JobPostingService:
         self,
         run: BatchJobRun,
         work24_data: dict[str, Any],
+        data_source: str = "PRODUCTION",
     ) -> tuple[JobPosting, str]:
         """Work24 목록 API 응답 한 건을 저장한다."""
         source_job_id = _required_text(work24_data, "source_job_id")
@@ -62,6 +63,7 @@ class JobPostingService:
                 work24_data.get("source_updated_at")
             ),
             "raw_response": _json_safe(work24_data.get("raw_response") or work24_data),
+            "data_source": data_source,
             "status": "OPEN",
             "collection_status": "COLLECTED",
             "embedding_status": "PENDING",
@@ -93,6 +95,7 @@ class JobPostingService:
         self,
         run: BatchJobRun,
         alio_data: dict[str, Any],
+        data_source: str = "PRODUCTION",
     ) -> tuple[JobPosting, str]:
         """ALIO 채용정보 목록/상세 정규화 응답 한 건을 저장한다."""
         source_job_id = _required_text(alio_data, "source_job_id")
@@ -134,6 +137,7 @@ class JobPostingService:
             "raw_content": _text_or_none(alio_data.get("raw_content")),
             "raw_response": _json_safe(alio_data.get("raw_response") or alio_data),
             "parsed_skills": _json_safe(alio_data.get("parsed_skills")),
+            "data_source": data_source,
             "status": _text_or_none(alio_data.get("status")) or "OPEN",
             "collection_status": "COLLECTED",
             "embedding_status": "PENDING",

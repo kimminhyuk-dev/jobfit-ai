@@ -96,6 +96,7 @@ class JobPostingRepository:
             "education_code",
             "career_level_code",
             "status",
+            "data_source",
         ):
             value = _clean(filters.get(field_name))
             if value:

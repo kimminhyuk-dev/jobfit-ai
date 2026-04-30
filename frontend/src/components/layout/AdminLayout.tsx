@@ -6,6 +6,7 @@ const adminNav = [
   { to: '/admin/dashboard', label: '대시보드', icon: 'home' as const },
   { to: '/admin/categories', label: '카테고리', icon: 'layers' as const },
   { to: '/admin/posts', label: 'Q&A 게시글', icon: 'file' as const },
+  { to: '/admin/jobs', label: '채용공고', icon: 'briefcase' as const },
 ];
 
 export default function AdminLayout() {
@@ -20,7 +21,7 @@ export default function AdminLayout() {
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#f6f8fb', fontFamily: 'Pretendard, -apple-system, sans-serif' }}>
       {/* Classic SaaS Sidebar */}
-      <aside className="w-56 flex flex-col flex-shrink-0 bg-white border-r" style={{ borderColor: '#e2e8f0' }}>
+      <aside className="w-56 flex flex-col shrink-0 bg-white border-r" style={{ borderColor: '#e2e8f0' }}>
         {/* Logo */}
         <div className="h-14 flex items-center gap-2 px-4 border-b" style={{ borderColor: '#e2e8f0' }}>
           <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{ background: '#2563eb' }}>
@@ -66,7 +67,7 @@ export default function AdminLayout() {
 
         {/* User */}
         <div className="p-3 border-t flex items-center gap-2.5" style={{ borderColor: '#e2e8f0' }}>
-          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-[12px] font-bold flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-[12px] font-bold shrink-0">
             {user?.name?.slice(0, 2) ?? 'AD'}
           </div>
           <div className="flex-1 min-w-0">
@@ -82,7 +83,7 @@ export default function AdminLayout() {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar */}
-        <header className="h-14 flex items-center gap-4 px-6 bg-white border-b flex-shrink-0" style={{ borderColor: '#e2e8f0' }}>
+        <header className="h-14 flex items-center gap-4 px-6 bg-white border-b shrink-0" style={{ borderColor: '#e2e8f0' }}>
           <div className="relative">
             <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#94a3b8' }}>
               <Icon name="search" size={14} />

@@ -2,7 +2,7 @@
 Post 테이블 DB 접근 계층
 """
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.post import Post
@@ -14,6 +14,10 @@ class PostRepository:
 
     def __init__(self, db: Session):
         self.db = db
+
+    def count_total(self) -> int:
+        stmt = select(func.count()).select_from(Post).where(Post.is_deleted.is_(False))
+        return int(self.db.execute(stmt).scalar_one())
 
     def list(
         self,

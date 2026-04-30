@@ -22,6 +22,7 @@ def list_jobs(
     education_code: str | None = Query(default=None, max_length=20),
     career_level_code: str | None = Query(default=None, max_length=20),
     status: str | None = Query(default=None, max_length=20),
+    data_source: str | None = Query(default=None, max_length=20),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -39,6 +40,7 @@ def list_jobs(
             "education_code": education_code,
             "career_level_code": career_level_code,
             "status": status,
+            "data_source": data_source,
         },
     )
     return JobPostingListResponse(

@@ -240,6 +240,14 @@ class JobPosting(Base, AuditMixin, SoftDeleteMixin):
         comment="변경 감지용 SHA256",
     )
 
+    data_source: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="PRODUCTION",
+        server_default="PRODUCTION",
+        index=True,
+        comment="데이터 출처 (PRODUCTION/MOCK/MANUAL)",
+    )
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,

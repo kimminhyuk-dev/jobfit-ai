@@ -17,6 +17,7 @@ import AdminLayout from './components/layout/AdminLayout';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import CategoriesPage from './pages/admin/CategoriesPage';
 import PostsPage from './pages/admin/PostsPage';
+import AdminJobsPage from './pages/admin/AdminJobsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -88,6 +89,7 @@ function AppRoutes() {
         <Route path="dashboard" element={<AdminDashboardPage />} />
         <Route path="categories" element={<CategoriesPage />} />
         <Route path="posts" element={<PostsPage />} />
+        <Route path="jobs" element={<AdminJobsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -419,6 +419,64 @@ Authorization: Bearer <admin_access_token>
 
 ## 채용공고 조회
 
+### POST /admin/jobs/sources/mock/load
+
+관리자가 `backend/data/mock_work24_jobs.json` 파일에서 Mock 채용공고 데이터를 DB에 로드한다.
+`data_source="MOCK"`, `source="WORK24"` 형식으로 저장한다.
+
+#### Header
+```http
+Authorization: Bearer <admin_access_token>
+```
+
+#### Request
+```json
+{
+  "file_path": null
+}
+```
+
+- `file_path`: 생략하거나 `null`로 보내면 `backend/data/mock_work24_jobs.json`을 사용한다.
+
+#### Response 200
+```json
+{
+  "job_code": "MOCK_LOAD",
+  "status": "SUCCESS",
+  "run_id": 10,
+  "collected_count": 30,
+  "inserted_count": 28,
+  "updated_count": 2,
+  "skipped_count": 0,
+  "failed_count": 0,
+  "error_code": null,
+  "error_message": null,
+  "data_source": "MOCK"
+}
+```
+
+#### JSON 파일 구조 (`backend/data/mock_work24_jobs.json`)
+```json
+{
+  "wantedRoot": {
+    "total": "30",
+    "wanted": [
+      {
+        "wantedAuthNo": "MOCK_001",
+        "company": "카카오",
+        "title": "백엔드 개발자",
+        "region": "서울",
+        "career": "경력",
+        "minEdubg": "대졸",
+        "closeDt": "20260531",
+        "regDt": "20260430",
+        "wantedInfoUrl": "https://example.com/jobs/MOCK_001"
+      }
+    ]
+  }
+}
+```
+
 ### GET /jobs
 DB에 저장된 `job_postings`만 조회한다. 프론트엔드는 ALIO 외부 API를 직접
 호출하지 않고 이 API만 사용한다.
@@ -432,9 +490,12 @@ employment_type_code=R1010
 education_code=R7040
 career_level_code=R2010
 status=OPEN
+data_source=PRODUCTION
 page=1
 size=20
 ```
+
+- `data_source`: `PRODUCTION` / `MOCK` / `MANUAL` — 생략 시 전체 조회
 
 #### Response 200
 ```json
@@ -465,6 +526,7 @@ size=20
       "ministry_code": "A1000",
       "posted_at": "2026-04-30T00:00:00Z",
       "deadline": "2026-05-10T00:00:00Z",
+      "data_source": "PRODUCTION",
       "status": "OPEN",
       "collected_at": "2026-04-30T00:00:00Z"
     }

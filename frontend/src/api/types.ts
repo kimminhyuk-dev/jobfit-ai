@@ -138,7 +138,16 @@ export interface Application {
   color: string;
 }
 
-// 대시보드 통계
+// 관리자 대시보드 통계
+export interface AdminStats {
+  total_users: number;
+  active_categories: number;
+  total_posts: number;
+  today_signups: number;
+  total_jobs: number;
+}
+
+// 사용자 대시보드 통계
 export interface DashboardStats {
   resumeScore: number;
   matchedJobs: number;

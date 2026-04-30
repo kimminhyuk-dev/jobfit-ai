@@ -2,7 +2,9 @@
 User 테이블 DB 접근 계층
 """
 
-from sqlalchemy import select
+from datetime import datetime, timezone
+
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.user import User
@@ -26,6 +28,20 @@ class UserRepository:
         if not include_deleted:
             stmt = stmt.where(User.is_deleted.is_(False))
         return self.db.execute(stmt).scalar_one_or_none()
+
+    def count_total(self) -> int:
+        stmt = select(func.count()).select_from(User).where(User.is_deleted.is_(False))
+        return int(self.db.execute(stmt).scalar_one())
+
+    def count_today(self) -> int:
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        stmt = (
+            select(func.count())
+            .select_from(User)
+            .where(User.is_deleted.is_(False))
+            .where(User.created_at >= today_start)
+        )
+        return int(self.db.execute(stmt).scalar_one())
 
     def create(self, user_create: UserCreate, hashed_password: str, request_ip: str | None) -> User:
         user = User(

@@ -117,6 +117,29 @@
 - 사용자 채용공고 조회 API `GET /jobs`
 - ALIO 코드 정의서 기반 공통코드 그룹/상세코드 테이블
 
+### Mock 데이터 트랙 (data_source 컬럼)
+
+- `job_postings.data_source` 컬럼 추가 (`VARCHAR(20)`, `server_default='PRODUCTION'`, 인덱스 포함)
+  - `PRODUCTION`: 실제 공공데이터 API 수집 데이터
+  - `MOCK`: 시연/매칭 검증용 Mock 데이터 (IT 회사명 등)
+  - `MANUAL`: 향후 사용자 수동 입력 (예약)
+- 기존 수집 서비스(`save_from_work24`, `save_from_alio`)에 `data_source` 파라미터 추가 (기본 `"PRODUCTION"`)
+- `JobPostingRepository.list_by_filter`에 `data_source` 필터 추가
+- `GET /jobs` API에 `data_source` 쿼리 파라미터 추가
+- `MockLoaderService` 신설: `backend/data/mock_work24_jobs.json` → `data_source="MOCK"` 저장
+- `POST /admin/jobs/sources/mock/load` 관리자 API 추가
+- Alembic 마이그레이션: `b8050fd5e470_add_data_source_column_to_job_postings.py`
+  - `job_sources` unique constraint 제거 라인은 수동으로 제거됨 (기존 drift, 우리 작업 범위 아님)
+- `backend/data/.gitkeep` 생성 (Mock JSON 파일 위치 예약)
+
+### 관리자 대시보드 통계 API
+
+- `GET /admin/stats` — 관리자 전용 통계 요약 (전체 사용자, 활성 카테고리, 총 게시글, 오늘 가입, 채용공고 수)
+- `UserRepository.count_total()`, `count_today()` 추가
+- `CategoryRepository.count_active()` 추가
+- `PostRepository.count_total()` 추가
+- `AdminStatsService`, `AdminStatsResponse` 스키마 신설
+
 ## 완료된 프론트엔드 기능
 
 - Vite + React + TypeScript 프로젝트 구성
@@ -142,8 +165,15 @@
   - source_url이 있으면 원문 공고 링크 제공
   - 로딩/에러 상태 처리
 - 사용자 라우트: `/user/dashboard`, `/user/resumes`, `/user/jobs`, `/user/matches`
-- 관리자 라우트: `/admin/dashboard`, `/admin/categories`, `/admin/posts`
+- 관리자 라우트: `/admin/dashboard`, `/admin/categories`, `/admin/posts`, `/admin/jobs`
+- 관리자 대시보드 `GET /admin/stats` 연결 완료: 전체 사용자·활성 카테고리·총 게시글·오늘 가입·채용공고 수 실데이터 표시, 로딩 스켈레톤·에러 배너 포함
+- 관리자 채용공고 화면(`/admin/jobs`) 신설: 소스 탭 필터(전체/ALIO/WORK24/SARAMIN/MANUAL), 상태 배지(OPEN/CLOSED/EXPIRED/HIDDEN), 마스터-디테일 레이아웃, 수집 메타 패널 포함
 - 관리자 라우트는 `user.role === 'ADMIN'`일 때만 접근 가능
+
+- `frontend/src/api/admin.ts`
+- `frontend/src/pages/admin/AdminJobsPage.tsx`
+- `backend/app/services/mock_loader_service.py`
+- `backend/data/mock_work24_jobs.json` (사용자가 배치 필요)
 
 ## 주요 파일
 
@@ -216,6 +246,24 @@
 - `ai_context/API_SPEC.md`
 
 ## 최근 검증
+
+2026-04-30 Mock 데이터 트랙 추가:
+
+- `python -m compileall app` 통과 (job_posting.py, job_posting_service.py, mock_loader_service.py 등 포함)
+- `POST /admin/jobs/sources/mock/load` 라우트 등록 확인
+- 전체 관리자 라우트 확인: `/admin/job-sources/alio/collect`, `/admin/jobs/sources/work24/collect`, `/admin/jobs/sources/mock/load`, `/admin/stats`
+- Alembic 마이그레이션 `b8050fd5e470_add_data_source_column_to_job_postings.py` 생성 확인
+  - `ALTER TABLE job_postings ADD COLUMN data_source VARCHAR(20) NOT NULL DEFAULT 'PRODUCTION'`
+  - `CREATE INDEX ix_job_postings_data_source`
+- `alembic upgrade head` 미실행 (사용자 마이그레이션 검토 후 적용 예정)
+
+2026-04-30 관리자 대시보드·채용공고 작업 완료:
+
+- `python -m compileall app` 통과 (admin_stats.py, admin_stats_service.py, user/category/post_repository.py 변경 포함)
+- `npm run lint` 통과 (경고 0개)
+- `npm run build` 통과 (232 modules)
+- `GET /admin/stats` FastAPI 라우터 등록 확인
+- 관리자 대시보드 실데이터 연결 및 AdminJobsPage 신설 확인
 
 2026-04-30 기준 확인 완료:
 
@@ -325,11 +373,15 @@ npm run dev
 
 ## 다음 작업
 
-1. ALIO 코드 동기화 배치 (`ALIO_CODE_SYNC`) 구현 여부 결정
-2. 관리자 카테고리 화면을 실제 `/categories` API와 연결
-3. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
-4. 채용공고 페이지에 페이지네이션 추가 (현재 size=50 고정)
-5. 매칭 기능(AI 매칭 점수, 스킬 분석) 구현 후 채용공고 상세에 반영
+1. 마이그레이션 검토 후 `alembic upgrade head` 실행
+2. `backend/data/mock_work24_jobs.json` 파일 준비 후 `POST /admin/jobs/sources/mock/load` Swagger 테스트
+3. DB 확인: `SELECT data_source, COUNT(*) FROM job_postings GROUP BY data_source;`
+4. 프론트엔드: 사용자 채용공고 화면에 data_source 필터 추가 (Mock/실데이터 탭 분리)
+5. 관리자 카테고리 화면을 실제 `/categories` API와 연결
+6. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
+7. 채용공고 페이지에 페이지네이션 추가 (현재 size=50/100 고정)
+8. 매칭 기능(AI 매칭 점수, 스킬 분석) 구현
+9. ALIO 코드 동기화 배치 (`ALIO_CODE_SYNC`) 구현 여부 결정
 
 ## 다른 AI에게 요청할 때 사용할 프롬프트
 
