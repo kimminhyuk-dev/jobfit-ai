@@ -134,6 +134,13 @@
 - 로그인/회원가입 화면은 React Hook Form + Zod로 클라이언트 검증 처리
 - 공통 에러 응답 타입과 회원가입 validation `details` 필드 매핑 정리
 - shadcn/ui 패턴 기반 공통 UI 컴포넌트 추가 (`Button`, `Input`, `Alert`)
+- 사용자 채용공고 화면(`/user/jobs`)을 실제 `GET /jobs?source=ALIO` API와 연결 완료
+  - TanStack Query 기반 데이터 패칭
+  - 공고 목록(좌) + 상세(우) 마스터-디테일 레이아웃 유지
+  - 표시 필드: 공고 제목, 기관명, 출처, 고용형태, 근무지, 마감일, 경력, 학력, 기관유형, 주무부처, NCS 분류
+  - 급여: 숫자 미제공 시 "공고문 참조" 표시
+  - source_url이 있으면 원문 공고 링크 제공
+  - 로딩/에러 상태 처리
 - 사용자 라우트: `/user/dashboard`, `/user/resumes`, `/user/jobs`, `/user/matches`
 - 관리자 라우트: `/admin/dashboard`, `/admin/categories`, `/admin/posts`
 - 관리자 라우트는 `user.role === 'ADMIN'`일 때만 접근 가능
@@ -199,6 +206,7 @@
 - `frontend/src/components/ui/button.tsx`
 - `frontend/src/components/ui/input.tsx`
 - `frontend/src/components/ui/alert.tsx`
+- `frontend/src/api/jobs.ts`
 - `frontend/src/pages/LoginPage.tsx`
 - `frontend/src/pages/SignupPage.tsx`
 - `frontend/src/components/layout/UserLayout.tsx`
@@ -246,6 +254,9 @@
 - `GET /jobs?source=ALIO&page=1&size=5` TestClient 검증: HTTP 200, `total=2`, `items_count=2` 확인
 - `GET /jobs?source=ALIO` 조회 경로 확인: 저장 데이터 0건 상태에서 정상 조회 처리 확인
 - `.\.venv\Scripts\python.exe -m compileall app` 재검증 통과
+- 프론트엔드 채용공고 화면 `GET /jobs?source=ALIO` 연결 후 `npm run lint` 통과 (경고 0개)
+- 프론트엔드 채용공고 화면 `GET /jobs?source=ALIO` 연결 후 `npm run build` 통과 (230 modules)
+- Alembic DB 상태: `d2e3f4a5b6c7 (head)` - upgrade 불필요
 - 프론트엔드 `npm run lint` 통과
 - 프론트엔드 `npm run build` 통과
 - 프론트엔드 `npm audit` 결과 취약점 0개 확인
@@ -314,11 +325,11 @@ npm run dev
 
 ## 다음 작업
 
-1. `alembic upgrade head`로 ALIO/공통코드 마이그레이션 적용
-2. ALIO 코드 동기화 배치 (`ALIO_CODE_SYNC`) 구현 여부 결정
-3. 관리자 카테고리 화면을 실제 `/categories` API와 연결
-4. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
-5. 프론트엔드 채용공고 화면을 `GET /jobs` API와 연결
+1. ALIO 코드 동기화 배치 (`ALIO_CODE_SYNC`) 구현 여부 결정
+2. 관리자 카테고리 화면을 실제 `/categories` API와 연결
+3. 관리자 Q&A 게시글 화면을 실제 `/posts` API와 연결
+4. 채용공고 페이지에 페이지네이션 추가 (현재 size=50 고정)
+5. 매칭 기능(AI 매칭 점수, 스킬 분석) 구현 후 채용공고 상세에 반영
 
 ## 다른 AI에게 요청할 때 사용할 프롬프트
 

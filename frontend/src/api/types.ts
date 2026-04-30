@@ -55,7 +55,7 @@ export interface Resume {
   status: 'analyzing' | 'done' | 'error';
 }
 
-// 채용공고
+// 채용공고 (mock UI용)
 export interface Job {
   id: string;
   company: string;
@@ -70,6 +70,43 @@ export interface Job {
   missingSkills: string[];
   posted: string;
   applicants: number;
+}
+
+// 채용공고 (백엔드 GET /jobs 응답)
+export interface JobPostingItem {
+  job_id: number;
+  source: string;
+  source_job_id: string | null;
+  source_url: string | null;
+  company_name: string | null;
+  title: string;
+  location: string | null;
+  location_code: string | null;
+  career_level: string | null;
+  career_level_code: string | null;
+  education: string | null;
+  education_code: string | null;
+  employment_type: string | null;
+  employment_type_code: string | null;
+  ncs_category: string | null;
+  ncs_category_code: string | null;
+  organization_type: string | null;
+  organization_type_code: string | null;
+  organization_category: string | null;
+  organization_category_code: string | null;
+  ministry: string | null;
+  ministry_code: string | null;
+  posted_at: string | null;
+  deadline: string | null;
+  status: string;
+  collected_at: string;
+}
+
+export interface JobPostingListResponse {
+  items: JobPostingItem[];
+  total: number;
+  page: number;
+  size: number;
 }
 
 // 스킬
