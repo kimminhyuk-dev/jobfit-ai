@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { AuthTokenResponse, LoginRequest, SignupRequest, User } from './types';
+import type { AuthResponse, User } from './types';
 
 export interface UserUpdateRequest {
   name?: string;
@@ -8,18 +8,18 @@ export interface UserUpdateRequest {
 }
 
 export const authApi = {
-  login: async (body: LoginRequest): Promise<AuthTokenResponse> => {
-    const res = await apiClient.post<AuthTokenResponse>('/auth/login', body);
+  login: async (body: { email: string; password: string }): Promise<AuthResponse> => {
+    const res = await apiClient.post<AuthResponse>('/auth/login', body);
     return res.data;
   },
 
-  signup: async (body: SignupRequest): Promise<AuthTokenResponse> => {
-    const res = await apiClient.post<AuthTokenResponse>('/auth/signup', body);
+  signup: async (body: { email: string; password: string; name: string }): Promise<AuthResponse> => {
+    const res = await apiClient.post<AuthResponse>('/auth/signup', body);
     return res.data;
   },
 
-  refresh: async (): Promise<AuthTokenResponse> => {
-    const res = await apiClient.post<AuthTokenResponse>('/auth/refresh');
+  refresh: async (): Promise<AuthResponse> => {
+    const res = await apiClient.post<AuthResponse>('/auth/refresh');
     return res.data;
   },
 

@@ -2,10 +2,10 @@
 FastAPI 의존성 모음
 """
 
-from fastapi import Depends, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
@@ -14,27 +14,24 @@ from app.models.user import User
 from app.repositories.user_repository import UserRepository
 
 
-bearer_scheme = HTTPBearer(auto_error=False)
-
-
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    request: Request,
     db: Session = Depends(get_db),
 ) -> User:
-    """Access Token으로 현재 로그인 사용자를 조회한다."""
-    if credentials is None:
-        raise _invalid_credentials_exception()
+    """Access Token 쿠키로 현재 로그인 사용자를 조회한다."""
+    token = request.cookies.get(settings.access_token_cookie_name)
+    if not token:
+        raise _unauthorized()
 
     try:
-        token = credentials.credentials
         payload = decode_token(token, expected_type="access")
         user_id = int(payload["sub"])
     except (ValueError, TypeError):
-        raise _invalid_credentials_exception()
+        raise _unauthorized()
 
     user = UserRepository(db).get_by_id(user_id)
     if user is None or user.status != "ACTIVE":
-        raise _invalid_credentials_exception()
+        raise _unauthorized()
     return user
 
 
@@ -51,10 +48,9 @@ def get_current_admin_user(
     return current_user
 
 
-def _invalid_credentials_exception() -> AppException:
+def _unauthorized() -> AppException:
     return AppException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         code=ErrorCode.UNAUTHORIZED,
         message="인증 정보가 유효하지 않습니다.",
-        headers={"WWW-Authenticate": "Bearer"},
     )

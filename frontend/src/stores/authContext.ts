@@ -5,12 +5,11 @@ import type { User } from '../api/types';
 
 export interface AuthState {
   user: User | null;
-  token: string | null;
   loading: boolean;
 }
 
 export interface AuthContextValue extends AuthState {
-  login: (token: string, user: User) => void;
+  login: (user: User) => void;
   logout: () => Promise<void>;
   setUser: (user: User) => void;
 }

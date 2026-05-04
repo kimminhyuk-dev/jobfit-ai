@@ -18,7 +18,9 @@
 - 목적: AI 기반 이력서-채용공고 매칭 플랫폼
 - 백엔드: FastAPI, SQLAlchemy 2.0, Alembic, PostgreSQL
 - 프론트엔드: Next.js 16 App Router, React 19, TypeScript, Tailwind CSS v4 기반 구현 완료
-- 인증 방식: JWT Access Token + HttpOnly Refresh Token Cookie
+- 인증 방식: Access Token + Refresh Token 모두 HttpOnly 쿠키 저장 (localStorage 제거)
+- Refresh Token은 DB(`refresh_tokens`)에 SHA-256 해시로 저장 — 취소(revocation)·재사용 감지(reuse detection) 지원
+- 인증 방식: Access Token(15분) + Refresh Token(14일) 모두 HttpOnly 쿠키, Refresh Token은 DB에 SHA-256 해시 저장
 - 권한 방식: `users.role` 기반 USER / ADMIN
 - 개발 환경: Windows, PowerShell, Python 3.12 계열
 
@@ -257,6 +259,33 @@
 - `ai_context/API_SPEC.md`
 
 ## 최근 검증
+
+2026-05-04 JWT 토큰 쿠키 저장 + Refresh Token DB 영속화 (현업 방식 적용):
+
+- **Access Token**: localStorage 제거 → HttpOnly 쿠키(`access_token`, 15분, `SameSite=Lax`, `path=/`)
+- **Refresh Token**: HttpOnly 쿠키(`refresh_token`, 14일) + DB `refresh_tokens` 테이블에 SHA-256 해시 저장
+- `backend/app/models/refresh_token.py` 신설: `id`, `user_id`, `token_hash`, `family_id`, `is_revoked`, `expires_at`, `created_ip`, `created_at`
+- `backend/app/repositories/refresh_token_repository.py` 신설: `create`, `get_by_hash`, `get_active_by_hash`, `revoke`, `revoke_family`, `revoke_all_by_user`
+- `backend/app/core/security.py`: `hash_token()` (hashlib.sha256) 추가
+- `backend/app/core/config.py`: `access_token_cookie_name/secure/samesite` 설정 추가
+- `backend/app/services/user_service.py`:
+  - `create_token_pair(user, ip)`: Refresh Token DB 저장
+  - `refresh(token, ip)`: JWT 검증 → DB 해시 조회 → 취소 토큰 재제출 시 family 전체 취소(재사용 공격 대응) → 로테이션
+  - `logout(token)`: DB에서 해당 토큰 취소
+  - `update_me()`: 비밀번호 변경 시 `revoke_all_by_user()` 호출 (전체 세션 강제 만료)
+- `backend/app/schemas/auth.py`: `TokenResponse` 폐기 → `AuthResponse { user }` (응답 바디에 토큰 미포함)
+- `backend/app/api/auth.py`: `_set_token_cookies()` 두 토큰 동시 쿠키 설정, `logout` DB 취소 추가
+- `backend/app/api/deps.py`: `HTTPBearer` 제거 → `request.cookies.get(access_token_cookie_name)` 방식으로 전환
+- Alembic 마이그레이션 `e1f2a3b4c5d6_add_refresh_tokens_table.py` 생성 및 `upgrade head` 적용
+- `frontend/src/api/client.ts`: Authorization 헤더 주입 제거, 401 자동 Refresh 인터셉터 추가 (pendingQueue로 동시 401 처리)
+- `frontend/src/stores/authContext.ts`: `token` 필드 제거, `login(user)` 시그니처 변경
+- `frontend/src/stores/authStore.tsx`: localStorage 완전 제거, 앱 시작 시 `/auth/me` → 실패 시 `/auth/refresh` 순으로 세션 복원
+- `frontend/src/api/types.ts`: `AuthTokenResponse` 폐기 → `AuthResponse { user }` 로 교체
+- `.gitignore`: 루트에 `frontend/.next/`, `*.tsbuildinfo` 추가, `frontend/.gitignore` Vite 잔재 제거 및 Next.js 패턴으로 정리
+- `python -m compileall app` 통과
+- `alembic upgrade head` 통과 (`b8050fd5e470 → e1f2a3b4c5d6`)
+- `npm run lint` 통과 (경고 0개)
+- `npm run build` 통과 (15개 라우트)
 
 2026-05-04 `'use client'` 명시 추가:
 

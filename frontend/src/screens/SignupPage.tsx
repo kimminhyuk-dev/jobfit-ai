@@ -47,7 +47,7 @@ export default function SignupPage() {
     setServerFieldErrors({});
     try {
       const res = await authApi.signup(values);
-      login(res.access_token, res.user);
+      login(res.user);
       router.push('/user/resumes');
     } catch (err) {
       const apiErr = err as ApiError;

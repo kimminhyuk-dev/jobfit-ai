@@ -28,7 +28,12 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 14
 
-    # Auth Cookie
+    # Auth Cookie — Access Token
+    access_token_cookie_name: str = "access_token"
+    access_token_cookie_secure: bool = False
+    access_token_cookie_samesite: str = "lax"
+
+    # Auth Cookie — Refresh Token
     refresh_token_cookie_name: str = "refresh_token"
     refresh_token_cookie_secure: bool = False
     refresh_token_cookie_samesite: str = "lax"

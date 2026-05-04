@@ -14,12 +14,9 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
-class TokenResponse(BaseModel):
-    """Access Token 응답"""
+class AuthResponse(BaseModel):
+    """로그인·회원가입·토큰 갱신 응답 — 토큰은 HttpOnly 쿠키로만 전달한다."""
 
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int
     user: UserResponse
 
 

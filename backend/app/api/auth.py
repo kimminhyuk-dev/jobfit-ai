@@ -11,7 +11,7 @@ from app.core.database import get_db
 from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
 from app.models.user import User
-from app.schemas.auth import LoginRequest, MessageResponse, TokenResponse
+from app.schemas.auth import AuthResponse, LoginRequest, MessageResponse
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.services.user_service import (
     DuplicateEmailError,
@@ -27,13 +27,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def get_user_service(db: Session = Depends(get_db)) -> UserService:
-    """UserService 의존성"""
     return UserService(db)
 
 
 @router.post(
     "/signup",
-    response_model=TokenResponse,
+    response_model=AuthResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def signup(
@@ -41,8 +40,8 @@ def signup(
     request: Request,
     response: Response,
     user_service: UserService = Depends(get_user_service),
-) -> TokenResponse:
-    """회원가입 후 Access Token을 발급하고 Refresh Token 쿠키를 설정한다."""
+) -> AuthResponse:
+    """회원가입 후 Access·Refresh Token을 HttpOnly 쿠키로 설정한다."""
     try:
         user = user_service.signup(user_create, request_ip=_get_client_ip(request))
     except DuplicateEmailError:
@@ -52,18 +51,20 @@ def signup(
             message="이미 가입된 이메일입니다.",
         )
 
-    access_token, refresh_token = user_service.create_token_pair(user)
-    _set_refresh_token_cookie(response, refresh_token)
-    return _build_token_response(user, access_token)
+    ip = _get_client_ip(request)
+    access_token, refresh_token = user_service.create_token_pair(user, ip=ip)
+    _set_token_cookies(response, access_token, refresh_token)
+    return AuthResponse(user=UserResponse.model_validate(user))
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=AuthResponse)
 def login(
     login_request: LoginRequest,
+    request: Request,
     response: Response,
     user_service: UserService = Depends(get_user_service),
-) -> TokenResponse:
-    """로그인 후 Access Token을 발급하고 Refresh Token 쿠키를 설정한다."""
+) -> AuthResponse:
+    """로그인 후 Access·Refresh Token을 HttpOnly 쿠키로 설정한다."""
     try:
         user = user_service.login(login_request)
     except InvalidCredentialsError:
@@ -79,18 +80,19 @@ def login(
             message="활성화되지 않은 계정입니다.",
         )
 
-    access_token, refresh_token = user_service.create_token_pair(user)
-    _set_refresh_token_cookie(response, refresh_token)
-    return _build_token_response(user, access_token)
+    ip = _get_client_ip(request)
+    access_token, refresh_token = user_service.create_token_pair(user, ip=ip)
+    _set_token_cookies(response, access_token, refresh_token)
+    return AuthResponse(user=UserResponse.model_validate(user))
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh", response_model=AuthResponse)
 def refresh(
     request: Request,
     response: Response,
     user_service: UserService = Depends(get_user_service),
-) -> TokenResponse:
-    """Refresh Token을 검증하고 토큰 쌍을 재발급한다."""
+) -> AuthResponse:
+    """Refresh Token 쿠키를 검증하고 토큰 쌍을 재발급한다."""
     refresh_token = request.cookies.get(settings.refresh_token_cookie_name)
     if not refresh_token:
         raise AppException(
@@ -100,35 +102,44 @@ def refresh(
         )
 
     try:
-        user = user_service.refresh(refresh_token)
+        ip = _get_client_ip(request)
+        user, access_token, new_refresh_token = user_service.refresh(refresh_token, ip=ip)
     except InvalidTokenError:
+        _clear_token_cookies(response)
         raise AppException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             code=ErrorCode.INVALID_REFRESH_TOKEN,
             message="Refresh Token이 유효하지 않습니다.",
         )
     except InactiveUserError:
+        _clear_token_cookies(response)
         raise AppException(
             status_code=status.HTTP_403_FORBIDDEN,
             code=ErrorCode.INACTIVE_USER,
             message="활성화되지 않은 계정입니다.",
         )
 
-    new_access_token, new_refresh_token = user_service.create_token_pair(user)
-    _set_refresh_token_cookie(response, new_refresh_token)
-    return _build_token_response(user, new_access_token)
+    _set_token_cookies(response, access_token, new_refresh_token)
+    return AuthResponse(user=UserResponse.model_validate(user))
 
 
 @router.post("/logout", response_model=MessageResponse)
-def logout(response: Response) -> MessageResponse:
-    """Refresh Token 쿠키를 삭제한다."""
-    _clear_refresh_token_cookie(response)
+def logout(
+    request: Request,
+    response: Response,
+    user_service: UserService = Depends(get_user_service),
+) -> MessageResponse:
+    """Refresh Token을 DB에서 취소하고 쿠키를 삭제한다."""
+    refresh_token = request.cookies.get(settings.refresh_token_cookie_name)
+    if refresh_token:
+        user_service.logout(refresh_token)
+    _clear_token_cookies(response)
     return MessageResponse(message="로그아웃되었습니다.")
 
 
 @router.get("/me", response_model=UserResponse)
 def read_me(current_user: User = Depends(get_current_user)) -> UserResponse:
-    """Access Token으로 현재 로그인 사용자를 조회한다."""
+    """Access Token 쿠키로 현재 로그인 사용자를 조회한다."""
     return UserResponse.model_validate(current_user)
 
 
@@ -150,20 +161,24 @@ def update_me(
     return UserResponse.model_validate(user)
 
 
-def _build_token_response(user: User, access_token: str) -> TokenResponse:
-    return TokenResponse(
-        access_token=access_token,
-        expires_in=settings.jwt_access_token_expire_minutes * 60,
-        user=UserResponse.model_validate(user),
+# ── 쿠키 헬퍼 ──────────────────────────────────────────────────────────────
+
+def _set_token_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    access_max_age = settings.jwt_access_token_expire_minutes * 60
+    response.set_cookie(
+        key=settings.access_token_cookie_name,
+        value=access_token,
+        max_age=access_max_age,
+        httponly=True,
+        secure=settings.access_token_cookie_secure,
+        samesite=settings.access_token_cookie_samesite,
+        path="/",
     )
-
-
-def _set_refresh_token_cookie(response: Response, refresh_token: str) -> None:
-    max_age = settings.jwt_refresh_token_expire_days * 24 * 60 * 60
+    refresh_max_age = settings.jwt_refresh_token_expire_days * 24 * 60 * 60
     response.set_cookie(
         key=settings.refresh_token_cookie_name,
         value=refresh_token,
-        max_age=max_age,
+        max_age=refresh_max_age,
         httponly=True,
         secure=settings.refresh_token_cookie_secure,
         samesite=settings.refresh_token_cookie_samesite,
@@ -171,7 +186,14 @@ def _set_refresh_token_cookie(response: Response, refresh_token: str) -> None:
     )
 
 
-def _clear_refresh_token_cookie(response: Response) -> None:
+def _clear_token_cookies(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.access_token_cookie_name,
+        httponly=True,
+        secure=settings.access_token_cookie_secure,
+        samesite=settings.access_token_cookie_samesite,
+        path="/",
+    )
     response.delete_cookie(
         key=settings.refresh_token_cookie_name,
         httponly=True,

@@ -2,6 +2,7 @@
 비밀번호 해시와 JWT 발급/검증 유틸
 """
 
+import hashlib
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -53,6 +54,11 @@ def decode_token(token: str, expected_type: str) -> dict[str, Any]:
         raise ValueError("토큰 subject가 없습니다.")
 
     return payload
+
+
+def hash_token(token: str) -> str:
+    """토큰을 SHA-256으로 해시한다. DB에는 평문 대신 해시만 저장한다."""
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def _create_token(subject: str, token_type: str, expires_delta: timedelta) -> str:

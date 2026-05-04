@@ -1,10 +1,22 @@
+# IDE
 .vscode/
 .idea/
 .claude/
+
+# Python
 backend/.venv/
-frontend/node_modules/
 backend/.env
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
 frontend/.env
+frontend/*.tsbuildinfo
+
+# Secrets / local overrides
+*.env.local
+.env*.local
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

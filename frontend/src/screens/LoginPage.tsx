@@ -44,7 +44,7 @@ export default function LoginPage() {
     setError(null);
     try {
       const res = await authApi.login(values);
-      login(res.access_token, res.user);
+      login(res.user);
       router.push(res.user.role === 'ADMIN' ? '/admin/dashboard' : '/user/dashboard');
     } catch (err) {
       const apiErr = err as ApiError;
