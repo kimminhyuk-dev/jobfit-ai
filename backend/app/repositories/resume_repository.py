@@ -101,3 +101,14 @@ class ResumeRepository:
         resume.updated_by = actor_id
         resume.updated_ip = request_ip
         self.db.flush()
+
+    def update_parsed_data(
+        self,
+        resume: Resume,
+        parsed_data: dict,
+    ) -> Resume:
+        resume.parsed_data = parsed_data
+        resume.parse_status = "COMPLETED"
+        resume.parse_error = None
+        self.db.flush()
+        return resume

@@ -56,6 +56,7 @@ class ResumeService:
         resume = self.resume_repository.get_by_id(resume_id, user_id)
         if resume is None:
             raise ResumeNotFoundError
+        self._refresh_parsed_data_if_empty(resume)
         return resume
 
     def create_resume(
@@ -157,3 +158,20 @@ class ResumeService:
                 file_path.unlink()
         except OSError:
             logger.warning("이력서 파일 삭제에 실패했습니다: %s", file_path)
+
+    def _refresh_parsed_data_if_empty(self, resume: Resume) -> None:
+        if not resume.raw_text or not self._is_empty_parsed_data(resume.parsed_data):
+            return
+        parsed_data = parse_resume_text(resume.raw_text)
+        self.resume_repository.update_parsed_data(resume, parsed_data)
+        self.db.commit()
+        self.db.refresh(resume)
+
+    @staticmethod
+    def _is_empty_parsed_data(parsed_data: dict | None) -> bool:
+        if parsed_data is None:
+            return True
+        return not any(
+            parsed_data.get(key)
+            for key in ("emails", "phones", "urls", "skills")
+        )

@@ -59,18 +59,26 @@ def extract_resume_text(file_path: Path, content_type: str) -> str:
 
 def parse_resume_text(text: str) -> dict:
     normalized = re.sub(r"\s+", " ", text).strip()
-    emails = sorted(set(re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", text)))
-    phones = sorted(
-        set(
-            re.findall(
-                r"(?:\+82[-.\s]?)?0?1[016789][-\s.]?\d{3,4}[-\s.]?\d{4}",
-                text,
-            )
-        )
+    compact_contact_text = _compact_contact_text(text)
+    compact_skill_text = _compact_skill_text(text)
+
+    emails = _extract_emails(text)
+    phone_candidates = re.findall(
+        r"(?:\+82[-.\s]?)?0?1[016789][-\s.]?\d{3,4}[-\s.]?\d{4}",
+        text,
+    ) + re.findall(
+        r"(?:\+82[-.]?)?0?1[016789][-.]?\d{3,4}[-.]?\d{4}",
+        compact_contact_text,
     )
-    urls = sorted(set(re.findall(r"https?://[^\s)]+", text)))
+    phones = sorted({_normalize_phone(phone) for phone in phone_candidates})
+    urls = _extract_urls(text)
     lower_text = normalized.lower()
-    skills = [skill for skill in SKILL_KEYWORDS if skill.lower() in lower_text]
+    compact_lower_text = compact_skill_text.lower()
+    skills = [
+        skill
+        for skill in SKILL_KEYWORDS
+        if skill.lower() in lower_text or _compact_skill_text(skill).lower() in compact_lower_text
+    ]
     return {
         "emails": emails,
         "phones": phones,
@@ -87,6 +95,56 @@ def _extract_txt(file_path: Path) -> str:
         except UnicodeDecodeError:
             continue
     raise ResumeParseError("텍스트 파일 인코딩을 확인할 수 없습니다.")
+
+
+def _compact_contact_text(text: str) -> str:
+    """PDF 추출 시 연락처/URL 문자가 벌어진 케이스를 정규식용으로 보정한다."""
+    return re.sub(r"(?<=[A-Za-z0-9@._+\-:/])\s+(?=[A-Za-z0-9@._+\-:/])", "", text)
+
+
+def _compact_skill_text(text: str) -> str:
+    """PDF 추출 시 J A V A처럼 벌어진 영문 기술명을 검색할 수 있게 보정한다."""
+    return re.sub(r"[^A-Za-z0-9+#.]+", "", text)
+
+
+def _normalize_phone(phone: str) -> str:
+    digits = re.sub(r"\D", "", phone)
+    if digits.startswith("82"):
+        digits = "0" + digits[2:]
+    if len(digits) == 11:
+        return f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
+    if len(digits) == 10:
+        return f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
+    return phone
+
+
+def _extract_emails(text: str) -> list[str]:
+    emails = set(re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", text))
+    email_pattern = re.compile(
+        r"(?:[A-Za-z0-9._%+\-]\s*)+@\s*(?:[A-Za-z0-9\-]\s*)+"
+        r"(?:\.\s*(?:[A-Za-z]\s*){2,})+"
+    )
+    for line in text.splitlines():
+        if "@" not in line or re.search(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", line):
+            continue
+        for match in email_pattern.findall(line):
+            compact_email = re.sub(r"\s+", "", match)
+            if re.fullmatch(r"[\w.+-]+@[\w-]+(?:\.[A-Za-z]{2,})+", compact_email):
+                emails.add(compact_email)
+    return sorted(emails)
+
+
+def _extract_urls(text: str) -> list[str]:
+    urls = set(re.findall(r"https?://[^\s)]+", text))
+    url_pattern = re.compile(r"https?\s*:\s*/\s*/\s*[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%\-\s]+")
+    for line in text.splitlines():
+        if not re.search(r"https?\s*:", line) or re.search(r"https?://[^\s)]+", line):
+            continue
+        for match in url_pattern.findall(line):
+            compact_url = re.sub(r"\s+", "", match).rstrip(".,;")
+            if re.fullmatch(r"https?://[^\s)]+", compact_url):
+                urls.add(compact_url)
+    return sorted(urls)
 
 
 def _extract_pdf(file_path: Path) -> str:

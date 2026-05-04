@@ -321,6 +321,9 @@
 - FastAPI TestClient 검증: 회원가입 201, TXT 이력서 업로드 201 + `parse_status=COMPLETED`, `GET /resumes` 200 + 1건
 - FastAPI TestClient 검증: DOCX 이력서 업로드 201 + `parse_status=COMPLETED`, 기술 키워드 파싱 확인
 - FastAPI TestClient 검증: 기본 이력서 2회 업로드 시 기본값 1개 유지, `DELETE /resumes/{resume_id}` 후 저장 파일 삭제 및 DB 원문/파싱 데이터 제거 확인
+- PDF 텍스트 추출 시 `J A V A`, `0 1 0 - ...`처럼 문자 사이 공백이 삽입되는 케이스를 보정해 기술 키워드/전화번호/이메일 파싱 개선
+- 기존 업로드 이력서에 `raw_text`는 있으나 파싱 결과가 비어 있으면 상세 조회 시 `parsed_data`를 재계산해 저장하도록 보강
+- 파서 샘플 검증: 분리된 이메일, 전화번호, `J A V A`, `P y t h o n`, `F a s t A P I`, `D o c k e r` 추출 확인
 - `npm run lint` 통과
 - `npm run build` 통과 (Next.js 16.2.4, 17개 정적 경로)
 - `git diff --check` 통과 (CRLF 경고만 출력)
