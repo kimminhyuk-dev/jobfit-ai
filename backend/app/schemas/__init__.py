@@ -1,9 +1,10 @@
-from app.schemas.auth import LoginRequest, MessageResponse, TokenResponse
+from app.schemas.auth import AuthResponse, LoginRequest, MessageResponse
 from app.schemas.category import CategoryCreate, CategoryResponse, CategoryUpdate
 from app.schemas.post import PostCreate, PostResponse, PostUpdate
 from app.schemas.user import UserCreate, UserResponse
 
 __all__ = [
+    "AuthResponse",
     "CategoryCreate",
     "CategoryResponse",
     "CategoryUpdate",
@@ -12,7 +13,6 @@ __all__ = [
     "PostCreate",
     "PostResponse",
     "PostUpdate",
-    "TokenResponse",
     "UserCreate",
     "UserResponse",
 ]
