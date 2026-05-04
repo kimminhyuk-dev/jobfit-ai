@@ -17,6 +17,9 @@ frontend/*.tsbuildinfo
 # Secrets / local overrides
 *.env.local
 .env*.local
+
+# User uploads / private local data
+backend/data/resumes/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

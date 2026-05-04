@@ -135,7 +135,12 @@ class UserService:
             self.refresh_token_repository.revoke(db_token)
             self.db.commit()
 
-    def update_me(self, user: User, user_update: UserUpdate) -> User:
+    def update_me(
+        self,
+        user: User,
+        user_update: UserUpdate,
+        request_ip: str | None = None,
+    ) -> User:
         new_hashed: str | None = None
         if user_update.new_password is not None:
             if not user_update.current_password or not verify_password(
@@ -148,6 +153,7 @@ class UserService:
             user,
             name=user_update.name,
             hashed_password=new_hashed,
+            request_ip=request_ip,
         )
         if new_hashed:
             # 비밀번호 변경 시 모든 세션 강제 만료

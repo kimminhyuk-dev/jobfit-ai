@@ -44,12 +44,28 @@ export interface SignupRequest {
 }
 
 // 이력서
+export interface ResumeParsedData {
+  emails: string[];
+  phones: string[];
+  urls: string[];
+  skills: string[];
+  text_length: number;
+}
+
 export interface Resume {
-  id: string;
-  filename: string;
-  uploaded_at: string;
-  score: number;
-  status: 'analyzing' | 'done' | 'error';
+  resume_id: number;
+  user_id: number;
+  title: string;
+  original_filename: string;
+  file_size: number;
+  content_type: string;
+  parse_status: 'PENDING' | 'COMPLETED' | 'FAILED';
+  parse_error: string | null;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+  raw_text?: string | null;
+  parsed_data?: ResumeParsedData | null;
 }
 
 // 채용공고 (mock UI용)

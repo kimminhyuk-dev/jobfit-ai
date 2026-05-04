@@ -48,25 +48,54 @@ class PostService:
             raise PostNotFoundError
         return post
 
-    def create_post(self, post_create: PostCreate, author_id: int) -> Post:
+    def create_post(
+        self,
+        post_create: PostCreate,
+        author_id: int,
+        request_ip: str | None = None,
+    ) -> Post:
         self._ensure_active_category(post_create.category_id)
-        post = self.post_repository.create(post_create, author_id=author_id)
+        post = self.post_repository.create(
+            post_create,
+            author_id=author_id,
+            request_ip=request_ip,
+        )
         self.db.commit()
         self.db.refresh(post)
         return post
 
-    def update_post(self, post_id: int, post_update: PostUpdate, updater_id: int) -> Post:
+    def update_post(
+        self,
+        post_id: int,
+        post_update: PostUpdate,
+        updater_id: int,
+        request_ip: str | None = None,
+    ) -> Post:
         post = self.get_post(post_id)
         if post_update.category_id is not None:
             self._ensure_active_category(post_update.category_id)
-        post = self.post_repository.update(post, post_update, updater_id=updater_id)
+        post = self.post_repository.update(
+            post,
+            post_update,
+            updater_id=updater_id,
+            request_ip=request_ip,
+        )
         self.db.commit()
         self.db.refresh(post)
         return post
 
-    def delete_post(self, post_id: int, deleter_id: int) -> None:
+    def delete_post(
+        self,
+        post_id: int,
+        deleter_id: int,
+        request_ip: str | None = None,
+    ) -> None:
         post = self.get_post(post_id)
-        self.post_repository.soft_delete(post, deleter_id=deleter_id)
+        self.post_repository.soft_delete(
+            post,
+            deleter_id=deleter_id,
+            request_ip=request_ip,
+        )
         self.db.commit()
 
     def _ensure_active_category(self, category_id: int) -> None:

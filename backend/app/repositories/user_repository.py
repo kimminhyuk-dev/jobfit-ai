@@ -43,11 +43,19 @@ class UserRepository:
         )
         return int(self.db.execute(stmt).scalar_one())
 
-    def update(self, user: User, name: str | None, hashed_password: str | None) -> User:
+    def update(
+        self,
+        user: User,
+        name: str | None,
+        hashed_password: str | None,
+        request_ip: str | None,
+    ) -> User:
         if name is not None:
             user.name = name
         if hashed_password is not None:
             user.password = hashed_password
+        user.updated_by = user.user_id
+        user.updated_ip = request_ip
         self.db.flush()
         return user
 

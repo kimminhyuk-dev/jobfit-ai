@@ -2,10 +2,10 @@
 카테고리 API 라우터
 """
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin_user
+from app.api.deps import get_client_ip, get_current_admin_user
 from app.core.database import get_db
 from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
@@ -38,6 +38,7 @@ def list_categories(
 @router.post("", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
 def create_category(
     category_create: CategoryCreate,
+    request: Request,
     current_user: User = Depends(get_current_admin_user),
     category_service: CategoryService = Depends(get_category_service),
 ) -> CategoryResponse:
@@ -46,6 +47,7 @@ def create_category(
         category = category_service.create_category(
             category_create,
             actor_id=current_user.user_id,
+            request_ip=get_client_ip(request),
         )
     except DuplicateCategorySlugError:
         raise AppException(
@@ -77,6 +79,7 @@ def get_category(
 def update_category(
     category_id: int,
     category_update: CategoryUpdate,
+    request: Request,
     current_user: User = Depends(get_current_admin_user),
     category_service: CategoryService = Depends(get_category_service),
 ) -> CategoryResponse:
@@ -86,6 +89,7 @@ def update_category(
             category_id,
             category_update,
             actor_id=current_user.user_id,
+            request_ip=get_client_ip(request),
         )
     except CategoryNotFoundError:
         raise AppException(
@@ -105,12 +109,17 @@ def update_category(
 @router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_category(
     category_id: int,
+    request: Request,
     current_user: User = Depends(get_current_admin_user),
     category_service: CategoryService = Depends(get_category_service),
 ) -> Response:
     """관리자가 카테고리를 소프트 삭제한다."""
     try:
-        category_service.delete_category(category_id, actor_id=current_user.user_id)
+        category_service.delete_category(
+            category_id,
+            actor_id=current_user.user_id,
+            request_ip=get_client_ip(request),
+        )
     except CategoryNotFoundError:
         raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,

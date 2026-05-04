@@ -50,7 +50,12 @@ class CategoryRepository:
             stmt = stmt.where(Category.is_deleted.is_(False))
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def create(self, category_create: CategoryCreate, actor_id: int) -> Category:
+    def create(
+        self,
+        category_create: CategoryCreate,
+        actor_id: int,
+        request_ip: str | None,
+    ) -> Category:
         category = Category(
             name=category_create.name,
             slug=category_create.slug,
@@ -58,7 +63,9 @@ class CategoryRepository:
             sort_order=category_create.sort_order,
             is_active=category_create.is_active,
             created_by=actor_id,
+            created_ip=request_ip,
             updated_by=actor_id,
+            updated_ip=request_ip,
         )
         self.db.add(category)
         self.db.flush()
@@ -69,16 +76,24 @@ class CategoryRepository:
         category: Category,
         category_update: CategoryUpdate,
         actor_id: int,
+        request_ip: str | None,
     ) -> Category:
         update_data = category_update.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(category, field, value)
         category.updated_by = actor_id
+        category.updated_ip = request_ip
         self.db.flush()
         return category
 
-    def soft_delete(self, category: Category, actor_id: int) -> None:
+    def soft_delete(
+        self,
+        category: Category,
+        actor_id: int,
+        request_ip: str | None,
+    ) -> None:
         category.is_deleted = True
         category.is_active = False
         category.updated_by = actor_id
+        category.updated_ip = request_ip
         self.db.flush()

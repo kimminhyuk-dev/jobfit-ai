@@ -2,10 +2,10 @@
 게시글 API 라우터
 """
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin_user
+from app.api.deps import get_client_ip, get_current_admin_user
 from app.core.database import get_db
 from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
@@ -45,12 +45,17 @@ def list_posts(
 @router.post("", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
 def create_post(
     post_create: PostCreate,
+    request: Request,
     current_user: User = Depends(get_current_admin_user),
     post_service: PostService = Depends(get_post_service),
 ) -> PostResponse:
     """관리자가 Q&A 게시글을 생성한다."""
     try:
-        post = post_service.create_post(post_create, author_id=current_user.user_id)
+        post = post_service.create_post(
+            post_create,
+            author_id=current_user.user_id,
+            request_ip=get_client_ip(request),
+        )
     except PostCategoryNotFoundError:
         raise AppException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -81,6 +86,7 @@ def get_post(
 def update_post(
     post_id: int,
     post_update: PostUpdate,
+    request: Request,
     current_user: User = Depends(get_current_admin_user),
     post_service: PostService = Depends(get_post_service),
 ) -> PostResponse:
@@ -90,6 +96,7 @@ def update_post(
             post_id,
             post_update,
             updater_id=current_user.user_id,
+            request_ip=get_client_ip(request),
         )
     except PostNotFoundError:
         raise AppException(
@@ -109,12 +116,17 @@ def update_post(
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_post(
     post_id: int,
+    request: Request,
     current_user: User = Depends(get_current_admin_user),
     post_service: PostService = Depends(get_post_service),
 ) -> Response:
     """관리자가 Q&A 게시글을 삭제한다."""
     try:
-        post_service.delete_post(post_id, deleter_id=current_user.user_id)
+        post_service.delete_post(
+            post_id,
+            deleter_id=current_user.user_id,
+            request_ip=get_client_ip(request),
+        )
     except PostNotFoundError:
         raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,

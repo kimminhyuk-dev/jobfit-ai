@@ -45,9 +45,9 @@
 - 공통 에러코드 기반 API 에러 응답 체계 구현 완료
 - 프론트엔드 Next.js 앱 전환 완료
   - 로그인/회원가입 화면과 인증 API 연결
-  - Access Token은 localStorage, Refresh Token은 HttpOnly Cookie 기반으로 사용
+  - Access Token과 Refresh Token은 모두 HttpOnly Cookie 기반으로 사용
   - 사용자/관리자 보호 라우트 구성
-  - 사용자 대시보드/이력서/채용공고/매칭 화면은 mock 데이터 기반 UI 구현
+  - 사용자 대시보드/채용공고/이력서 화면은 실제 API 연결 완료, 매칭 화면은 mock 데이터 기반 UI 구현
   - 관리자 대시보드/카테고리/Q&A 게시글 화면은 mock 데이터 기반 UI 구현
 - 프론트엔드 공통 API 클라이언트가 백엔드 공통 에러 응답 `{ code, message, details }`를 수신하도록 구성됨
 - 프론트엔드 계획 스택 반영 완료
@@ -142,6 +142,18 @@
 - `PostRepository.count_total()` 추가
 - `AdminStatsService`, `AdminStatsResponse` 스키마 신설
 
+### 이력서 도메인
+
+- `POST /resumes` — 현재 사용자의 이력서 파일 업로드, 원본 저장, 텍스트 추출, 기본 파싱 결과 저장
+- `GET /resumes` — 현재 사용자의 이력서 목록 조회
+- `GET /resumes/{resume_id}` — 현재 사용자의 이력서 상세 및 파싱 결과 조회
+- `DELETE /resumes/{resume_id}` — 현재 사용자의 이력서 소프트 삭제 + 추출 원문/파싱 결과 삭제 + 저장 파일 삭제
+- 지원 파일: PDF, DOCX, TXT, 최대 10MB
+- 파싱 상태: `PENDING` / `COMPLETED` / `FAILED`
+- 파싱 결과: 이메일, 전화번호, URL, 기술 키워드, 추출 텍스트 길이
+- 이력서 테이블은 `created_at`, `created_by`, `created_ip`, `updated_at`, `updated_by`, `updated_ip` 감사 컬럼 포함
+- 기본 이력서는 사용자별 1개만 유지되도록 부분 unique index(`uq_resumes_one_default_per_user`) 적용
+
 ## 완료된 프론트엔드 기능
 
 - Next.js 16 App Router + React + TypeScript 프로젝트 구성
@@ -177,6 +189,10 @@
 - 사용자 채용공고 화면: ALIO/Mock 소스 탭 + 서버 페이지네이션 추가
 - 회원정보 수정 API (`PATCH /auth/me`) 구현 (이름·비밀번호)
 - 사용자 대시보드 "프로필 수정" 모달 추가
+- 사용자 이력서 화면(`/user/resumes`) 실제 API 연결 완료
+  - `GET /resumes`, `GET /resumes/{resume_id}`, `POST /resumes`, `DELETE /resumes/{resume_id}` 연동
+  - PDF/DOCX/TXT 업로드 UI, 기본 이력서 설정, 파싱 상태/오류 표시
+  - 이메일/전화번호/링크/기술 키워드 기본 파싱 결과와 추출 텍스트 표시
 - IT 채용 Mock 화면 추가 (`/user/mock-jobs`, `/admin/mock-jobs`)
   - `MockJobItem` 타입 + 20개 IT 기업 Mock 데이터 (Work24 테이블 구조 기반)
   - 카테고리 필터 탭 (백엔드/프론트엔드/AI·ML/DevOps·SRE/모바일/데이터/QA·보안/게임)
@@ -184,6 +200,14 @@
   - 관리자 화면: 테이블 뷰 + 통계 카드 + 카테고리 분포 차트
   - UserLayout, AdminLayout 네비게이션 항목 추가
 - `backend/app/schemas/__init__.py` TokenResponse → AuthResponse 수정 (ImportError 해결)
+- 이력서 등록 도메인 구현 완료
+  - `resumes` 테이블 추가: 원본 파일 메타데이터, 저장 경로, 추출 텍스트, 규칙 기반 파싱 JSON, 파싱 상태, 소프트 삭제, 감사 컬럼 포함
+  - `POST /resumes`: PDF/DOCX/TXT 업로드, 최대 용량 초과 시 스트리밍 읽기 중단, 로컬 파일 저장, 기본 텍스트 추출 및 이메일/전화번호/URL/기술 키워드 파싱
+  - `GET /resumes`, `GET /resumes/{resume_id}`, `DELETE /resumes/{resume_id}` 사용자 본인 이력서 API 추가
+  - 이력서 삭제 시 DB 원문/파싱 개인정보를 비우고 저장 파일을 삭제
+  - 사용자별 기본 이력서는 DB 부분 unique index로 1개만 허용
+  - PDF/DOCX 파싱 의존성으로 `pypdf`, `python-docx` 추가
+  - 사용자 직접 수정 API와 관리자 카테고리/Q&A 게시글 CRUD에 `updated_ip` 기록 보강
 
 - `frontend/src/api/admin.ts`
 - `frontend/src/app`
@@ -200,6 +224,7 @@
 - `backend/app/api/categories.py`
 - `backend/app/api/deps.py`
 - `backend/app/api/posts.py`
+- `backend/app/api/resumes.py`
 - `backend/app/core/config.py`
 - `backend/app/core/database.py`
 - `backend/app/core/error_codes.py`
@@ -213,23 +238,28 @@
 - `backend/app/models/job_source.py`
 - `backend/app/models/job_posting.py`
 - `backend/app/models/post.py`
+- `backend/app/models/resume.py`
 - `backend/app/models/user.py`
 - `backend/app/repositories/category_repository.py`
 - `backend/app/repositories/batch_job_run_repository.py`
 - `backend/app/repositories/job_source_repository.py`
 - `backend/app/repositories/job_posting_repository.py`
 - `backend/app/repositories/post_repository.py`
+- `backend/app/repositories/resume_repository.py`
 - `backend/app/repositories/user_repository.py`
 - `backend/app/schemas/auth.py`
 - `backend/app/schemas/category.py`
 - `backend/app/schemas/job_collection.py`
 - `backend/app/schemas/post.py`
+- `backend/app/schemas/resume.py`
 - `backend/app/schemas/user.py`
 - `backend/app/services/category_service.py`
 - `backend/app/services/alio_collection_service.py`
 - `backend/app/services/job_source_service.py`
 - `backend/app/services/job_posting_service.py`
 - `backend/app/services/post_service.py`
+- `backend/app/services/resume_parser.py`
+- `backend/app/services/resume_service.py`
 - `backend/app/services/user_service.py`
 - `backend/app/services/work24_collection_service.py`
 - `backend/app/services/job_sources/alio_client.py`
@@ -240,6 +270,7 @@
 - `backend/alembic/versions/b9a9c0967b9a_add_job_postings_and_batch_job_runs_.py`
 - `backend/alembic/versions/3a2b1c4d5e6f_create_posts_table.py`
 - `backend/alembic/versions/8dad372a1f24_create_users_table.py`
+- `backend/alembic/versions/f2a3b4c5d6e7_create_resumes_table.py`
 - `backend/.env.example`
 - `frontend/package.json`
 - `frontend/next.config.ts`
@@ -257,8 +288,10 @@
 - `frontend/src/components/ui/input.tsx`
 - `frontend/src/components/ui/alert.tsx`
 - `frontend/src/api/jobs.ts`
+- `frontend/src/api/resumes.ts`
 - `frontend/src/screens/LoginPage.tsx`
 - `frontend/src/screens/SignupPage.tsx`
+- `frontend/src/screens/user/ResumesPage.tsx`
 - `frontend/src/components/layout/UserLayout.tsx`
 - `frontend/src/components/layout/AdminLayout.tsx`
 - `AGENTS.md` / `CLAUDE.md` / `GEMINI.md`
@@ -266,6 +299,31 @@
 - `ai_context/API_SPEC.md`
 
 ## 최근 검증
+
+2026-05-04 이력서 등록 API + 기본 파싱 + 감사 IP 보강:
+
+- `AuditMixin` 기준 대부분의 주요 테이블은 이미 `created_at`, `created_by`, `created_ip`, `updated_at`, `updated_by`, `updated_ip` 감사 컬럼을 갖고 있음을 확인
+- 신규 `resumes` 테이블도 동일 감사 컬럼과 `is_deleted` 소프트 삭제 컬럼 포함
+- `POST /resumes`, `GET /resumes`, `GET /resumes/{resume_id}`, `DELETE /resumes/{resume_id}` 구현
+- 이력서 파일은 `settings.resume_upload_dir` 하위에 사용자별 디렉터리로 저장, 기본 최대 10MB
+- 업로드 파일은 최대 용량을 넘으면 전체 파일을 메모리에 올리기 전에 읽기를 중단
+- DB 저장 실패 시 방금 저장한 이력서 파일을 정리하도록 보강
+- 이력서 삭제 시 소프트 삭제와 함께 원문 텍스트/파싱 JSON/파일 메타 개인정보를 비우고 실제 저장 파일 삭제
+- 사용자별 기본 이력서 1개 보장을 위한 `a1b2c3d4e5f6_add_resume_default_unique_index.py` 마이그레이션 추가
+- TXT는 즉시 텍스트 추출 가능, PDF/DOCX는 `pypdf`, `python-docx` 의존성 기반 추출
+- 파싱 결과는 이메일, 전화번호, URL, 기술 키워드, 추출 텍스트 길이를 `parsed_data` JSON에 저장
+- 회원정보 수정, 관리자 카테고리 CRUD, 관리자 Q&A 게시글 CRUD에 `updated_ip` 기록 보강
+- 프론트엔드 `/user/resumes` 화면을 실제 이력서 API와 연결하고 mock 업로드 흐름 제거
+- `python -m compileall app` 통과
+- `pip install pypdf==6.4.1 python-docx==1.2.0` 통과
+- `alembic heads` 결과 `a1b2c3d4e5f6 (head)` 확인
+- `alembic upgrade head` 통과 (`f2a3b4c5d6e7 → a1b2c3d4e5f6`)
+- FastAPI TestClient 검증: 회원가입 201, TXT 이력서 업로드 201 + `parse_status=COMPLETED`, `GET /resumes` 200 + 1건
+- FastAPI TestClient 검증: DOCX 이력서 업로드 201 + `parse_status=COMPLETED`, 기술 키워드 파싱 확인
+- FastAPI TestClient 검증: 기본 이력서 2회 업로드 시 기본값 1개 유지, `DELETE /resumes/{resume_id}` 후 저장 파일 삭제 및 DB 원문/파싱 데이터 제거 확인
+- `npm run lint` 통과
+- `npm run build` 통과 (Next.js 16.2.4, 17개 정적 경로)
+- `git diff --check` 통과 (CRLF 경고만 출력)
 
 2026-05-04 JWT 토큰 쿠키 저장 + Refresh Token DB 영속화 (현업 방식 적용):
 
@@ -483,12 +541,12 @@ npm run dev
 ## 다음 작업
 
 ### 🔴 우선순위 높음
-1. **백엔드 이력서 도메인** — `POST /resumes` (업로드·저장), `GET /resumes` (목록) API 구현
-2. **Claude API 연동** — `POST /ai/analyze` 이력서 vs 공고 강점·약점·개선 제안 분석
-3. **벡터 임베딩** — sentence-transformers + pgvector 매칭 점수 계산
+1. **Claude API 연동** — `POST /ai/analyze` 이력서 vs 공고 강점·약점·개선 제안 분석
+2. **벡터 임베딩** — sentence-transformers + pgvector 매칭 점수 계산
+3. 이력서 파싱 재시도 API/관리자 파싱 실패 모니터링 범위 결정
 
 ### 🟡 우선순위 중간
-4. **프론트엔드 이력서 화면** (`/user/resumes`) — 업로드 UI, 파싱 결과 표시 (API 연결)
+4. PDF/DOCX 실제 샘플 업로드 검증 (`pypdf`, `python-docx` 설치 후)
 5. **프론트엔드 AI 매칭 화면** (`/user/matches`) — 매칭 점수 게이지, 강점/약점, AI 개선 제안
 6. `POST /admin/jobs/sources/mock/load` Swagger 테스트 (mock_work24_jobs.json DB 로드 확인)
 7. DB 확인: `SELECT data_source, COUNT(*) FROM job_postings GROUP BY data_source;`

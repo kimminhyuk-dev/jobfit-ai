@@ -5,7 +5,7 @@
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_client_ip, get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.error_codes import ErrorCode
@@ -43,7 +43,7 @@ def signup(
 ) -> AuthResponse:
     """회원가입 후 Access·Refresh Token을 HttpOnly 쿠키로 설정한다."""
     try:
-        user = user_service.signup(user_create, request_ip=_get_client_ip(request))
+        user = user_service.signup(user_create, request_ip=get_client_ip(request))
     except DuplicateEmailError:
         raise AppException(
             status_code=status.HTTP_409_CONFLICT,
@@ -51,7 +51,7 @@ def signup(
             message="이미 가입된 이메일입니다.",
         )
 
-    ip = _get_client_ip(request)
+    ip = get_client_ip(request)
     access_token, refresh_token = user_service.create_token_pair(user, ip=ip)
     _set_token_cookies(response, access_token, refresh_token)
     return AuthResponse(user=UserResponse.model_validate(user))
@@ -80,7 +80,7 @@ def login(
             message="활성화되지 않은 계정입니다.",
         )
 
-    ip = _get_client_ip(request)
+    ip = get_client_ip(request)
     access_token, refresh_token = user_service.create_token_pair(user, ip=ip)
     _set_token_cookies(response, access_token, refresh_token)
     return AuthResponse(user=UserResponse.model_validate(user))
@@ -102,7 +102,7 @@ def refresh(
         )
 
     try:
-        ip = _get_client_ip(request)
+        ip = get_client_ip(request)
         user, access_token, new_refresh_token = user_service.refresh(refresh_token, ip=ip)
     except InvalidTokenError:
         _clear_token_cookies(response)
@@ -146,12 +146,17 @@ def read_me(current_user: User = Depends(get_current_user)) -> UserResponse:
 @router.patch("/me", response_model=UserResponse)
 def update_me(
     user_update: UserUpdate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     user_service: UserService = Depends(get_user_service),
 ) -> UserResponse:
     """현재 로그인 사용자의 이름 또는 비밀번호를 수정한다."""
     try:
-        user = user_service.update_me(current_user, user_update)
+        user = user_service.update_me(
+            current_user,
+            user_update,
+            request_ip=get_client_ip(request),
+        )
     except InvalidCurrentPasswordError:
         raise AppException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -201,12 +206,3 @@ def _clear_token_cookies(response: Response) -> None:
         samesite=settings.refresh_token_cookie_samesite,
         path="/auth",
     )
-
-
-def _get_client_ip(request: Request) -> str | None:
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return None

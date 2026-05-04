@@ -64,6 +64,10 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5174",
     ]
 
+    # Resume upload
+    resume_upload_dir: str = "data/resumes"
+    resume_max_upload_mb: int = 10
+
 
 # 전역 싱글톤
 settings = Settings()

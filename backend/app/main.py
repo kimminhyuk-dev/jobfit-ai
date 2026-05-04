@@ -14,6 +14,7 @@ from app.api import (
     categories_router,
     jobs_router,
     posts_router,
+    resumes_router,
 )
 from app.core.config import settings
 from app.core.database import get_db
@@ -42,6 +43,7 @@ app.include_router(posts_router)
 app.include_router(admin_jobs_router)
 app.include_router(admin_stats_router)
 app.include_router(jobs_router)
+app.include_router(resumes_router)
 
 
 @app.get("/")

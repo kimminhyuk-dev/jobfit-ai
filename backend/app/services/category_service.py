@@ -37,12 +37,21 @@ class CategoryService:
             raise CategoryNotFoundError
         return category
 
-    def create_category(self, category_create: CategoryCreate, actor_id: int) -> Category:
+    def create_category(
+        self,
+        category_create: CategoryCreate,
+        actor_id: int,
+        request_ip: str | None = None,
+    ) -> Category:
         if self.category_repository.get_by_slug(category_create.slug, include_deleted=True):
             raise DuplicateCategorySlugError
 
         try:
-            category = self.category_repository.create(category_create, actor_id=actor_id)
+            category = self.category_repository.create(
+                category_create,
+                actor_id=actor_id,
+                request_ip=request_ip,
+            )
             self.db.commit()
             self.db.refresh(category)
         except IntegrityError as exc:
@@ -55,6 +64,7 @@ class CategoryService:
         category_id: int,
         category_update: CategoryUpdate,
         actor_id: int,
+        request_ip: str | None = None,
     ) -> Category:
         category = self.get_category(category_id, include_inactive=True)
         if category_update.slug is not None:
@@ -70,6 +80,7 @@ class CategoryService:
                 category,
                 category_update,
                 actor_id=actor_id,
+                request_ip=request_ip,
             )
             self.db.commit()
             self.db.refresh(category)
@@ -78,7 +89,16 @@ class CategoryService:
             raise DuplicateCategorySlugError from exc
         return category
 
-    def delete_category(self, category_id: int, actor_id: int) -> None:
+    def delete_category(
+        self,
+        category_id: int,
+        actor_id: int,
+        request_ip: str | None = None,
+    ) -> None:
         category = self.get_category(category_id, include_inactive=True)
-        self.category_repository.soft_delete(category, actor_id=actor_id)
+        self.category_repository.soft_delete(
+            category,
+            actor_id=actor_id,
+            request_ip=request_ip,
+        )
         self.db.commit()

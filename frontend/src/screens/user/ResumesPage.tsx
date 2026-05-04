@@ -1,225 +1,306 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Icon from '../../components/ui/Icon';
-import Gauge from '../../components/ui/Gauge';
-import { mockResumes } from '../../api/mock/resumes';
-import type { Resume } from '../../api/types';
+import { resumesApi, type UploadResumeParams } from '../../api/resumes';
+import type { ApiError, Resume } from '../../api/types';
 
-type UploadStage = 'idle' | 'uploading' | 'analyzing' | 'done';
+function formatFileSize(size: number): string {
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))}KB`;
+  return `${(size / 1024 / 1024).toFixed(1)}MB`;
+}
+
+function statusLabel(status: Resume['parse_status']): string {
+  if (status === 'COMPLETED') return '파싱 완료';
+  if (status === 'FAILED') return '파싱 실패';
+  return '대기 중';
+}
+
+function statusClass(status: Resume['parse_status']): string {
+  if (status === 'COMPLETED') return 'bg-m-success-soft text-m-success';
+  if (status === 'FAILED') return 'bg-m-danger-soft text-m-danger';
+  return 'bg-m-warn-soft text-m-warn';
+}
 
 export default function ResumesPage() {
-  const [stage, setStage] = useState<UploadStage>('idle');
-  const [progress, setProgress] = useState(0);
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [drag, setDrag] = useState(false);
-  const [resumes] = useState<Resume[]>(mockResumes);
+  const [title, setTitle] = useState('');
+  const [isDefault, setIsDefault] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Resume | null>(null);
 
-  const startUpload = () => {
-    setStage('uploading');
-    setProgress(0);
-    let p = 0;
-    const tick = () => {
-      p += 4 + Math.random() * 8;
-      if (p >= 100) {
-        setProgress(100);
-        setTimeout(() => {
-          setStage('analyzing');
-          let q = 0;
-          const tick2 = () => {
-            q += 3 + Math.random() * 5;
-            if (q >= 100) {
-              setProgress(100);
-              setTimeout(() => setStage('done'), 400);
-            } else {
-              setProgress(q);
-              setTimeout(tick2, 180);
-            }
-          };
-          setProgress(0);
-          tick2();
-        }, 400);
-      } else {
-        setProgress(p);
-        setTimeout(tick, 120);
-      }
-    };
-    tick();
-  };
+  const { data: resumes = [], isLoading } = useQuery({
+    queryKey: ['resumes'],
+    queryFn: resumesApi.getResumes,
+  });
 
-  const analysisSteps = [
-    { label: '텍스트 추출 완료', done: true },
-    { label: '경력 및 스킬 파싱 완료', done: true },
-    { label: '12,400개 채용공고와 매칭 중...', done: false },
-    { label: '강점/약점 분석', done: false },
-  ];
+  const selectedId = selected?.resume_id ?? resumes[0]?.resume_id ?? null;
+
+  const { data: selectedDetail } = useQuery({
+    queryKey: ['resume', selectedId],
+    queryFn: () => resumesApi.getResume(selectedId as number),
+    enabled: selectedId !== null,
+  });
+
+  const uploadMutation = useMutation<Resume, ApiError, UploadResumeParams>({
+    mutationFn: resumesApi.uploadResume,
+    onSuccess: (resume) => {
+      setTitle('');
+      setError(null);
+      setSelected(resume);
+      queryClient.setQueryData(['resume', resume.resume_id], resume);
+      queryClient.invalidateQueries({ queryKey: ['resumes'] });
+    },
+    onError: (err: ApiError) => {
+      setError(err.message || '이력서 업로드에 실패했습니다.');
+    },
+  });
+
+  const deleteMutation = useMutation<void, ApiError, number>({
+    mutationFn: resumesApi.deleteResume,
+    onSuccess: (_, deletedResumeId) => {
+      setSelected(null);
+      queryClient.removeQueries({ queryKey: ['resume', deletedResumeId] });
+      queryClient.invalidateQueries({ queryKey: ['resumes'] });
+    },
+    onError: (err: ApiError) => {
+      setError(err.message || '이력서 삭제에 실패했습니다.');
+    },
+  });
+
+  const activeResume = selectedDetail ?? selected ?? resumes[0] ?? null;
+
+  function upload(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    uploadMutation.mutate({
+      file,
+      title: title.trim() || undefined,
+      isDefault,
+    });
+  }
 
   return (
-    <div className="p-6 max-w-[800px] mx-auto">
-      <h1 className="text-[20px] font-bold text-m-text tracking-tight mb-1">내 이력서</h1>
-      <p className="text-[13px] text-m-muted mb-6">이력서를 업로드하면 AI가 분석 후 맞춤 채용공고를 추천해 드려요.</p>
-
-      {/* Upload area */}
-      <div className="bg-m-surface border border-m-border rounded-2xl p-6 mb-6">
-        {/* Stepper */}
-        <div className="flex items-center gap-2 justify-center mb-6">
-          {[
-            { n: 1, label: '이력서 업로드', active: true, done: stage === 'done' },
-            { n: 2, label: 'AI 분석', active: stage === 'analyzing' || stage === 'done', done: stage === 'done' },
-            { n: 3, label: '맞춤 채용공고', active: stage === 'done', done: false },
-          ].map((s, i, arr) => (
-            <div key={s.n} className="flex items-center gap-2">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold font-mono ${
-                    s.done
-                      ? 'bg-m-success text-white'
-                      : s.active
-                      ? 'bg-m-primary text-white'
-                      : 'bg-m-border text-m-subtle'
-                  }`}
-                >
-                  {s.done ? <Icon name="check" size={13} strokeWidth={3} /> : s.n}
-                </div>
-                <span className={`text-[13px] ${s.active ? 'font-semibold text-m-text' : 'text-m-muted'}`}>
-                  {s.label}
-                </span>
-              </div>
-              {i < arr.length - 1 && <div className="w-8 h-px bg-m-border" />}
-            </div>
-          ))}
+    <div className="p-6 max-w-[1060px] mx-auto">
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-[20px] font-bold text-m-text tracking-tight mb-1">내 이력서</h1>
+          <p className="text-[13px] text-m-muted">
+            PDF, DOCX, TXT 파일을 저장하고 서버에서 기본 파싱 결과를 관리합니다.
+          </p>
         </div>
-
-        {/* Dropzone */}
-        {stage === 'idle' && (
-          <div
-            onDragEnter={(e) => { e.preventDefault(); setDrag(true); }}
-            onDragOver={(e) => e.preventDefault()}
-            onDragLeave={() => setDrag(false)}
-            onDrop={(e) => { e.preventDefault(); setDrag(false); startUpload(); }}
-            onClick={startUpload}
-            className={`rounded-xl border-2 border-dashed py-14 text-center cursor-pointer transition-all ${
-              drag
-                ? 'border-m-primary bg-m-primary-soft'
-                : 'border-m-border-strong bg-m-surface-alt hover:border-m-primary hover:bg-m-primary-soft'
-            }`}
-          >
-            <div className="w-14 h-14 rounded-2xl bg-m-primary-soft text-m-primary flex items-center justify-center mx-auto mb-4">
-              <Icon name="upload" size={26} />
-            </div>
-            <p className="text-[15px] font-semibold text-m-text mb-1">파일을 끌어다 놓거나 클릭해 선택하세요</p>
-            <p className="text-[13px] text-m-muted">PDF · DOCX · 최대 10MB</p>
-            <button className="mt-5 h-9 px-5 rounded-lg bg-m-primary text-white text-[13px] font-semibold hover:bg-m-primary-hover transition-colors">
-              파일 선택
-            </button>
-          </div>
-        )}
-
-        {/* Progress */}
-        {(stage === 'uploading' || stage === 'analyzing') && (
-          <div className="border border-m-border rounded-xl p-5">
-            <div className="flex items-center gap-3.5 mb-4">
-              <div className="w-11 h-11 rounded-xl bg-m-primary-soft text-m-primary flex items-center justify-center">
-                <Icon name={stage === 'uploading' ? 'pdf' : 'sparkle'} size={22} />
-              </div>
-              <div className="flex-1">
-                <p className="text-[14px] font-semibold text-m-text">
-                  {stage === 'uploading' ? 'resume_v4.pdf' : 'AI가 이력서를 분석하고 있어요'}
-                </p>
-                <p className="text-[12px] text-m-muted mt-0.5">
-                  {stage === 'uploading' ? '업로드 중 · 1.4MB' : '경력, 스킬, 프로젝트를 추출 중...'}
-                </p>
-              </div>
-              <span className="text-[13px] font-bold text-m-primary font-mono">{Math.round(progress)}%</span>
-            </div>
-            <div className="h-1.5 bg-m-surface-alt rounded-full overflow-hidden">
-              <div
-                className="h-full bg-m-primary rounded-full transition-all duration-200"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            {stage === 'analyzing' && (
-              <div className="flex flex-col gap-2 mt-5">
-                {analysisSteps.map((s) => (
-                  <div key={s.label} className="flex items-center gap-2.5 text-[13px]">
-                    <div
-                      className={`w-[18px] h-[18px] rounded-full flex items-center justify-center flex-shrink-0 ${
-                        s.done ? 'bg-m-success text-white' : 'bg-m-surface-alt text-m-subtle'
-                      }`}
-                    >
-                      {s.done ? (
-                        <Icon name="check" size={11} strokeWidth={3} />
-                      ) : (
-                        <span className="w-1.5 h-1.5 bg-m-subtle rounded-full animate-pulse" />
-                      )}
-                    </div>
-                    <span className={s.done ? 'text-m-text' : 'text-m-muted'}>{s.label}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Done */}
-        {stage === 'done' && (
-          <div className="text-center py-4">
-            <div className="w-14 h-14 rounded-full bg-m-success-soft text-m-success flex items-center justify-center mx-auto mb-4">
-              <Icon name="check" size={28} strokeWidth={2.5} />
-            </div>
-            <h2 className="text-[18px] font-bold text-m-text">분석 완료!</h2>
-            <p className="text-[14px] text-m-muted mt-2">
-              <strong className="text-m-text">28개</strong>의 추천 채용공고와{' '}
-              <strong className="text-m-text">3개</strong>의 개선 제안을 준비했어요.
-            </p>
-            <button
-              onClick={() => setStage('idle')}
-              className="mt-5 h-10 px-6 rounded-lg bg-m-primary text-white text-[14px] font-semibold hover:bg-m-primary-hover transition-colors inline-flex items-center gap-2"
-            >
-              대시보드로 이동
-              <Icon name="arrow" size={16} />
-            </button>
-          </div>
-        )}
-
-        {/* Tip */}
-        {stage === 'idle' && (
-          <div className="mt-4 flex gap-3 items-start p-4 bg-m-primary-soft rounded-xl">
-            <Icon name="sparkle" size={16} color="#1d4ed8" className="mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-[13px] font-semibold text-m-text">이력서가 없으신가요?</p>
-              <p className="text-[12px] text-m-muted mt-0.5">LinkedIn 프로필을 연동하거나 빈 템플릿으로 시작할 수 있어요.</p>
-            </div>
-          </div>
-        )}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="h-9 px-4 rounded-lg bg-m-primary text-white text-[13px] font-semibold hover:bg-m-primary-hover transition-colors inline-flex items-center gap-2"
+        >
+          <Icon name="upload" size={15} />
+          파일 선택
+        </button>
       </div>
 
-      {/* Existing resumes */}
-      {resumes.length > 0 && (
-        <div>
-          <h2 className="text-[14px] font-semibold text-m-text mb-3">업로드한 이력서</h2>
-          <div className="flex flex-col gap-2.5">
-            {resumes.map((r, i) => (
-              <div key={r.id} className="bg-m-surface border border-m-border rounded-xl p-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-m-primary-soft text-m-primary flex items-center justify-center flex-shrink-0">
-                  <Icon name="pdf" size={20} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold text-m-text truncate">
-                    {r.filename}
-                    {i === 0 && (
-                      <span className="ml-2 text-[11px] px-1.5 py-0.5 bg-m-primary text-white rounded font-medium">
-                        최신
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-[12px] text-m-muted mt-0.5">
-                    {new Date(r.uploaded_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
-                  </p>
-                </div>
-                <Gauge score={r.score} size={52} stroke={5} label="" />
+      {error && (
+        <div className="mb-4 rounded-xl border border-m-danger bg-m-danger-soft p-3 text-[13px] text-m-danger">
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-5">
+        <div className="flex flex-col gap-4">
+          <div className="bg-m-surface border border-m-border rounded-2xl p-5">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+              className="hidden"
+              onChange={(e) => {
+                upload(e.target.files?.[0]);
+                e.currentTarget.value = '';
+              }}
+            />
+            <div className="mb-3">
+              <label className="block text-[12px] font-semibold text-m-text mb-1.5">이력서 제목</label>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="예: 백엔드 개발자 이력서"
+                className="w-full h-9 px-3 rounded-lg border border-m-border bg-m-surface-alt text-[13px] focus:outline-none focus:border-m-primary focus:ring-1 focus:ring-m-primary"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 mb-4 text-[13px] text-m-muted">
+              <input
+                type="checkbox"
+                checked={isDefault}
+                onChange={(e) => setIsDefault(e.target.checked)}
+                className="w-4 h-4"
+              />
+              기본 이력서로 설정
+            </label>
+
+            <div
+              onDragEnter={(e) => {
+                e.preventDefault();
+                setDrag(true);
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDragLeave={() => setDrag(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDrag(false);
+                upload(e.dataTransfer.files?.[0]);
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              className={`rounded-xl border-2 border-dashed py-12 text-center cursor-pointer transition-all ${
+                drag
+                  ? 'border-m-primary bg-m-primary-soft'
+                  : 'border-m-border-strong bg-m-surface-alt hover:border-m-primary hover:bg-m-primary-soft'
+              }`}
+            >
+              <div className="w-14 h-14 rounded-2xl bg-m-primary-soft text-m-primary flex items-center justify-center mx-auto mb-4">
+                <Icon name="upload" size={26} />
               </div>
-            ))}
+              <p className="text-[15px] font-semibold text-m-text mb-1">
+                {uploadMutation.isPending ? '업로드 및 파싱 중...' : '파일을 끌어다 놓거나 클릭하세요'}
+              </p>
+              <p className="text-[13px] text-m-muted">PDF · DOCX · TXT · 최대 10MB</p>
+            </div>
           </div>
+
+          <div>
+            <h2 className="text-[14px] font-semibold text-m-text mb-3">등록한 이력서</h2>
+            <div className="flex flex-col gap-2.5">
+              {isLoading ? (
+                <div className="bg-m-surface border border-m-border rounded-xl p-4 text-[13px] text-m-subtle">
+                  불러오는 중...
+                </div>
+              ) : resumes.length === 0 ? (
+                <div className="bg-m-surface border border-m-border rounded-xl p-4 text-[13px] text-m-subtle">
+                  아직 등록한 이력서가 없습니다.
+                </div>
+              ) : (
+                resumes.map((resume) => (
+                  <button
+                    key={resume.resume_id}
+                    onClick={() => setSelected(resume)}
+                    className={`bg-m-surface border rounded-xl p-4 flex items-center gap-4 text-left transition-colors ${
+                      activeResume?.resume_id === resume.resume_id
+                        ? 'border-m-primary bg-m-primary-soft'
+                        : 'border-m-border hover:bg-m-surface-alt'
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-m-primary-soft text-m-primary flex items-center justify-center flex-shrink-0">
+                      <Icon name="pdf" size={20} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-m-text truncate">
+                        {resume.title}
+                        {resume.is_default && (
+                          <span className="ml-2 text-[11px] px-1.5 py-0.5 bg-m-primary text-white rounded font-medium">
+                            기본
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[12px] text-m-muted mt-0.5 truncate">
+                        {resume.original_filename} · {formatFileSize(resume.file_size)}
+                      </p>
+                    </div>
+                    <span className={`text-[11px] font-semibold px-2 py-1 rounded-full ${statusClass(resume.parse_status)}`}>
+                      {statusLabel(resume.parse_status)}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-m-surface border border-m-border rounded-2xl min-h-[520px]">
+          {activeResume ? (
+            <div className="p-5">
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div>
+                  <h2 className="text-[18px] font-bold text-m-text">{activeResume.title}</h2>
+                  <p className="text-[13px] text-m-muted mt-1">
+                    {activeResume.original_filename} · 등록일{' '}
+                    {new Date(activeResume.created_at).toLocaleDateString('ko-KR')}
+                  </p>
+                </div>
+                <button
+                  onClick={() => deleteMutation.mutate(activeResume.resume_id)}
+                  disabled={deleteMutation.isPending}
+                  className="h-8 px-3 rounded-lg border border-m-border text-[12px] font-medium text-m-muted hover:bg-m-surface-alt disabled:opacity-50 flex-shrink-0"
+                >
+                  삭제
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                <div className="rounded-xl bg-m-surface-alt p-3">
+                  <p className="text-[11px] text-m-subtle mb-1">상태</p>
+                  <p className="text-[13px] font-semibold text-m-text">{statusLabel(activeResume.parse_status)}</p>
+                </div>
+                <div className="rounded-xl bg-m-surface-alt p-3">
+                  <p className="text-[11px] text-m-subtle mb-1">파일 크기</p>
+                  <p className="text-[13px] font-semibold text-m-text">{formatFileSize(activeResume.file_size)}</p>
+                </div>
+                <div className="rounded-xl bg-m-surface-alt p-3">
+                  <p className="text-[11px] text-m-subtle mb-1">추출 길이</p>
+                  <p className="text-[13px] font-semibold text-m-text">
+                    {activeResume.parsed_data?.text_length ?? 0}자
+                  </p>
+                </div>
+              </div>
+
+              {activeResume.parse_error && (
+                <div className="mb-5 rounded-xl border border-m-warn bg-m-warn-soft p-3 text-[13px] text-m-warn">
+                  {activeResume.parse_error}
+                </div>
+              )}
+
+              <div className="mb-5">
+                <h3 className="text-[14px] font-semibold text-m-text mb-3">기본 파싱 결과</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
+                  <ParsedBlock label="이메일" items={activeResume.parsed_data?.emails ?? []} />
+                  <ParsedBlock label="전화번호" items={activeResume.parsed_data?.phones ?? []} />
+                  <ParsedBlock label="링크" items={activeResume.parsed_data?.urls ?? []} />
+                  <ParsedBlock label="기술 키워드" items={activeResume.parsed_data?.skills ?? []} />
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-[14px] font-semibold text-m-text mb-3">추출 텍스트</h3>
+                <div className="max-h-[240px] overflow-auto scrollbar-thin rounded-xl bg-m-surface-alt p-4 text-[12px] leading-relaxed text-m-muted whitespace-pre-wrap">
+                  {activeResume.raw_text || '추출된 텍스트가 없습니다.'}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center text-[14px] text-m-subtle">
+              이력서를 등록하면 파싱 결과가 표시됩니다.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ParsedBlock({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="rounded-xl bg-m-surface-alt p-3 min-h-[86px]">
+      <p className="text-[11px] text-m-subtle mb-2">{label}</p>
+      {items.length === 0 ? (
+        <p className="text-[12px] text-m-subtle">없음</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {items.map((item) => (
+            <span key={item} className="px-2 py-1 rounded-full bg-white border border-m-border text-[11px] text-m-muted">
+              {item}
+            </span>
+          ))}
         </div>
       )}
     </div>

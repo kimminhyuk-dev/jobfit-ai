@@ -4,6 +4,7 @@ from app.api.auth import router as auth_router
 from app.api.categories import router as categories_router
 from app.api.jobs import router as jobs_router
 from app.api.posts import router as posts_router
+from app.api.resumes import router as resumes_router
 
 __all__ = [
     "admin_jobs_router",
@@ -12,4 +13,5 @@ __all__ = [
     "categories_router",
     "jobs_router",
     "posts_router",
+    "resumes_router",
 ]
