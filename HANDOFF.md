@@ -177,6 +177,13 @@
 - 사용자 채용공고 화면: ALIO/Mock 소스 탭 + 서버 페이지네이션 추가
 - 회원정보 수정 API (`PATCH /auth/me`) 구현 (이름·비밀번호)
 - 사용자 대시보드 "프로필 수정" 모달 추가
+- IT 채용 Mock 화면 추가 (`/user/mock-jobs`, `/admin/mock-jobs`)
+  - `MockJobItem` 타입 + 20개 IT 기업 Mock 데이터 (Work24 테이블 구조 기반)
+  - 카테고리 필터 탭 (백엔드/프론트엔드/AI·ML/DevOps·SRE/모바일/데이터/QA·보안/게임)
+  - 기술스택 칩, 연봉 표시, AI 분석 예정 플레이스홀더
+  - 관리자 화면: 테이블 뷰 + 통계 카드 + 카테고리 분포 차트
+  - UserLayout, AdminLayout 네비게이션 항목 추가
+- `backend/app/schemas/__init__.py` TokenResponse → AuthResponse 수정 (ImportError 해결)
 
 - `frontend/src/api/admin.ts`
 - `frontend/src/app`
@@ -475,11 +482,21 @@ npm run dev
 
 ## 다음 작업
 
-1. `POST /admin/jobs/sources/mock/load` Swagger 테스트 (mock_work24_jobs.json 로드 확인)
-2. DB 확인: `SELECT data_source, COUNT(*) FROM job_postings GROUP BY data_source;`
-3. 매칭 기능(AI 매칭 점수, 스킬 분석) 구현
-4. 이력서 도메인 (업로드, 저장, 파싱) 구현
-5. ALIO 코드 동기화 배치 (`ALIO_CODE_SYNC`) 구현 여부 결정
+### 🔴 우선순위 높음
+1. **백엔드 이력서 도메인** — `POST /resumes` (업로드·저장), `GET /resumes` (목록) API 구현
+2. **Claude API 연동** — `POST /ai/analyze` 이력서 vs 공고 강점·약점·개선 제안 분석
+3. **벡터 임베딩** — sentence-transformers + pgvector 매칭 점수 계산
+
+### 🟡 우선순위 중간
+4. **프론트엔드 이력서 화면** (`/user/resumes`) — 업로드 UI, 파싱 결과 표시 (API 연결)
+5. **프론트엔드 AI 매칭 화면** (`/user/matches`) — 매칭 점수 게이지, 강점/약점, AI 개선 제안
+6. `POST /admin/jobs/sources/mock/load` Swagger 테스트 (mock_work24_jobs.json DB 로드 확인)
+7. DB 확인: `SELECT data_source, COUNT(*) FROM job_postings GROUP BY data_source;`
+
+### 🟢 우선순위 낮음
+8. **지원 현황 화면** (`/user/applications`) — Kanban/리스트 뷰, localStorage 기반
+9. ALIO 코드 동기화 배치 (`ALIO_CODE_SYNC`) 구현 여부 결정
+10. Docker Compose 전체 통합 (프론트 + 백엔드 + DB)
 
 ## 다른 AI에게 요청할 때 사용할 프롬프트
 
