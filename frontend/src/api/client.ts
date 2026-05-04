@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import type { ApiError } from './types';
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
@@ -11,6 +11,8 @@ export const apiClient = axios.create({
 
 // Access Token 주입
 apiClient.interceptors.request.use((config) => {
+  if (typeof window === 'undefined') return config;
+
   const token = localStorage.getItem('access_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;

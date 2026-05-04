@@ -1,5 +1,9 @@
+'use client';
+
 import { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import type { ReactNode } from 'react';
 import Icon from '../ui/Icon';
 import { useAuth } from '../../stores/authContext';
 
@@ -10,14 +14,15 @@ const navItems = [
   { to: '/user/resumes', label: '내 이력서', icon: 'file' as const },
 ];
 
-export default function UserLayout() {
+export default function UserLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
 
   const handleLogout = async () => {
     await logout();
-    navigate('/login');
+    router.push('/login');
   };
 
   const initials = user?.name?.slice(0, 2) ?? '??';
@@ -44,44 +49,42 @@ export default function UserLayout() {
 
         {/* Nav */}
         <nav className="flex-1 p-3 flex flex-col gap-0.5">
-          {navItems.map((item) => (
-            <NavLink
+          {navItems.map((item) => {
+            const isActive = pathname === item.to;
+
+            return (
+            <Link
               key={item.to}
-              to={item.to}
+              href={item.to}
               title={item.label}
-              className={({ isActive }) =>
-                `flex items-center h-9 rounded-lg text-[13px] font-medium transition-colors gap-2.5 ${
+              className={`flex items-center h-9 rounded-lg text-[13px] font-medium transition-colors gap-2.5 ${
                   collapsed ? 'justify-center px-0' : 'px-3'
                 } ${
                   isActive
                     ? 'bg-m-primary-soft text-m-primary font-semibold'
                     : 'text-m-muted hover:bg-m-surface-alt hover:text-m-text'
-                }`
-              }
+                }`}
             >
-              {({ isActive }) => (
+              <Icon name={item.icon} size={16} />
+              {!collapsed && (
                 <>
-                  <Icon name={item.icon} size={16} />
-                  {!collapsed && (
-                    <>
-                      <span className="flex-1">{item.label}</span>
-                      {item.badge && (
-                        <span
-                          className={`text-[11px] px-1.5 py-0.5 rounded-full font-semibold font-mono ${
-                            isActive
-                              ? 'bg-m-primary text-white'
-                              : 'bg-m-surface-alt text-m-subtle'
-                          }`}
-                        >
-                          {item.badge}
-                        </span>
-                      )}
-                    </>
+                  <span className="flex-1">{item.label}</span>
+                  {item.badge && (
+                    <span
+                      className={`text-[11px] px-1.5 py-0.5 rounded-full font-semibold font-mono ${
+                        isActive
+                          ? 'bg-m-primary text-white'
+                          : 'bg-m-surface-alt text-m-subtle'
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
                   )}
                 </>
               )}
-            </NavLink>
-          ))}
+            </Link>
+            );
+          })}
         </nav>
 
         {/* Upgrade banner */}
@@ -150,18 +153,18 @@ export default function UserLayout() {
             <Icon name="bell" size={16} />
             <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-m-danger rounded-full border border-m-surface" />
           </button>
-          <NavLink
-            to="/user/resumes"
+          <Link
+            href="/user/resumes"
             className="h-9 px-3.5 flex items-center gap-1.5 rounded-lg bg-m-primary text-white text-[13px] font-semibold hover:bg-m-primary-hover transition-colors"
           >
             <Icon name="upload" size={14} />
             새 이력서
-          </NavLink>
+          </Link>
         </header>
 
         {/* Page content */}
         <main className="flex-1 overflow-auto scrollbar-thin">
-          <Outlet />
+          {children}
         </main>
       </div>
     </div>

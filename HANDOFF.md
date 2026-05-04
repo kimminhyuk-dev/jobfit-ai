@@ -17,7 +17,7 @@
 - 프로젝트명: jobfit-ai
 - 목적: AI 기반 이력서-채용공고 매칭 플랫폼
 - 백엔드: FastAPI, SQLAlchemy 2.0, Alembic, PostgreSQL
-- 프론트엔드: React 19, TypeScript, Vite 8, Tailwind CSS v4 기반 초기 구현 완료
+- 프론트엔드: Next.js 16 App Router, React 19, TypeScript, Tailwind CSS v4 기반 구현 완료
 - 인증 방식: JWT Access Token + HttpOnly Refresh Token Cookie
 - 권한 방식: `users.role` 기반 USER / ADMIN
 - 개발 환경: Windows, PowerShell, Python 3.12 계열
@@ -41,7 +41,7 @@
 - 카테고리/게시글 생성·수정·삭제는 ADMIN만 가능
 - 일반 USER는 카테고리/게시글 조회만 가능
 - 공통 에러코드 기반 API 에러 응답 체계 구현 완료
-- 프론트엔드 React 앱 초기 구현 완료
+- 프론트엔드 Next.js 앱 전환 완료
   - 로그인/회원가입 화면과 인증 API 연결
   - Access Token은 localStorage, Refresh Token은 HttpOnly Cookie 기반으로 사용
   - 사용자/관리자 보호 라우트 구성
@@ -50,8 +50,8 @@
 - 프론트엔드 공통 API 클라이언트가 백엔드 공통 에러 응답 `{ code, message, details }`를 수신하도록 구성됨
 - 프론트엔드 계획 스택 반영 완료
   - React 19 적용
-  - Vite 8 적용
-  - Tailwind CSS v4 및 `@tailwindcss/vite` 적용
+  - Next.js 16 App Router 적용
+  - Tailwind CSS v4 및 `@tailwindcss/postcss` 적용
   - TanStack Query Provider 적용
   - React Hook Form + Zod 기반 로그인/회원가입 폼 검증 적용
   - shadcn/ui 방식의 `Button`, `Input`, `Alert` 공통 컴포넌트 추가
@@ -142,14 +142,15 @@
 
 ## 완료된 프론트엔드 기능
 
-- Vite + React + TypeScript 프로젝트 구성
+- Next.js 16 App Router + React + TypeScript 프로젝트 구성
 - Tailwind CSS v4 기반 전역 스타일과 사용자/관리자 레이아웃 구성
 - React 19 기반으로 업그레이드
-- Vite 8 및 `@tailwindcss/vite` 기반 빌드 설정 적용
+- Next.js 16 및 `@tailwindcss/postcss` 기반 빌드 설정 적용
 - ESLint 9 flat config 기반 lint 설정 적용
-- 개발 중 Vite가 5174 포트로 올라가는 경우를 고려해 백엔드 기본 CORS 허용 origin에 `localhost/127.0.0.1:5174` 추가
+- Next.js 개발 서버 기본 포트 `3000`을 백엔드 기본 CORS 허용 origin에 추가
+- 기존 Vite 개발 포트 `5173/5174` CORS 허용값은 과거 호환용으로 유지
 - axios API 클라이언트 구성
-  - 기본 API URL: `VITE_API_URL` 또는 `http://localhost:8000`
+  - 기본 API URL: `NEXT_PUBLIC_API_URL` 또는 `http://localhost:8000`
   - `withCredentials: true`로 Refresh Token Cookie 포함
   - Access Token을 `Authorization: Bearer` 헤더에 자동 주입
 - TanStack Query `QueryClientProvider` 구성
@@ -164,8 +165,8 @@
   - 급여: 숫자 미제공 시 "공고문 참조" 표시
   - source_url이 있으면 원문 공고 링크 제공
   - 로딩/에러 상태 처리
-- 사용자 라우트: `/user/dashboard`, `/user/resumes`, `/user/jobs`, `/user/matches`
-- 관리자 라우트: `/admin/dashboard`, `/admin/categories`, `/admin/posts`, `/admin/jobs`
+- Next.js App Router 사용자 라우트: `/user/dashboard`, `/user/resumes`, `/user/jobs`, `/user/matches`
+- Next.js App Router 관리자 라우트: `/admin/dashboard`, `/admin/categories`, `/admin/posts`, `/admin/jobs`
 - 관리자 대시보드 `GET /admin/stats` 연결 완료: 전체 사용자·활성 카테고리·총 게시글·오늘 가입·채용공고 수 실데이터 표시, 로딩 스켈레톤·에러 배너 포함
 - 관리자 채용공고 화면(`/admin/jobs`) 신설: 소스 탭 필터(전체/ALIO/WORK24/SARAMIN/MANUAL), 상태 배지(OPEN/CLOSED/EXPIRED/HIDDEN), 마스터-디테일 레이아웃, 수집 메타 패널 포함
 - 관리자 라우트는 `user.role === 'ADMIN'`일 때만 접근 가능
@@ -176,7 +177,8 @@
 - 사용자 대시보드 "프로필 수정" 모달 추가
 
 - `frontend/src/api/admin.ts`
-- `frontend/src/pages/admin/AdminJobsPage.tsx`
+- `frontend/src/app`
+- `frontend/src/screens/admin/AdminJobsPage.tsx`
 - `backend/app/services/mock_loader_service.py`
 - `backend/data/mock_work24_jobs.json` (사용자가 배치 필요)
 
@@ -231,7 +233,11 @@
 - `backend/alembic/versions/8dad372a1f24_create_users_table.py`
 - `backend/.env.example`
 - `frontend/package.json`
-- `frontend/src/App.tsx`
+- `frontend/next.config.ts`
+- `frontend/postcss.config.mjs`
+- `frontend/src/app/layout.tsx`
+- `frontend/src/app/providers.tsx`
+- `frontend/src/components/auth/RequireAuth.tsx`
 - `frontend/src/api/client.ts`
 - `frontend/src/api/auth.ts`
 - `frontend/src/api/types.ts`
@@ -242,8 +248,8 @@
 - `frontend/src/components/ui/input.tsx`
 - `frontend/src/components/ui/alert.tsx`
 - `frontend/src/api/jobs.ts`
-- `frontend/src/pages/LoginPage.tsx`
-- `frontend/src/pages/SignupPage.tsx`
+- `frontend/src/screens/LoginPage.tsx`
+- `frontend/src/screens/SignupPage.tsx`
 - `frontend/src/components/layout/UserLayout.tsx`
 - `frontend/src/components/layout/AdminLayout.tsx`
 - `AGENTS.md` / `CLAUDE.md` / `GEMINI.md`
@@ -251,6 +257,40 @@
 - `ai_context/API_SPEC.md`
 
 ## 최근 검증
+
+2026-05-04 `'use client'` 명시 추가:
+
+- Next.js App Router 베스트 프랙티스 적용: hooks/navigation API를 사용하는 모든 컴포넌트에 `'use client'` 지시문 명시
+- 추가 대상: `screens/LoginPage`, `screens/SignupPage`, `screens/user/DashboardPage`, `screens/user/JobsPage`, `screens/user/MatchesPage`, `screens/user/ResumesPage`, `screens/admin/AdminDashboardPage`, `screens/admin/AdminJobsPage`, `screens/admin/CategoriesPage`, `screens/admin/PostsPage`, `components/layout/UserLayout`, `components/layout/AdminLayout` (12개 파일)
+- `npm run lint` 통과 (경고 0개)
+- `npm run build` 통과 (Next.js 16.2.4, 15개 라우트 정적 생성)
+
+2026-05-04 프론트엔드 Next.js 전환:
+
+- 전환 전 기준점 확인: 기존 프론트엔드는 `package.json` 기준 Vite 8 + React Router v7 + `VITE_API_URL` 구조였고, `HANDOFF.md`와 `git status --short` 확인 후 작업 시작
+- 프론트엔드 빌드 도구를 Vite에서 Next.js 16 App Router로 전환
+  - `next`, `@tailwindcss/postcss`, `postcss.config.mjs`, `next.config.ts`, `next-env.d.ts` 추가
+  - `vite`, `@vitejs/plugin-react`, `@tailwindcss/vite`, `react-router-dom`, Vite 엔트리 파일 제거
+  - 기존 `src/pages` 화면 컴포넌트는 Next Pages Router 충돌을 피하기 위해 `src/screens`로 이동
+  - `src/app`에 `/`, `/login`, `/signup`, `/user/*`, `/admin/*` App Router 경로 추가
+- React Router 의존 제거
+  - `Link`, `useRouter`, `usePathname`을 Next.js API로 교체
+  - `UserLayout`, `AdminLayout`은 `children` 기반 App Router 레이아웃으로 변경
+  - `RequireAuth`, `RootRedirect` 클라이언트 보호 라우트 컴포넌트 추가
+- 프론트엔드 API 환경 변수명을 `VITE_API_URL`에서 `NEXT_PUBLIC_API_URL`로 변경
+- Next.js SSR/프리렌더링 대응
+  - `AuthProvider`와 `AuthContext`를 client component로 명시
+  - `localStorage` 초기 접근을 클라이언트 마운트 이후로 이동
+  - axios interceptor에 `typeof window` 가드 추가
+- 백엔드 기본 CORS origin에 Next.js 개발 서버 포트 `localhost/127.0.0.1:3000` 추가
+- npm audit에서 Next 내부 `postcss` 하위 의존성 취약점이 보고되어 `overrides.postcss=^8.5.10`으로 보정
+- 검증 결과
+  - `npm run lint` 통과
+  - `npm run build` 통과 (Next.js 16.2.4, App Router 14개 경로 + `_not-found` 정적 생성)
+  - `npm audit --audit-level=moderate` 통과 (취약점 0개)
+  - `python -m compileall app` 통과
+  - `git diff --check` 통과 (공백 오류 없음)
+  - Next.js dev server `http://127.0.0.1:3000` 기동 및 HTTP 200 응답 확인
 
 2026-04-30 관리자 화면 API 연결·회원 수정 API·채용공고 UX 개선:
 
@@ -398,10 +438,11 @@ cd C:\Users\USER\jobfit-ai\frontend
 npm run dev
 ```
 
-- 현재 프론트엔드 구현 스택은 `package.json` 기준 React 19, Vite 8, Tailwind CSS v4이다.
-- TanStack Query, React Hook Form, Zod, React Router v7, shadcn/ui 패턴 기반 공통 컴포넌트는 적용 완료.
+- 현재 프론트엔드 구현 스택은 `package.json` 기준 Next.js 16, React 19, Tailwind CSS v4이다.
+- Next.js 개발 서버 기본 포트는 `3000`이다.
+- TanStack Query, React Hook Form, Zod, shadcn/ui 패턴 기반 공통 컴포넌트는 적용 완료.
 - 로컬 Node 버전은 `v20.20.2`로 확인되었고, Tailwind CSS v4 native binding 이슈 없이 빌드가 통과한다.
-- `frontend` dev server가 기본 5173 포트를 사용할 수 없을 때 5174로 뜰 수 있으므로, 백엔드 CORS 기본값과 `.env.example`은 5173/5174를 모두 포함한다.
+- 백엔드 CORS 기본값과 `.env.example`은 Next.js 기본 포트 `3000`과 기존 Vite 포트 `5173/5174`를 모두 포함한다.
 
 ## 다음 작업
 

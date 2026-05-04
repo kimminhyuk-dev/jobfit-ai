@@ -1,3 +1,5 @@
+'use client';
+
 import { useReducer, useEffect, type ReactNode } from 'react';
 import { authApi } from '../api/auth';
 import type { User } from '../api/types';
@@ -27,7 +29,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, {
     user: null,
-    token: localStorage.getItem('access_token'),
+    token: null,
     loading: true,
   });
 

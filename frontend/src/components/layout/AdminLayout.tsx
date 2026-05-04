@@ -1,4 +1,8 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+'use client';
+
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import type { ReactNode } from 'react';
 import Icon from '../ui/Icon';
 import { useAuth } from '../../stores/authContext';
 
@@ -9,13 +13,14 @@ const adminNav = [
   { to: '/admin/jobs', label: '채용공고', icon: 'briefcase' as const },
 ];
 
-export default function AdminLayout() {
+export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const pathname = usePathname();
+  const router = useRouter();
 
   const handleLogout = async () => {
     await logout();
-    navigate('/login');
+    router.push('/login');
   };
 
   return (
@@ -39,30 +44,28 @@ export default function AdminLayout() {
 
         {/* Nav */}
         <nav className="flex-1 p-3 flex flex-col gap-0.5">
-          {adminNav.map((item) => (
-            <NavLink
+          {adminNav.map((item) => {
+            const isActive = pathname === item.to;
+
+            return (
+            <Link
               key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `flex items-center h-9 px-3 rounded-lg text-[13px] gap-2.5 transition-colors ${
+              href={item.to}
+              className={`flex items-center h-9 px-3 rounded-lg text-[13px] gap-2.5 transition-colors ${
                   isActive
                     ? 'font-semibold'
                     : 'font-medium hover:bg-slate-50'
-                }`
-              }
-              style={({ isActive }) => ({
+                }`}
+              style={{
                 background: isActive ? '#eff6ff' : undefined,
                 color: isActive ? '#2563eb' : '#475569',
-              })}
+              }}
             >
-              {({ isActive }) => (
-                <>
-                  <Icon name={item.icon} size={16} color={isActive ? '#2563eb' : '#94a3b8'} />
-                  <span>{item.label}</span>
-                </>
-              )}
-            </NavLink>
-          ))}
+              <Icon name={item.icon} size={16} color={isActive ? '#2563eb' : '#94a3b8'} />
+              <span>{item.label}</span>
+            </Link>
+            );
+          })}
         </nav>
 
         {/* User */}
@@ -102,7 +105,7 @@ export default function AdminLayout() {
 
         {/* Content */}
         <main className="flex-1 overflow-auto scrollbar-thin">
-          <Outlet />
+          {children}
         </main>
       </div>
     </div>
