@@ -150,7 +150,7 @@
 - `DELETE /resumes/{resume_id}` — 현재 사용자의 이력서 소프트 삭제 + 추출 원문/파싱 결과 삭제 + 저장 파일 삭제
 - 지원 파일: PDF, DOCX, TXT, 최대 10MB
 - 파싱 상태: `PENDING` / `COMPLETED` / `FAILED`
-- 파싱 결과: 이메일, 전화번호, URL, 기술 키워드, 추출 텍스트 길이
+- 파싱 결과: 프로필 후보, 이메일, 전화번호, URL, 기술 키워드, 섹션별 원문(학력/교육/경력/프로젝트/자격증/자기소개서/수상/어학), AI 분석용 하이라이트, 추출 텍스트 길이
 - 이력서 테이블은 `created_at`, `created_by`, `created_ip`, `updated_at`, `updated_by`, `updated_ip` 감사 컬럼 포함
 - 기본 이력서는 사용자별 1개만 유지되도록 부분 unique index(`uq_resumes_one_default_per_user`) 적용
 
@@ -202,7 +202,7 @@
 - `backend/app/schemas/__init__.py` TokenResponse → AuthResponse 수정 (ImportError 해결)
 - 이력서 등록 도메인 구현 완료
   - `resumes` 테이블 추가: 원본 파일 메타데이터, 저장 경로, 추출 텍스트, 규칙 기반 파싱 JSON, 파싱 상태, 소프트 삭제, 감사 컬럼 포함
-  - `POST /resumes`: PDF/DOCX/TXT 업로드, 최대 용량 초과 시 스트리밍 읽기 중단, 로컬 파일 저장, 기본 텍스트 추출 및 이메일/전화번호/URL/기술 키워드 파싱
+  - `POST /resumes`: PDF/DOCX/TXT 업로드, 최대 용량 초과 시 스트리밍 읽기 중단, 로컬 파일 저장, 기본 텍스트 추출 및 프로필/이메일/전화번호/URL/기술 키워드/주요 섹션 파싱
   - `GET /resumes`, `GET /resumes/{resume_id}`, `DELETE /resumes/{resume_id}` 사용자 본인 이력서 API 추가
   - 이력서 삭제 시 DB 원문/파싱 개인정보를 비우고 저장 파일을 삭제
   - 사용자별 기본 이력서는 DB 부분 unique index로 1개만 허용
@@ -311,7 +311,7 @@
 - 이력서 삭제 시 소프트 삭제와 함께 원문 텍스트/파싱 JSON/파일 메타 개인정보를 비우고 실제 저장 파일 삭제
 - 사용자별 기본 이력서 1개 보장을 위한 `a1b2c3d4e5f6_add_resume_default_unique_index.py` 마이그레이션 추가
 - TXT는 즉시 텍스트 추출 가능, PDF/DOCX는 `pypdf`, `python-docx` 의존성 기반 추출
-- 파싱 결과는 이메일, 전화번호, URL, 기술 키워드, 추출 텍스트 길이를 `parsed_data` JSON에 저장
+- 파싱 결과는 프로필 후보, 이메일, 전화번호, URL, 기술 키워드, 섹션별 원문, AI 분석용 하이라이트, 추출 텍스트 길이를 `parsed_data` JSON에 저장
 - 회원정보 수정, 관리자 카테고리 CRUD, 관리자 Q&A 게시글 CRUD에 `updated_ip` 기록 보강
 - 프론트엔드 `/user/resumes` 화면을 실제 이력서 API와 연결하고 mock 업로드 흐름 제거
 - `python -m compileall app` 통과
@@ -322,8 +322,10 @@
 - FastAPI TestClient 검증: DOCX 이력서 업로드 201 + `parse_status=COMPLETED`, 기술 키워드 파싱 확인
 - FastAPI TestClient 검증: 기본 이력서 2회 업로드 시 기본값 1개 유지, `DELETE /resumes/{resume_id}` 후 저장 파일 삭제 및 DB 원문/파싱 데이터 제거 확인
 - PDF 텍스트 추출 시 `J A V A`, `0 1 0 - ...`처럼 문자 사이 공백이 삽입되는 케이스를 보정해 기술 키워드/전화번호/이메일 파싱 개선
+- 프로토콜 없는 `github.com/...` 계열 URL과 PDF에서 벌어진 URL 후보를 인식하도록 URL 파싱 보강
+- AI 분석 입력을 위해 학력/교육/경력/프로젝트/자격증/자기소개서/수상/어학 섹션 감지 및 하이라이트 추출 추가
 - 기존 업로드 이력서에 `raw_text`는 있으나 파싱 결과가 비어 있으면 상세 조회 시 `parsed_data`를 재계산해 저장하도록 보강
-- 파서 샘플 검증: 분리된 이메일, 전화번호, `J A V A`, `P y t h o n`, `F a s t A P I`, `D o c k e r` 추출 확인
+- 파서 샘플 검증: 분리된 이메일, 전화번호, `github.com/...`, `J A V A`, `Spring Boot`, 학력/교육/경력/프로젝트/자격증/자기소개서 섹션 추출 확인
 - `npm run lint` 통과
 - `npm run build` 통과 (Next.js 16.2.4, 17개 정적 경로)
 - `git diff --check` 통과 (CRLF 경고만 출력)

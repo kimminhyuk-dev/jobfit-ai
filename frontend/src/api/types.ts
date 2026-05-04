@@ -45,10 +45,28 @@ export interface SignupRequest {
 
 // 이력서
 export interface ResumeParsedData {
+  profile?: {
+    name?: string | null;
+    birth_date?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    urls?: string[];
+    address?: string | null;
+  };
   emails: string[];
   phones: string[];
   urls: string[];
   skills: string[];
+  sections?: Record<string, string>;
+  education?: string[];
+  training?: string[];
+  experiences?: string[];
+  projects?: string[];
+  certifications?: string[];
+  cover_letter?: string | null;
+  awards?: string[];
+  languages?: string[];
+  highlights?: Record<string, string[]>;
   text_length: number;
 }
 

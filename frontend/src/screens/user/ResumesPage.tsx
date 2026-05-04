@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Icon from '../../components/ui/Icon';
 import { resumesApi, type UploadResumeParams } from '../../api/resumes';
-import type { ApiError, Resume } from '../../api/types';
+import type { ApiError, Resume, ResumeParsedData } from '../../api/types';
 
 function formatFileSize(size: number): string {
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))}KB`;
@@ -270,6 +270,8 @@ export default function ResumesPage() {
                 </div>
               </div>
 
+              {activeResume.parsed_data && <StructuredParsedData parsedData={activeResume.parsed_data} />}
+
               <div>
                 <h3 className="text-[14px] font-semibold text-m-text mb-3">추출 텍스트</h3>
                 <div className="max-h-[240px] overflow-auto scrollbar-thin rounded-xl bg-m-surface-alt p-4 text-[12px] leading-relaxed text-m-muted whitespace-pre-wrap">
@@ -284,6 +286,62 @@ export default function ResumesPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function StructuredParsedData({ parsedData }: { parsedData: ResumeParsedData }) {
+  const profileItems = [
+    parsedData.profile?.name && `이름: ${parsedData.profile.name}`,
+    parsedData.profile?.birth_date && `생년월일: ${parsedData.profile.birth_date}`,
+    parsedData.profile?.address && `주소: ${parsedData.profile.address}`,
+  ].filter(Boolean) as string[];
+
+  const blocks = [
+    { label: '프로필', items: profileItems },
+    { label: '학력', items: parsedData.education ?? [] },
+    { label: '교육/훈련', items: parsedData.training ?? [] },
+    { label: '경력', items: parsedData.experiences ?? [] },
+    { label: '프로젝트', items: parsedData.projects ?? [] },
+    { label: '자격증', items: parsedData.certifications ?? [] },
+    { label: '수상', items: parsedData.awards ?? [] },
+    { label: '어학', items: parsedData.languages ?? [] },
+  ].filter((block) => block.items.length > 0);
+
+  const hasCoverLetter = Boolean(parsedData.cover_letter);
+  if (blocks.length === 0 && !hasCoverLetter) return null;
+
+  return (
+    <div className="mb-5">
+      <h3 className="text-[14px] font-semibold text-m-text mb-3">AI 분석용 구조화 데이터</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {blocks.map((block) => (
+          <TextListBlock key={block.label} label={block.label} items={block.items} />
+        ))}
+      </div>
+      {hasCoverLetter && (
+        <div className="mt-3 rounded-xl bg-m-surface-alt p-3">
+          <p className="text-[11px] text-m-subtle mb-2">자기소개서</p>
+          <p className="max-h-[180px] overflow-auto whitespace-pre-wrap text-[12px] leading-relaxed text-m-muted">
+            {parsedData.cover_letter}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TextListBlock({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="rounded-xl bg-m-surface-alt p-3 min-h-[86px]">
+      <p className="text-[11px] text-m-subtle mb-2">{label}</p>
+      <ul className="space-y-1.5">
+        {items.slice(0, 8).map((item, index) => (
+          <li key={`${label}-${index}`} className="text-[12px] leading-relaxed text-m-muted">
+            {item}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
