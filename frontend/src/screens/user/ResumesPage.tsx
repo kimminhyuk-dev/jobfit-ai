@@ -43,6 +43,7 @@ export default function ResumesPage() {
   const [isDefault, setIsDefault] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Resume | null>(null);
+  const [viewMode, setViewMode] = useState<'preview' | 'data'>('preview');
   const [uploadFlow, setUploadFlow] = useState<UploadFlow>({
     status: 'idle',
     progress: 0,
@@ -352,9 +353,9 @@ export default function ResumesPage() {
                   <p className="text-[13px] font-semibold text-m-text">{formatFileSize(activeResume.file_size)}</p>
                 </div>
                 <div className="rounded-xl bg-m-surface-alt p-3">
-                  <p className="text-[11px] text-m-subtle mb-1">추출 길이</p>
+                  <p className="text-[11px] text-m-subtle mb-1">파일 형식</p>
                   <p className="text-[13px] font-semibold text-m-text">
-                    {activeResume.parsed_data?.text_length ?? 0}자
+                    {activeResume.content_type.split('/')[1]?.toUpperCase() || 'DOCUMENT'}
                   </p>
                 </div>
               </div>
@@ -365,24 +366,55 @@ export default function ResumesPage() {
                 </div>
               )}
 
-              <div className="mb-5">
-                <h3 className="text-[14px] font-semibold text-m-text mb-3">기본 파싱 결과</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
-                  <ParsedBlock label="이메일" items={activeResume.parsed_data?.emails ?? []} />
-                  <ParsedBlock label="전화번호" items={activeResume.parsed_data?.phones ?? []} />
-                  <ParsedBlock label="링크" items={activeResume.parsed_data?.urls ?? []} />
-                  <ParsedBlock label="기술 키워드" items={activeResume.parsed_data?.skills ?? []} />
-                </div>
+              <div className="mb-4 flex items-center gap-1 bg-m-surface-alt p-1 rounded-xl w-fit">
+                <button
+                  onClick={() => setViewMode('preview')}
+                  className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
+                    viewMode === 'preview' ? 'bg-white text-m-primary shadow-sm' : 'text-m-muted hover:text-m-text'
+                  }`}
+                >
+                  파일 미리보기
+                </button>
+                <button
+                  onClick={() => setViewMode('data')}
+                  className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
+                    viewMode === 'data' ? 'bg-white text-m-primary shadow-sm' : 'text-m-muted hover:text-m-text'
+                  }`}
+                >
+                  파싱 데이터
+                </button>
               </div>
 
-              {activeResume.parsed_data && <StructuredParsedData parsedData={activeResume.parsed_data} />}
-
-              <div>
-                <h3 className="text-[14px] font-semibold text-m-text mb-3">추출 텍스트</h3>
-                <div className="max-h-[240px] overflow-auto scrollbar-thin rounded-xl bg-m-surface-alt p-4 text-[12px] leading-relaxed text-m-muted whitespace-pre-wrap">
-                  {activeResume.raw_text || '추출된 텍스트가 없습니다.'}
+              {viewMode === 'preview' ? (
+                <div className="rounded-2xl border border-m-border bg-m-surface-alt overflow-hidden aspect-[1/1.4] relative">
+                  <iframe
+                    src={resumesApi.getResumeFileUrl(activeResume.resume_id)}
+                    className="w-full h-full border-none"
+                    title="Resume Preview"
+                  />
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="mb-5">
+                    <h3 className="text-[14px] font-semibold text-m-text mb-3">기본 파싱 결과</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
+                      <ParsedBlock label="이메일" items={activeResume.parsed_data?.emails ?? []} />
+                      <ParsedBlock label="전화번호" items={activeResume.parsed_data?.phones ?? []} />
+                      <ParsedBlock label="링크" items={activeResume.parsed_data?.urls ?? []} />
+                      <ParsedBlock label="기술 키워드" items={activeResume.parsed_data?.skills ?? []} />
+                    </div>
+                  </div>
+
+                  {activeResume.parsed_data && <StructuredParsedData parsedData={activeResume.parsed_data} />}
+
+                  <div>
+                    <h3 className="text-[14px] font-semibold text-m-text mb-3">추출 텍스트</h3>
+                    <div className="max-h-[240px] overflow-auto scrollbar-thin rounded-xl bg-m-surface-alt p-4 text-[12px] leading-relaxed text-m-muted whitespace-pre-wrap">
+                      {activeResume.raw_text || '추출된 텍스트가 없습니다.'}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="h-full flex items-center justify-center text-[14px] text-m-subtle">

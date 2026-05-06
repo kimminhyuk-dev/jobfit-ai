@@ -33,4 +33,8 @@ export const resumesApi = {
   deleteResume: async (resumeId: number): Promise<void> => {
     await apiClient.delete(`/resumes/${resumeId}`);
   },
+  
+  getResumeFileUrl: (resumeId: number): string => {
+    return `${apiClient.defaults.baseURL}/resumes/${resumeId}/file`;
+  },
 };

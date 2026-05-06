@@ -49,6 +49,7 @@
   - 사용자/관리자 보호 라우트 구성
   - 사용자 대시보드/채용공고/이력서 화면은 실제 API 연결 완료, 매칭 화면은 mock 데이터 기반 UI 구현
   - 관리자 대시보드/카테고리/Q&A 게시글 화면은 mock 데이터 기반 UI 구현
+- 관리자 사용자 관리 화면 구현 완료 (사용자 목록, 상세 정보, 이력서 파싱 데이터 및 파일 프리뷰)
 - 프론트엔드 공통 API 클라이언트가 백엔드 공통 에러 응답 `{ code, message, details }`를 수신하도록 구성됨
 - 프론트엔드 계획 스택 반영 완료
   - React 19 적용
@@ -150,6 +151,7 @@
 - `POST /resumes` — 현재 사용자의 이력서 파일 업로드, 원본 저장, 텍스트 추출, 기본 파싱 결과 저장
 - `GET /resumes` — 현재 사용자의 이력서 목록 조회
 - `GET /resumes/{resume_id}` — 현재 사용자의 이력서 상세 및 파싱 결과 조회
+- `GET /resumes/{resume_id}/file` — 이력서 원본 파일 스트리밍 (프리뷰용)
 - `DELETE /resumes/{resume_id}` — 현재 사용자의 이력서 소프트 삭제 + 추출 원문/파싱 결과 삭제 + 저장 파일 삭제
 - 지원 파일: PDF, DOCX, TXT, 최대 10MB
 - 파싱 상태: `PENDING` / `COMPLETED` / `FAILED`
@@ -303,6 +305,21 @@
 - `ai_context/API_SPEC.md`
 
 ## 최근 검증
+
+2026-05-06 이력서 PDF 프리뷰 및 관리자 사용자 관리 기능 고도화:
+
+- 백엔드: 이력서 원본 파일 스트리밍 API(`GET /resumes/{id}/file`) 구현
+- 백엔드: 관리자 전용 사용자 목록(`GET /admin/users`) 및 상세 조회(`GET /admin/users/{id}`) API 구현
+- 프론트엔드: 이력서 상세 페이지에 PDF 프리뷰(`iframe`) 및 탭(파싱 데이터/프리뷰) 도입
+- 프론트엔드: 관리자용 사용자 관리 화면(`AdminUsersPage`) 신설 및 사이드바 연결
+- 환경 설정: 인텔리제이 `.idea` 설정(파이썬 인터프리터, 소스 루트) 직접 수정하여 참조 에러 해결
+- 프로젝트 문서(ai_context, AGENTS.md 등) 최신화
+- 검증
+  - `python -m compileall app` 통과
+  - 관리자 사용자 목록 API (`GET /admin/users`) 200 응답 및 사용자 목록 확인
+  - 사용자 상세 API (`GET /admin/users/{id}`) 200 응답 및 이력서 데이터 확인
+  - 이력서 파일 스트리밍 API (`GET /resumes/{id}/file`) 200 응답 및 PDF 콘텐츠 타입 확인
+  - 인텔리제이 프로젝트 뷰에서 `backend` 폴더가 Source Root로 정상 표시됨을 확인
 
 2026-05-06 이력서 업로드 진행 UI 및 취약점 점검:
 

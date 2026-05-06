@@ -3,6 +3,7 @@
 """
 
 from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_client_ip, get_current_user
@@ -102,6 +103,29 @@ def get_resume(
             message="이력서를 찾을 수 없습니다.",
         )
     return ResumeDetail.model_validate(resume)
+
+
+@router.get("/{resume_id}/file")
+def get_resume_file(
+    resume_id: int,
+    current_user: User = Depends(get_current_user),
+    resume_service: ResumeService = Depends(get_resume_service),
+) -> FileResponse:
+    """이력서 원본 파일을 스트리밍한다 (프리뷰용)."""
+    try:
+        resume = resume_service.get_resume(resume_id, current_user.user_id)
+    except ResumeNotFoundError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.RESUME_NOT_FOUND,
+            message="이력서를 찾을 수 없습니다.",
+        )
+
+    return FileResponse(
+        path=resume.file_path,
+        media_type=resume.content_type,
+        filename=resume.original_filename,
+    )
 
 
 @router.delete("/{resume_id}", status_code=status.HTTP_204_NO_CONTENT)

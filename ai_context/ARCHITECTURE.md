@@ -23,7 +23,8 @@
 - app/core: 설정, DB 연결, 보안 관련 공통 모듈
 
 ## 프론트엔드 구조
-- src/pages: 페이지 단위 컴포넌트
+- src/app: Next.js 16 App Router 기반 페이지 구조
+- src/screens: 페이지 단위 비즈니스 로직 및 컴포넌트 조합
 - src/components: 공통 UI 컴포넌트
 - src/api: 백엔드 API 통신 모듈과 공통 타입
 - src/stores: 인증 상태와 Context Provider

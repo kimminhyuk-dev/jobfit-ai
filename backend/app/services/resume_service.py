@@ -71,6 +71,14 @@ class ResumeService:
         self._refresh_parsed_data_if_empty(resume)
         return resume
 
+    def get_resume_for_admin(self, resume_id: int) -> Resume:
+        """관리자용: 특정 이력서 상세 정보를 조회한다."""
+        resume = self.resume_repository.get_by_id_no_user(resume_id)
+        if resume is None:
+            raise ResumeNotFoundError
+        self._refresh_parsed_data_if_empty(resume)
+        return resume
+
     def create_resume(
         self,
         *,

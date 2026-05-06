@@ -43,6 +43,16 @@ class UserRepository:
         )
         return int(self.db.execute(stmt).scalar_one())
 
+    def list_users(self, skip: int = 0, limit: int = 100) -> list[User]:
+        stmt = (
+            select(User)
+            .where(User.is_deleted.is_(False))
+            .order_by(User.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(self.db.execute(stmt).scalars().all())
+
     def update(
         self,
         user: User,

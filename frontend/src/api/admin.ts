@@ -8,13 +8,40 @@ import type {
   Post,
   PostCreate,
   PostUpdate,
+  Resume,
+  User,
 } from './types';
 import type { GetJobsParams } from './jobs';
+
+export interface AdminUserDetail {
+  user: User;
+  resumes: Resume[];
+}
 
 export const adminApi = {
   getStats: async (): Promise<AdminStats> => {
     const res = await apiClient.get<AdminStats>('/admin/stats');
     return res.data;
+  },
+
+  // 회원 관리
+  listUsers: async (params: { skip?: number; limit?: number } = {}): Promise<User[]> => {
+    const res = await apiClient.get<User[]>('/admin/users', { params });
+    return res.data;
+  },
+
+  getUserDetail: async (userId: number): Promise<AdminUserDetail> => {
+    const res = await apiClient.get<AdminUserDetail>(`/admin/users/${userId}`);
+    return res.data;
+  },
+
+  getResumeDetail: async (resumeId: number): Promise<Resume> => {
+    const res = await apiClient.get<Resume>(`/admin/users/resumes/${resumeId}`);
+    return res.data;
+  },
+
+  getResumeFileUrl: (resumeId: number): string => {
+    return `${apiClient.defaults.baseURL}/admin/users/resumes/${resumeId}/file`;
   },
 
   getJobs: async (params: GetJobsParams = {}): Promise<JobPostingListResponse> => {

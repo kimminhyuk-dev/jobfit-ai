@@ -537,6 +537,49 @@ size=20
 }
 ```
 
+## 이력서
+
+### POST /resumes
+이력서 파일을 업로드하고 텍스트를 추출하여 기본 파싱 결과를 저장한다.
+
+#### Request (Multipart/form-data)
+- `file`: PDF, DOCX, TXT 파일 (최대 10MB)
+- `is_default`: 기본 이력서 여부 (boolean, optional, default: true)
+
+#### Response 201
+```json
+{
+  "resume_id": 1,
+  "filename": "resume.pdf",
+  "parse_status": "COMPLETED",
+  "parsed_data": {
+    "profile": { "name": "홍길동", "email": "user@example.com" },
+    "skills": ["Python", "FastAPI"],
+    "sections": { "experience": "...", "projects": "..." }
+  }
+}
+```
+
+### GET /resumes
+현재 사용자의 이력서 목록을 조회한다.
+
+### GET /resumes/{resume_id}
+이력서 상세 정보와 파싱 결과를 조회한다.
+
+### GET /resumes/{resume_id}/file
+이력서 원본 파일을 스트리밍한다. (프리뷰용)
+
+### DELETE /resumes/{resume_id}
+이력서를 소프트 삭제하고 저장된 파일을 물리적으로 삭제한다.
+
+## 관리자 - 사용자 관리
+
+### GET /admin/users
+사용자 목록을 조회한다. (페이지네이션 포함)
+
+### GET /admin/users/{user_id}
+특정 사용자의 상세 정보와 이력서 정보를 조회한다.
+
 ## 채용공고 저장 구조
 
 - `job_postings`는 삭제하지 않고 ALIO, WORK24, SARAMIN, MANUAL 등 출처 확장형으로 재사용한다.

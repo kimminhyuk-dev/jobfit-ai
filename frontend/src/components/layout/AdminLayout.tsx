@@ -8,6 +8,7 @@ import { useAuth } from '../../stores/authContext';
 
 const adminNav = [
   { to: '/admin/dashboard', label: '대시보드', icon: 'home' as const },
+  { to: '/admin/users', label: '사용자 관리', icon: 'user' as const },
   { to: '/admin/categories', label: '카테고리', icon: 'layers' as const },
   { to: '/admin/posts', label: 'Q&A 게시글', icon: 'file' as const },
   { to: '/admin/jobs', label: '채용공고', icon: 'briefcase' as const },

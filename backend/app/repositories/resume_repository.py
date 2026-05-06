@@ -37,6 +37,16 @@ class ResumeRepository:
             stmt = stmt.where(Resume.is_deleted.is_(False))
         return self.db.execute(stmt).scalar_one_or_none()
 
+    def get_by_id_no_user(
+        self,
+        resume_id: int,
+        include_deleted: bool = False,
+    ) -> Resume | None:
+        stmt = select(Resume).where(Resume.resume_id == resume_id)
+        if not include_deleted:
+            stmt = stmt.where(Resume.is_deleted.is_(False))
+        return self.db.execute(stmt).scalar_one_or_none()
+
     def clear_default(self, user_id: int, actor_id: int, request_ip: str | None) -> None:
         resumes = self.list_by_user(user_id)
         for resume in resumes:
