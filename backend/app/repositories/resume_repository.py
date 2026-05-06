@@ -2,6 +2,8 @@
 Resume 테이블 DB 접근 계층
 """
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -66,7 +68,7 @@ class ResumeRepository:
         file_size: int,
         content_type: str,
         raw_text: str | None,
-        parsed_data: dict | None,
+        parsed_data: dict[str, Any] | None,
         parse_status: str,
         parse_error: str | None,
         is_default: bool,
@@ -115,7 +117,7 @@ class ResumeRepository:
     def update_parsed_data(
         self,
         resume: Resume,
-        parsed_data: dict,
+        parsed_data: dict[str, Any],
     ) -> Resume:
         resume.parsed_data = parsed_data
         resume.parse_status = "COMPLETED"
@@ -129,7 +131,7 @@ class ResumeRepository:
         *,
         title: str | None,
         raw_text: str | None,
-        parsed_data: dict | None,
+        parsed_data: dict[str, Any] | None,
         actor_id: int,
         request_ip: str | None,
     ) -> Resume:

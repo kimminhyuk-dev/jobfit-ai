@@ -4,6 +4,7 @@
 
 import logging
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -43,7 +44,7 @@ ALLOWED_SUFFIXES = {".pdf", ".docx", ".txt"}
 logger = logging.getLogger(__name__)
 
 
-def _parse_with_best_available(raw_text: str) -> dict:
+def _parse_with_best_available(raw_text: str) -> dict[str, Any]:
     """GEMINI_API_KEY가 있으면 LLM 파서, 없거나 실패하면 정규식 파서로 폴백."""
     api_key = settings.gemini_api_key
     if api_key:
@@ -107,7 +108,7 @@ class ResumeService:
         file_path.write_bytes(file_bytes)
 
         raw_text: str | None = None
-        parsed_data: dict | None = None
+        parsed_data: dict[str, Any] | None = None
         parse_status = "COMPLETED"
         parse_error: str | None = None
         try:
@@ -178,7 +179,7 @@ class ResumeService:
         actor_id: int,
         title: str | None,
         raw_text: str | None,
-        parsed_data: dict | None,
+        parsed_data: dict[str, Any] | None,
         request_ip: str | None,
     ) -> Resume:
         resume = self.resume_repository.get_by_id_no_user(resume_id)
@@ -200,7 +201,7 @@ class ResumeService:
         actor_id: int,
         title: str | None,
         raw_text: str | None,
-        parsed_data: dict | None,
+        parsed_data: dict[str, Any] | None,
         request_ip: str | None,
     ) -> Resume:
         normalized_title = title.strip() if title is not None else None
@@ -250,7 +251,7 @@ class ResumeService:
         self.db.refresh(resume)
 
     @staticmethod
-    def _needs_parsed_data_refresh(parsed_data: dict | None) -> bool:
+    def _needs_parsed_data_refresh(parsed_data: dict[str, Any] | None) -> bool:
         if parsed_data is None:
             return True
         if "profile" not in parsed_data or "sections" not in parsed_data:

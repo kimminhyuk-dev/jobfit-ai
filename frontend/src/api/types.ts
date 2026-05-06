@@ -58,6 +58,7 @@ export interface ResumeParsedData {
   urls: string[];
   skills: string[];
   sections?: Record<string, string>;
+  schools?: Record<string, unknown>[];
   education?: string[];
   training?: string[];
   experiences?: string[];
@@ -69,6 +70,7 @@ export interface ResumeParsedData {
   languages?: string[];
   highlights?: Record<string, string[]>;
   text_length: number;
+  parsed_by?: string | null;
 }
 
 export interface Resume {

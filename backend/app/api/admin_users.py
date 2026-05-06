@@ -94,13 +94,18 @@ def update_user_resume_detail(
     resume_service: ResumeService = Depends(get_resume_service),
 ) -> ResumeDetail:
     """관리자가 특정 이력서의 제목/추출 원문/파싱 결과를 수정한다."""
+    parsed_data = (
+        payload.parsed_data.model_dump(mode="json")
+        if payload.parsed_data is not None
+        else None
+    )
     try:
         resume = resume_service.update_resume_content_for_admin(
             resume_id,
             actor_id=current_admin.user_id,
             title=payload.title,
             raw_text=payload.raw_text,
-            parsed_data=payload.parsed_data,
+            parsed_data=parsed_data,
             request_ip=get_client_ip(request),
         )
     except ResumeNotFoundError:

@@ -50,9 +50,9 @@
   - 사용자 대시보드/채용공고/이력서 화면은 실제 API 연결 완료, 매칭 화면은 mock 데이터 기반 UI 구현
   - 관리자 대시보드/카테고리/Q&A 게시글 화면은 mock 데이터 기반 UI 구현
 - 관리자 사용자 관리 화면 구현 완료 (사용자 목록, 상세 정보, 이력서 파싱 데이터 및 파일 프리뷰)
-- 관리자 이력서 화면에서 파싱 데이터(프로필, 이메일, 연락처, 링크, 기술, 학력, 교육, 경력, 프로젝트, 자격증, 자기소개서 목차, 수상, 어학, 원문)를 조회·수정 가능
+- 관리자 이력서 화면에서 파싱 데이터(프로필, 이메일, 연락처, 링크, 기술, 학력, 교육, 경력, 프로젝트, 자격증, 자기소개서 목차, 수상, 어학, 원문)를 DTO 기반으로 조회·수정 가능
 - 사용자 이력서 화면은 원본 파일 업로드·목록·미리보기 중심으로 구성하고 파싱 데이터는 노출하지 않음
-- 이력서 파싱 데이터 화면은 1/2/3차 프로젝트와 자기소개서 목차를 개별 카드로 분리해 표시
+- 이력서 파싱 데이터 화면은 `projects`/`sections.projects`의 프로젝트 본문과 `cover_letter_sections`의 자기소개서 목차를 분리해 표시
 - 루트 `package.json` 편의 스크립트(`dev`, `build`, `lint`)는 실제 Next.js/FastAPI 경로 기준으로 정리됨
 - Next.js Turbopack root는 `frontend`로 고정되어 루트 `package-lock.json`이 있어도 alias/라우트 해석이 흔들리지 않음
 - 프론트엔드 공통 API 클라이언트가 백엔드 공통 에러 응답 `{ code, message, details }`를 수신하도록 구성됨
@@ -214,7 +214,7 @@
   - 사용자 목록 클릭 시 사용자 상세, 이력서 목록, 이력서 파싱 데이터 표시
   - 관리자 전용 이력서 상세/파일 Blob API로 파싱 정보와 PDF 프리뷰 표시
   - 관리자도 사용자 이력서의 파싱 데이터와 추출 원문 수정 가능
-  - 1/2/3차 프로젝트, `sections.projects`, 자기소개서의 프로젝트 관련 목차 및 자기소개서 목차를 카드 단위로 구분해 가독성 개선
+  - 1/2/3차 프로젝트와 `sections.projects`는 프로젝트 카드로, `기술역량 및 프로젝트` 등 자기소개서 목차는 자기소개서 카드로 분리해 가독성 개선
 - IT 채용 Mock 화면 추가 (`/user/mock-jobs`, `/admin/mock-jobs`)
   - `MockJobItem` 타입 + 20개 IT 기업 Mock 데이터 (Work24 테이블 구조 기반)
   - 카테고리 필터 탭 (백엔드/프론트엔드/AI·ML/DevOps·SRE/모바일/데이터/QA·보안/게임)
@@ -321,6 +321,17 @@
 - `ai_context/API_SPEC.md`
 
 ## 최근 검증
+
+2026-05-06 프로젝트/자기소개서 파싱 표시 기준 재정리:
+
+- `ResumeParsedData` 백엔드 DTO를 확장해 `profile`, `sections`, `schools`, `projects`, `cover_letter_sections`, `highlights`, `parsed_by` 등 관리자 수정 API의 파싱 데이터 계약을 명확화
+- 관리자 이력서 파싱 화면에서 `cover_letter_sections`의 `기술역량 및 프로젝트`를 프로젝트 카드로 끌어오던 보정 로직 제거
+- 프로젝트는 `projects`와 `sections.projects`만 기준으로 표시·저장하고, 관리자 수정 저장 시 `sections.projects`도 함께 갱신
+- 파서 샘플 검증: `프로젝트` 섹션 아래 `1차/2차 프로젝트`는 `projects`로, `자기소개서 > 기술역량 및 프로젝트`는 `cover_letter_sections`로 분리됨 확인
+- `.\.venv\Scripts\python.exe -m compileall app` 통과
+- `npm run lint` 통과
+- `npm run build` 통과
+- `git diff --check` 통과
 
 2026-05-06 사용자 이력서 파싱 노출 제거 및 관리자 프로젝트 내용 보강:
 

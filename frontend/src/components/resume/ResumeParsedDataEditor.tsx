@@ -175,19 +175,8 @@ function collectProjectItems(parsed: ResumeParsedData): string[] {
   const candidates = [
     ...splitProjectItems(parsed.projects),
     ...splitProjectItems(parsed.sections?.projects ? [parsed.sections.projects] : []),
-    ...projectItemsFromCoverLetterSections(parsed.cover_letter_sections),
   ];
   return dedupeItems(candidates);
-}
-
-function projectItemsFromCoverLetterSections(sections: Record<string, string> | undefined): string[] {
-  return Object.entries(sections ?? {})
-    .filter(([title]) => {
-      const compact = normalizeHeading(title);
-      return compact.includes('프로젝트') || compact.includes('기술역량');
-    })
-    .map(([title, content]) => `${title}\n${content}`)
-    .filter((item) => item.trim());
 }
 
 function dedupeItems(items: string[]): string[] {
@@ -243,6 +232,21 @@ function normalizeCoverLetterSections(
   return entries;
 }
 
+function upsertSection(
+  sections: Record<string, string> | undefined,
+  key: string,
+  value: string,
+): Record<string, string> {
+  const next = { ...(sections ?? {}) };
+  const trimmed = value.trim();
+  if (trimmed) {
+    next[key] = trimmed;
+  } else {
+    delete next[key];
+  }
+  return next;
+}
+
 function createFormState(resume: Resume): ParsedFormState {
   const parsed = resume.parsed_data ?? EMPTY_PARSED_DATA;
   const projectItems = collectProjectItems(parsed);
@@ -287,6 +291,8 @@ export default function ResumeParsedDataEditor({
     const emails = fromLines(form.emails);
     const phones = fromLines(form.phones);
     const urls = fromLines(form.urls);
+    const projectBlocks = splitProjectText(form.projects);
+    const coverLetterSections = textToSections(form.coverLetterSections);
     const parsedData: ResumeParsedData = {
       ...existing,
       profile: {
@@ -302,15 +308,16 @@ export default function ResumeParsedDataEditor({
       phones,
       urls,
       skills: fromLines(form.skills),
+      sections: upsertSection(existing.sections, 'projects', form.projects),
       education: fromLines(form.education),
       training: fromLines(form.training),
       experiences: fromLines(form.experiences),
-      projects: splitProjectText(form.projects),
+      projects: projectBlocks,
       certifications: fromLines(form.certifications),
       awards: fromLines(form.awards),
       languages: fromLines(form.languages),
       cover_letter: form.coverLetter.trim() || null,
-      cover_letter_sections: textToSections(form.coverLetterSections),
+      cover_letter_sections: coverLetterSections,
       text_length: form.rawText.replace(/\s+/g, ' ').trim().length,
     };
     onSave({
@@ -530,9 +537,11 @@ function ProjectBlock({ items }: { items: string[] | undefined }) {
                   {extractFirstLine(item) || `프로젝트 ${index + 1}`}
                 </p>
               </div>
-              <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-m-muted">
-                {dropFirstLine(item)}
-              </p>
+              {dropFirstLine(item) && (
+                <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-m-muted">
+                  {dropFirstLine(item)}
+                </p>
+              )}
             </div>
           ))}
         </div>
@@ -547,7 +556,7 @@ function extractFirstLine(text: string): string {
 
 function dropFirstLine(text: string): string {
   const lines = text.split('\n');
-  return lines.slice(1).join('\n').trim() || text;
+  return lines.slice(1).join('\n').trim();
 }
 
 function CoverLetterBlock({

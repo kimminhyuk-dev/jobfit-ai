@@ -264,7 +264,7 @@ def extract_resume_text(file_path: Path, content_type: str) -> str:
     raise ResumeParseError("지원하지 않는 파일 형식입니다.")
 
 
-def parse_resume_text(text: str) -> dict:
+def parse_resume_text(text: str) -> dict[str, Any]:
     text = _clean_extracted_text(text)
     normalized = re.sub(r"\s+", " ", text).strip()
     compact_contact_text = _compact_contact_text(text)
