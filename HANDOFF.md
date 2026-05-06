@@ -192,6 +192,7 @@
 - 사용자 이력서 화면(`/user/resumes`) 실제 API 연결 완료
   - `GET /resumes`, `GET /resumes/{resume_id}`, `POST /resumes`, `DELETE /resumes/{resume_id}` 연동
   - PDF/DOCX/TXT 업로드 UI, 기본 이력서 설정, 파싱 상태/오류 표시
+  - 업로드/AI 분석/맞춤 채용공고 준비 3단계 진행 상태 카드 표시
   - 이메일/전화번호/링크/기술 키워드 기본 파싱 결과와 추출 텍스트 표시
 - IT 채용 Mock 화면 추가 (`/user/mock-jobs`, `/admin/mock-jobs`)
   - `MockJobItem` 타입 + 20개 IT 기업 Mock 데이터 (Work24 테이블 구조 기반)
@@ -300,6 +301,23 @@
 
 ## 최근 검증
 
+2026-05-06 이력서 업로드 진행 UI 및 취약점 점검:
+
+- `frontend/src/screens/user/ResumesPage.tsx`
+  - 이력서 업로드 중 `이력서 업로드 → AI 분석 → 맞춤 채용공고` 3단계 진행 카드 추가
+  - 진행률 바, 단계 스테퍼, 파일명/용량 표시, 분석 완료/실패 상태 표시 추가
+  - 프론트엔드 파일 확장자 및 10MB 용량 사전 검증 추가
+- 의존성 보안 업데이트
+  - `pypdf` `6.4.1 → 6.10.2`
+  - `pdfplumber` `0.11.4 → 0.11.9` (`pdfminer-six==20251230` 호환)
+- 검증
+  - `python -m compileall app` 통과
+  - `pip-audit -r requirements.txt` 통과: 알려진 취약점 없음
+  - `npm audit --audit-level=moderate` 통과: 취약점 0건
+  - `npm run lint` 통과
+  - `npm run build` 통과 (19개 라우트)
+  - `git diff --check` 통과 (CRLF 경고만 출력)
+
 2026-05-06 이력서 파서 개선 — 프로젝트 전체 표시 + 자기소개서 목차 구조화:
 
 - `resume_parser.py` 버그 수정 및 기능 추가
@@ -311,6 +329,14 @@
   - `COVER_LETTER_SECTION_LABELS`, `_COVER_LETTER_SUBSECTION_COMPACT` 상수 추가
   - `parse_resume_text()`: `projects`를 `_group_section_items` 기반 블록 리스트로, `cover_letter_sections` 필드 추가
   - `parse_resume_with_llm()`: `cover_letter_sections` 필드 추가 (LLM 결과도 소제목 파싱 적용)
+  - `parse_resume_with_llm()`: Gemini 입력 제한을 8,000자에서 20,000자로 확대하고, 규칙 기반 프로젝트 후보를 프롬프트에 함께 전달
+  - LLM이 프로젝트를 요약/병합해 후보보다 적게 반환하면 규칙 기반 프로젝트 항목을 보존하도록 보정
+  - 제어문자(`\x00` 계열, `` 등)와 zero-width 문자를 제거하는 공통 정규화 함수 추가
+  - DOCX 파싱 시 `document.paragraphs`뿐 아니라 `document.tables`의 셀 텍스트도 함께 추출
+  - 자기소개서 목차 인식 확장: `지원동기 및 입사 후 포부`, `기술역량 및 프로젝트`, 직무역량, 성장배경, 학교생활, 가치관, 생활신조, 문제해결/협업/도전/성취/실패/갈등해결/리더십 경험 등 흔한 소제목 변형 추가
+  - 번호/불릿이 붙은 자기소개서 소제목(`1. 지원동기`, `가. 가치관` 등)도 같은 목차로 인식하도록 보강
+  - 자기소개서 소제목을 `SECTION_ALIASES`의 큰 섹션 판별 목록에서는 제외하고, 자기소개서 내부 목차 전환/분리에만 사용하도록 수정
+  - LLM 결과의 `experiences`/`projects`에 자기소개서 목차(`기술역량 및 프로젝트`, `프로젝트 후기` 등)가 섞이면 후처리에서 제거
   - 모듈 주석 `ANTHROPIC_API_KEY` → `GEMINI_API_KEY` 수정
   - `_normalize_pdf_text` 중복 "# 3." 주석 수정
 - `frontend/src/api/types.ts`: `ResumeParsedData`에 `cover_letter_sections?: Record<string, string>` 추가
@@ -320,6 +346,10 @@
   - `CoverLetterSectionsBlock` 신설: 소제목별 자기소개서 목차 표시
   - `StructuredParsedData`: 위 두 컴포넌트 적용, 자기소개서 섹션 분리 표시
 - `python -m compileall app/services/resume_parser.py` 통과
+- `python -m compileall app` 통과
+- 샘플 검증: `1차/2차/3차` 프로젝트 텍스트가 `projects` 3개 항목으로 분리됨 확인
+- 샘플 검증: `지원동기 및 입사 후 포부`, `기술역량 및 프로젝트`, `가. 가치관` 자기소개서 목차가 `cover_letter_sections`로 분리됨 확인
+- 샘플 검증: `경력` 뒤에 `기술역량 및 프로젝트`, `프로젝트 후기`가 이어져도 경력에는 회사/기간만 남고 해당 내용은 자기소개서 목차로 분리됨 확인
 - `npm run lint` 통과 (경고 0개)
 - `npm run build` 통과 (19개 라우트)
 

@@ -15,6 +15,15 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+MAX_LLM_INPUT_CHARS = 20000
+CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+ZERO_WIDTH_CHARS_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\ufeff]")
+PROJECT_ITEM_START_RE = re.compile(
+    r"^(?:프로젝트\s*)?(?:\d+\s*차|[0-9]+[.)]|[①-⑳])(?:\s|[:：.\-]|$)"
+    r"|^프로젝트\s*\d+",
+    re.IGNORECASE,
+)
+
 
 class ResumeParseError(Exception):
     """이력서 텍스트 추출 실패"""
@@ -58,6 +67,11 @@ SKILL_KEYWORDS = [
     "프론트엔드",
 ]
 
+
+def _compact_header_text(text: str) -> str:
+    return re.sub(r"[^0-9A-Za-z가-힣]", "", text).lower()
+
+
 SECTION_ALIASES = {
     "profile": [
         "인적사항",
@@ -94,12 +108,6 @@ SECTION_ALIASES = {
     "cover_letter": [
         "자기소개서",
         "자기소개",
-        "지원동기",
-        "성장과정",
-        "학창시절",
-        "자신의 장단점",
-        "성격의 장단점",
-        "입사 후 포부",
         "cover letter",
         "introduction",
         "personal statement",
@@ -111,18 +119,77 @@ SECTION_ALIASES = {
 # 자기소개서 소제목: 섹션 전환 후에도 텍스트에 포함되어야 할 항목
 COVER_LETTER_SECTION_LABELS = [
     "지원동기",
+    "지원 동기",
+    "지원동기 및 입사 후 포부",
+    "지원동기 및 포부",
+    "지원동기 및 향후계획",
+    "지원동기 및 장래포부",
+    "지원동기와 입사 후 포부",
+    "입사 지원 동기",
+    "입사지원동기",
     "성장과정",
+    "성장 과정",
+    "성장배경",
+    "가정환경",
     "학창시절",
+    "학교생활",
+    "대학생활",
     "자신의 장단점",
     "성격의 장단점",
+    "성격 장단점",
+    "장점 및 단점",
+    "강점 및 약점",
+    "강점과 약점",
     "입사 후 포부",
+    "입사후포부",
+    "입사 후 계획",
+    "입사 후 목표",
+    "입사 후 성장계획",
+    "향후 포부",
+    "향후 계획",
+    "장래 포부",
+    "직무역량",
+    "직무 역량",
+    "기술역량",
+    "기술 역량",
+    "기술역량 및 프로젝트",
+    "기술 역량 및 프로젝트",
+    "프로젝트 내용",
+    "프로젝트 후기",
+    "프로젝트를 통해 배운 점",
+    "프로젝트 수행 내용",
+    "프로젝트 성과",
+    "보유역량",
+    "핵심역량",
+    "역량 및 경험",
+    "경험 및 경력기술서",
+    "경력기술서",
+    "주요경험",
+    "사회경험",
+    "직무경험",
+    "프로젝트 경험",
+    "프로젝트 수행 경험",
+    "문제해결 경험",
+    "협업 경험",
+    "팀워크 경험",
+    "도전 경험",
+    "성취 경험",
+    "실패 경험",
+    "갈등 해결 경험",
+    "리더십 경험",
+    "가치관",
+    "생활신조",
+    "인생관",
+    "직업관",
+    "장래희망",
     "포부",
+    "기타사항",
 ]
 
 # compact 형태로 미리 계산 (_compact_header_text 와 동일 규칙: 비알파뉴메릭 제거 + 소문자)
-_COVER_LETTER_SUBSECTION_COMPACT = frozenset({
-    "지원동기", "성장과정", "학창시절", "자신의장단점", "성격의장단점", "입사후포부", "포부",
-})
+_COVER_LETTER_SUBSECTION_COMPACT = frozenset(
+    _compact_header_text(label) for label in COVER_LETTER_SECTION_LABELS
+)
 
 SCHOOL_LEVEL_PATTERNS: list[tuple[str, str]] = [
     ("university", r"[가-힣A-Za-z0-9]+대학원"),
@@ -150,6 +217,7 @@ def extract_resume_text(file_path: Path, content_type: str) -> str:
 
 
 def parse_resume_text(text: str) -> dict:
+    text = _clean_extracted_text(text)
     normalized = re.sub(r"\s+", " ", text).strip()
     compact_contact_text = _compact_contact_text(text)
     compact_skill_text = _compact_skill_text(text)
@@ -234,9 +302,14 @@ _LLM_SYSTEM_PROMPT = """당신은 한국어 이력서 파싱 전문가입니다.
    - 대학교·대학원·고등학교 → education
    - 회사에서 한 업무·직책·재직기간 → experiences
    - 개발한 서비스·앱·시스템 → projects
+   - 지원동기·입사 후 포부·기술역량 및 프로젝트·프로젝트 후기처럼 자기소개서 목차 아래에 있는 내용은 experiences/projects에 넣지 말고 cover_letter에만 넣을 것
 
 4. 없는 섹션은 빈 배열 [], 없는 단일값은 null
-5. 텍스트 전체를 빠짐없이 분석하고 내용이 잘리지 않도록 할 것"""
+5. 텍스트 전체를 빠짐없이 분석하고 내용이 잘리지 않도록 할 것
+6. projects는 절대 요약하거나 병합하지 말 것
+   - "1차", "2차", "3차", "프로젝트 1", "프로젝트명"처럼 새 항목이 시작되면 반드시 별도 배열 요소로 반환
+   - 입력에 제공된 프로젝트 후보가 있으면 각 후보를 하나의 projects 항목으로 유지
+   - 프로젝트가 3개면 projects 배열도 3개 이상이어야 함"""
 
 # Free Tier에서 사용 가능한 모델 우선순위 목록
 _GEMINI_MODEL_CANDIDATES = [
@@ -254,13 +327,18 @@ def parse_resume_with_llm(raw_text: str, api_key: str) -> dict:
     genai = importlib.import_module("google.generativeai")
     genai.configure(api_key=api_key)
 
-    emails = _extract_emails(raw_text)
-    compact_contact = _compact_contact_text(raw_text)
+    source_text = _clean_extracted_text(raw_text)
+    rule_based = parse_resume_text(source_text)
+    project_candidates = _normalize_list_value(rule_based.get("projects"))
+
+    emails = _extract_emails(source_text)
+    compact_contact = _compact_contact_text(source_text)
     phone_candidates = re.findall(
-        r"(?:\+82[-.\s]?)?0?1[016789][-\s.]?\d{3,4}[-\s.]?\d{4}", raw_text
+        r"(?:\+82[-.\s]?)?0?1[016789][-\s.]?\d{3,4}[-\s.]?\d{4}", source_text
     ) + re.findall(r"(?:\+82[-.]?)?0?1[016789][-.]?\d{3,4}[-.]?\d{4}", compact_contact)
     phones = sorted({_normalize_phone(p) for p in phone_candidates})
-    urls = _extract_urls(raw_text)
+    urls = _extract_urls(source_text)
+    user_prompt = _build_llm_resume_prompt(source_text, project_candidates)
 
     last_exc: Exception | None = None
     response = None
@@ -272,7 +350,7 @@ def parse_resume_with_llm(raw_text: str, api_key: str) -> dict:
                 system_instruction=_LLM_SYSTEM_PROMPT,
                 generation_config={"response_mime_type": "application/json"},
             )
-            response = model.generate_content(raw_text[:8000])
+            response = model.generate_content(user_prompt)
             used_model = model_name
             break
         except Exception as exc:  # noqa: BLE001
@@ -283,7 +361,14 @@ def parse_resume_with_llm(raw_text: str, api_key: str) -> dict:
         raise last_exc or RuntimeError("모든 Gemini 모델 호출 실패")
 
     llm = _json.loads(response.text)
-    normalized = re.sub(r"\s+", " ", raw_text).strip()
+    normalized = re.sub(r"\s+", " ", source_text).strip()
+    llm_experiences = _drop_cover_letter_like_items(
+        _normalize_list_value(llm.get("experiences"))
+    )
+    llm_projects = _drop_cover_letter_like_items(
+        _split_project_items_from_values(_normalize_list_value(llm.get("projects")))
+    )
+    projects = _merge_project_candidates(llm_projects, project_candidates)
     return {
         "profile": {
             "name": llm.get("name"),
@@ -297,18 +382,18 @@ def parse_resume_with_llm(raw_text: str, api_key: str) -> dict:
         "emails": emails,
         "phones": phones,
         "urls": urls,
-        "skills": llm.get("skills", []),
+        "skills": _normalize_list_value(llm.get("skills")),
         "sections": {},
-        "schools": [],
-        "education": llm.get("education", []),
-        "training": llm.get("training", []),
-        "experiences": llm.get("experiences", []),
-        "projects": llm.get("projects", []),
-        "certifications": llm.get("certifications", []),
+        "schools": rule_based.get("schools", []),
+        "education": _normalize_list_value(llm.get("education")),
+        "training": _normalize_list_value(llm.get("training")),
+        "experiences": llm_experiences,
+        "projects": projects,
+        "certifications": _normalize_list_value(llm.get("certifications")),
         "cover_letter": llm.get("cover_letter"),
         "cover_letter_sections": _parse_cover_letter_sections(llm.get("cover_letter")),
-        "awards": llm.get("awards", []),
-        "languages": llm.get("languages", []),
+        "awards": _normalize_list_value(llm.get("awards")),
+        "languages": _normalize_list_value(llm.get("languages")),
         "highlights": {},
         "text_length": len(normalized),
         "parsed_by": f"llm:{used_model}",
@@ -318,10 +403,82 @@ def parse_resume_with_llm(raw_text: str, api_key: str) -> dict:
 def _extract_txt(file_path: Path) -> str:
     for encoding in ("utf-8", "cp949", "euc-kr"):
         try:
-            return file_path.read_text(encoding=encoding)
+            return _clean_extracted_text(file_path.read_text(encoding=encoding))
         except UnicodeDecodeError:
             continue
     raise ResumeParseError("텍스트 파일 인코딩을 확인할 수 없습니다.")
+
+
+def _clean_extracted_text(text: str) -> str:
+    """파일 파서/LLM 입력 전에 제어문자와 PDF 추출 찌꺼기를 제거한다."""
+    text = unicodedata.normalize("NFKC", text)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = ZERO_WIDTH_CHARS_RE.sub("", text)
+    text = CONTROL_CHARS_RE.sub("", text)
+    text = text.replace("\ufffd", "")
+    return text.strip()
+
+
+def _build_llm_resume_prompt(text: str, project_candidates: list[str]) -> str:
+    limited_text = text[:MAX_LLM_INPUT_CHARS]
+    project_hint = ""
+    if project_candidates:
+        project_hint = (
+            "\n\n[규칙 기반 프로젝트 후보]\n"
+            "아래 후보는 프로젝트 섹션에서 먼저 분리한 항목입니다. "
+            "누락하거나 하나로 합치지 말고 projects 배열에 각각 반영하세요.\n"
+            f"{_json.dumps(project_candidates, ensure_ascii=False)}\n"
+        )
+    return f"{project_hint}\n\n[이력서 원문]\n{limited_text}"
+
+
+def _normalize_list_value(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        result: list[str] = []
+        for item in value:
+            if item is None:
+                continue
+            if isinstance(item, str):
+                text = item.strip()
+            else:
+                text = _json.dumps(item, ensure_ascii=False)
+            if text:
+                result.append(text)
+        return result
+    if isinstance(value, str):
+        text = value.strip()
+        return [text] if text else []
+    return [_json.dumps(value, ensure_ascii=False)]
+
+
+def _split_project_items_from_values(values: list[str]) -> list[str]:
+    items: list[str] = []
+    for value in values:
+        split_items = _group_section_items(value)
+        items.extend(split_items or [value])
+    return items
+
+
+def _merge_project_candidates(
+    llm_projects: list[str],
+    rule_projects: list[str],
+) -> list[str]:
+    """LLM이 프로젝트를 요약/병합한 경우 규칙 기반 항목을 보존한다."""
+    if len(rule_projects) > len(llm_projects):
+        return rule_projects
+    return llm_projects or rule_projects
+
+
+def _drop_cover_letter_like_items(items: list[str]) -> list[str]:
+    """자기소개서 목차가 섞인 항목을 경력/프로젝트 결과에서 제거한다."""
+    return [item for item in items if not _looks_like_cover_letter_item(item)]
+
+
+def _looks_like_cover_letter_item(text: str) -> bool:
+    compact = _compact_header_text(text)
+    return any(label in compact for label in _COVER_LETTER_SUBSECTION_COMPACT)
 
 
 def _compact_contact_text(text: str) -> str:
@@ -529,14 +686,15 @@ def _detect_sections(text: str) -> dict[str, str]:
     current_key: str | None = None
 
     for line in lines:
+        if _match_cover_letter_subsection(line):
+            current_key = "cover_letter"
+            sections.setdefault(current_key, []).append(line)
+            continue
+
         section_key = _classify_section_header(line)
         if section_key:
             current_key = section_key
             sections.setdefault(current_key, [])
-            # 자기소개서 소제목은 섹션 헤더로 처리하면서 내용에도 포함:
-            # _parse_cover_letter_sections 가 구조화 시 소제목을 구분자로 활용
-            if section_key == "cover_letter" and _compact_header_text(line) in _COVER_LETTER_SUBSECTION_COMPACT:
-                sections[current_key].append(line)
             continue
         if current_key:
             sections[current_key].append(line)
@@ -549,7 +707,7 @@ def _detect_sections(text: str) -> dict[str, str]:
 
 
 def _classify_section_header(line: str) -> str | None:
-    compact_line = _compact_header_text(line)
+    compact_line = _compact_cover_letter_heading(line)
     if len(compact_line) > 40:
         return None
     for key, aliases in SECTION_ALIASES.items():
@@ -563,10 +721,6 @@ def _classify_section_header(line: str) -> str | None:
                 if not re.search(r"[가-힣A-Za-z]", remainder):
                     return key
     return None
-
-
-def _compact_header_text(text: str) -> str:
-    return re.sub(r"[^0-9A-Za-z가-힣]", "", text).lower()
 
 
 def _normalized_lines(text: str) -> list[str]:
@@ -608,7 +762,7 @@ def _find_lines(text: str, keywords: list[str], limit: int = 12) -> list[str]:
 
 
 def _group_section_items(text: str) -> list[str]:
-    """빈 줄을 구분자로 섹션 텍스트를 개별 항목 블록으로 그룹화한다.
+    """빈 줄이나 항목 시작 패턴으로 섹션 텍스트를 개별 항목 블록으로 그룹화한다.
 
     예: 프로젝트 섹션의 각 프로젝트를 별도 항목으로 분리.
     """
@@ -618,7 +772,10 @@ def _group_section_items(text: str) -> list[str]:
     current: list[str] = []
     for line in text.splitlines():
         stripped = line.strip()
-        if stripped:
+        if stripped and current and PROJECT_ITEM_START_RE.search(stripped):
+            groups.append("\n".join(current))
+            current = [stripped]
+        elif stripped:
             current.append(stripped)
         elif current:
             groups.append("\n".join(current))
@@ -650,11 +807,19 @@ def _parse_cover_letter_sections(text: str | None) -> dict[str, str]:
 
 
 def _match_cover_letter_subsection(line: str) -> str | None:
-    compact = _compact_header_text(line)
+    compact = _compact_cover_letter_heading(line)
     for label in COVER_LETTER_SECTION_LABELS:
         if compact == _compact_header_text(label):
             return label
     return None
+
+
+def _compact_cover_letter_heading(text: str) -> str:
+    """번호/불릿이 붙은 자기소개서 목차를 같은 제목으로 비교한다."""
+    text = re.sub(r"^\s*[가-하]\s*[.)、:：]\s*", "", text.strip())
+    compact = _compact_header_text(text)
+    compact = re.sub(r"^\d{1,2}", "", compact)
+    return compact
 
 
 def _normalize_pdf_text(text: str) -> str:
@@ -668,8 +833,8 @@ def _normalize_pdf_text(text: str) -> str:
     4. 줄 단위 공백 정리 후 'J a v a' 같은 분리 영문자 복원
     5. 텍스트 과반이 단일 음절 분리 인코딩이면 한글도 복원
     """
-    # 1. 전각 → 반각
-    text = unicodedata.normalize("NFKC", text)
+    # 1. 전각 → 반각, 제어문자 제거
+    text = _clean_extracted_text(text)
     # 2. HWP/한컴 PDF 폰트 커스텀 인코딩 아티팩트 제거
     #    독립 소문자 'r'이 한글·괄호 앞에 오는 패턴 ('r학과', 'r(졸업)', 'r파견')
     text = re.sub(r"(?<![A-Za-z0-9])r(?=[가-힣(（「『【〔])", "", text)
@@ -695,7 +860,7 @@ def _normalize_pdf_text(text: str) -> str:
         text = "\n".join(_fix_korean_spaced_chars(ln) for ln in text.splitlines())
         text = re.sub(r"[ \t]{2,}", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
+    return _clean_extracted_text(text)
 
 
 def _is_spaced_char_encoding(text: str) -> bool:
@@ -772,6 +937,16 @@ def _extract_docx(file_path: Path) -> str:
     try:
         document = docx.Document(str(file_path))
         paragraphs = [paragraph.text for paragraph in document.paragraphs]
+        table_lines: list[str] = []
+        for table in document.tables:
+            for row in table.rows:
+                cells = [
+                    cell.text.strip()
+                    for cell in row.cells
+                    if cell.text and cell.text.strip()
+                ]
+                if cells:
+                    table_lines.append(" | ".join(cells))
     except Exception as exc:  # noqa: BLE001
         raise ResumeParseError("DOCX 텍스트 추출에 실패했습니다.") from exc
-    return "\n".join(paragraphs).strip()
+    return _clean_extracted_text("\n".join([*paragraphs, *table_lines]))

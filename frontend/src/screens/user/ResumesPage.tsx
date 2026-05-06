@@ -1,10 +1,22 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Icon from '../../components/ui/Icon';
 import { resumesApi, type UploadResumeParams } from '../../api/resumes';
 import type { ApiError, Resume, ResumeParsedData } from '../../api/types';
+
+const MAX_RESUME_UPLOAD_BYTES = 10 * 1024 * 1024;
+const ALLOWED_RESUME_EXTENSIONS = ['.pdf', '.docx', '.txt'];
+
+type UploadFlowStatus = 'idle' | 'uploading' | 'analyzing' | 'matching' | 'complete' | 'error';
+
+interface UploadFlow {
+  status: UploadFlowStatus;
+  progress: number;
+  fileName: string;
+  fileSize: number;
+}
 
 function formatFileSize(size: number): string {
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))}KB`;
@@ -31,6 +43,12 @@ export default function ResumesPage() {
   const [isDefault, setIsDefault] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Resume | null>(null);
+  const [uploadFlow, setUploadFlow] = useState<UploadFlow>({
+    status: 'idle',
+    progress: 0,
+    fileName: '',
+    fileSize: 0,
+  });
 
   const { data: resumes = [], isLoading } = useQuery({
     queryKey: ['resumes'],
@@ -51,11 +69,21 @@ export default function ResumesPage() {
       setTitle('');
       setError(null);
       setSelected(resume);
+      setUploadFlow((prev) => ({
+        ...prev,
+        status: 'complete',
+        progress: 100,
+      }));
       queryClient.setQueryData(['resume', resume.resume_id], resume);
       queryClient.invalidateQueries({ queryKey: ['resumes'] });
     },
     onError: (err: ApiError) => {
       setError(err.message || '이력서 업로드에 실패했습니다.');
+      setUploadFlow((prev) => ({
+        ...prev,
+        status: 'error',
+        progress: Math.max(prev.progress, 16),
+      }));
     },
   });
 
@@ -72,10 +100,67 @@ export default function ResumesPage() {
   });
 
   const activeResume = selectedDetail ?? selected ?? resumes[0] ?? null;
+  const isUploadFlowVisible = uploadFlow.status !== 'idle';
+
+  useEffect(() => {
+    if (!uploadMutation.isPending) return;
+
+    const timer = window.setInterval(() => {
+      setUploadFlow((prev) => {
+        if (!uploadMutation.isPending || prev.status === 'complete' || prev.status === 'error') {
+          return prev;
+        }
+
+        const nextProgress = Math.min(prev.progress + 4, 92);
+        let nextStatus: UploadFlowStatus = 'uploading';
+        if (nextProgress >= 76) {
+          nextStatus = 'matching';
+        } else if (nextProgress >= 38) {
+          nextStatus = 'analyzing';
+        }
+
+        return {
+          ...prev,
+          progress: nextProgress,
+          status: nextStatus,
+        };
+      });
+    }, 520);
+
+    return () => window.clearInterval(timer);
+  }, [uploadMutation.isPending]);
 
   function upload(file: File | undefined) {
     if (!file) return;
+    const lowerName = file.name.toLowerCase();
+    const isAllowed = ALLOWED_RESUME_EXTENSIONS.some((extension) => lowerName.endsWith(extension));
+    if (!isAllowed) {
+      setError('PDF, DOCX, TXT 파일만 업로드할 수 있습니다.');
+      setUploadFlow({
+        status: 'error',
+        progress: 0,
+        fileName: file.name,
+        fileSize: file.size,
+      });
+      return;
+    }
+    if (file.size > MAX_RESUME_UPLOAD_BYTES) {
+      setError('이력서 파일은 최대 10MB까지 업로드할 수 있습니다.');
+      setUploadFlow({
+        status: 'error',
+        progress: 0,
+        fileName: file.name,
+        fileSize: file.size,
+      });
+      return;
+    }
     setError(null);
+    setUploadFlow({
+      status: 'uploading',
+      progress: 8,
+      fileName: file.name,
+      fileSize: file.size,
+    });
     uploadMutation.mutate({
       file,
       title: title.trim() || undefined,
@@ -154,6 +239,10 @@ export default function ResumesPage() {
               }}
               onClick={() => fileInputRef.current?.click()}
               className={`rounded-xl border-2 border-dashed py-12 text-center cursor-pointer transition-all ${
+                isUploadFlowVisible
+                  ? 'hidden'
+                  : ''
+              } ${
                 drag
                   ? 'border-m-primary bg-m-primary-soft'
                   : 'border-m-border-strong bg-m-surface-alt hover:border-m-primary hover:bg-m-primary-soft'
@@ -167,6 +256,22 @@ export default function ResumesPage() {
               </p>
               <p className="text-[13px] text-m-muted">PDF · DOCX · TXT · 최대 10MB</p>
             </div>
+
+            {isUploadFlowVisible && (
+              <ResumeAnalysisProgress
+                flow={uploadFlow}
+                onChooseFile={() => fileInputRef.current?.click()}
+                onReset={() => {
+                  setUploadFlow({
+                    status: 'idle',
+                    progress: 0,
+                    fileName: '',
+                    fileSize: 0,
+                  });
+                  setError(null);
+                }}
+              />
+            )}
           </div>
 
           <div>
@@ -334,6 +439,176 @@ function StructuredParsedData({ parsedData }: { parsedData: ResumeParsedData }) 
       )}
     </div>
   );
+}
+
+function ResumeAnalysisProgress({
+  flow,
+  onChooseFile,
+  onReset,
+}: {
+  flow: UploadFlow;
+  onChooseFile: () => void;
+  onReset: () => void;
+}) {
+  const currentStep = flow.status === 'uploading' ? 1 : flow.status === 'analyzing' ? 2 : 3;
+  const isComplete = flow.status === 'complete';
+  const isError = flow.status === 'error';
+  const heading = getUploadFlowHeading(flow.status);
+  const subtext = getUploadFlowSubtext(flow.status);
+  const progress = isComplete ? 100 : Math.max(0, Math.min(100, flow.progress));
+  const checklist = [
+    { label: '텍스트 추출 완료', done: progress >= 38 || isComplete },
+    { label: '경력 및 스킬 파싱 완료', done: progress >= 76 || isComplete },
+    { label: '맞춤 채용공고 준비 중', done: isComplete },
+    { label: '강점/약점 분석', done: isComplete },
+  ];
+
+  return (
+    <div className="rounded-xl border border-m-border bg-white p-4">
+      <AnalysisStepper currentStep={currentStep} isComplete={isComplete} isError={isError} />
+
+      <div className="mt-5 flex items-start gap-4">
+        <div
+          className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
+            isComplete
+              ? 'bg-m-success-soft text-m-success'
+              : isError
+                ? 'bg-m-danger-soft text-m-danger'
+                : 'bg-m-primary-soft text-m-primary'
+          }`}
+        >
+          {isComplete ? (
+            <Icon name="check" size={28} strokeWidth={2.5} />
+          ) : isError ? (
+            <Icon name="x" size={24} strokeWidth={2.5} />
+          ) : (
+            <Icon name="sparkle" size={25} strokeWidth={2} className="animate-spin" />
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[15px] font-bold text-m-text">{heading}</p>
+              <p className="text-[12px] text-m-muted mt-0.5 truncate">
+                {flow.fileName || '이력서 파일'} · {flow.fileSize ? formatFileSize(flow.fileSize) : '대기 중'}
+              </p>
+            </div>
+            <p className="text-[15px] font-bold text-m-primary tabular-nums">{progress}%</p>
+          </div>
+
+          <div className="mt-4 h-2 rounded-full bg-m-surface-alt overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                isError ? 'bg-m-danger' : isComplete ? 'bg-m-success' : 'bg-m-primary'
+              }`}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+
+          <p className="mt-3 text-[12px] text-m-muted">{subtext}</p>
+
+          {!isError && (
+            <div className="mt-4 grid grid-cols-1 gap-2">
+              {checklist.map((item) => (
+                <div key={item.label} className="flex items-center gap-2 text-[12px] text-m-muted">
+                  <span
+                    className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                      item.done ? 'bg-m-success text-white' : 'bg-m-surface-alt text-m-subtle'
+                    }`}
+                  >
+                    {item.done ? <Icon name="check" size={13} strokeWidth={2.4} /> : <span className="w-1.5 h-1.5 rounded-full bg-current" />}
+                  </span>
+                  {item.label}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {(isComplete || isError) && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onChooseFile}
+                className="h-8 px-3 rounded-lg bg-m-primary text-white text-[12px] font-semibold hover:bg-m-primary-hover transition-colors"
+              >
+                다른 파일 선택
+              </button>
+              <button
+                type="button"
+                onClick={onReset}
+                className="h-8 px-3 rounded-lg border border-m-border text-[12px] font-medium text-m-muted hover:bg-m-surface-alt transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnalysisStepper({
+  currentStep,
+  isComplete,
+  isError,
+}: {
+  currentStep: number;
+  isComplete: boolean;
+  isError: boolean;
+}) {
+  const steps = ['이력서 업로드', 'AI 분석', '맞춤 채용공고'];
+
+  return (
+    <div className="flex items-center justify-center gap-2 text-[12px] font-semibold">
+      {steps.map((label, index) => {
+        const step = index + 1;
+        const done = isComplete || step < currentStep;
+        const active = !isComplete && step === currentStep && !isError;
+
+        return (
+          <div key={label} className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              <span
+                className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                  done
+                    ? 'bg-m-success text-white'
+                    : active
+                      ? 'bg-m-primary text-white'
+                      : isError && step === currentStep
+                        ? 'bg-m-danger text-white'
+                        : 'bg-m-surface-alt text-m-subtle'
+                }`}
+              >
+                {done ? <Icon name="check" size={15} strokeWidth={2.4} /> : step}
+              </span>
+              <span className={done || active ? 'text-m-text' : 'text-m-muted'}>{label}</span>
+            </div>
+            {index < steps.length - 1 && <span className="w-8 h-px bg-m-border" />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function getUploadFlowHeading(status: UploadFlowStatus): string {
+  if (status === 'uploading') return '이력서를 업로드하고 있어요';
+  if (status === 'analyzing') return 'AI가 이력서를 분석하고 있어요';
+  if (status === 'matching') return '맞춤 채용공고를 준비하고 있어요';
+  if (status === 'complete') return '분석 완료!';
+  if (status === 'error') return '분석을 완료하지 못했어요';
+  return '이력서를 준비하고 있어요';
+}
+
+function getUploadFlowSubtext(status: UploadFlowStatus): string {
+  if (status === 'uploading') return '파일을 서버에 저장하고 텍스트 추출을 준비하는 중입니다.';
+  if (status === 'analyzing') return '경력, 스킬, 프로젝트, 자기소개서 목차를 구조화하는 중입니다.';
+  if (status === 'matching') return '매칭 화면에서 사용할 이력서 분석 데이터를 정리하는 중입니다.';
+  if (status === 'complete') return '이력서 구조화 데이터가 준비되었습니다. 상세 결과를 확인해 보세요.';
+  if (status === 'error') return '파일 형식, 용량 또는 파싱 오류를 확인한 뒤 다시 시도해 주세요.';
+  return '잠시만 기다려 주세요.';
 }
 
 function TextListBlock({ label, items }: { label: string; items: string[] }) {
