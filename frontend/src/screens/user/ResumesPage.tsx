@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Icon from '../../components/ui/Icon';
-import ResumeParsedDataEditor from '../../components/resume/ResumeParsedDataEditor';
 import { resumesApi, type UploadResumeParams } from '../../api/resumes';
-import type { ApiError, Resume, ResumeUpdatePayload } from '../../api/types';
+import type { ApiError, Resume } from '../../api/types';
 
 const MAX_RESUME_UPLOAD_BYTES = 10 * 1024 * 1024;
 const ALLOWED_RESUME_EXTENSIONS = ['.pdf', '.docx', '.txt'];
@@ -25,9 +24,9 @@ function formatFileSize(size: number): string {
 }
 
 function statusLabel(status: Resume['parse_status']): string {
-  if (status === 'COMPLETED') return '파싱 완료';
-  if (status === 'FAILED') return '파싱 실패';
-  return '대기 중';
+  if (status === 'COMPLETED') return '처리 완료';
+  if (status === 'FAILED') return '확인 필요';
+  return '처리 중';
 }
 
 function statusClass(status: Resume['parse_status']): string {
@@ -44,7 +43,6 @@ export default function ResumesPage() {
   const [isDefault, setIsDefault] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Resume | null>(null);
-  const [viewMode, setViewMode] = useState<'preview' | 'data'>('preview');
   const [uploadFlow, setUploadFlow] = useState<UploadFlow>({
     status: 'idle',
     progress: 0,
@@ -101,19 +99,6 @@ export default function ResumesPage() {
     },
   });
 
-  const updateMutation = useMutation<Resume, ApiError, { resumeId: number; data: ResumeUpdatePayload }>({
-    mutationFn: ({ resumeId, data }) => resumesApi.updateResume(resumeId, data),
-    onSuccess: (resume) => {
-      setError(null);
-      setSelected(resume);
-      queryClient.setQueryData(['resume', resume.resume_id], resume);
-      queryClient.invalidateQueries({ queryKey: ['resumes'] });
-    },
-    onError: (err: ApiError) => {
-      setError(err.message || '이력서 수정에 실패했습니다.');
-    },
-  });
-
   const activeResume = selectedDetail ?? selected ?? resumes[0] ?? null;
   const previewResumeId = activeResume?.resume_id ?? null;
 
@@ -124,7 +109,7 @@ export default function ResumesPage() {
   } = useQuery({
     queryKey: ['resume-file', previewResumeId],
     queryFn: () => resumesApi.getResumeFileBlob(previewResumeId as number),
-    enabled: previewResumeId !== null && viewMode === 'preview',
+    enabled: previewResumeId !== null,
   });
 
   const previewUrl = useMemo(() => {
@@ -214,7 +199,7 @@ export default function ResumesPage() {
         <div>
           <h1 className="text-[20px] font-bold text-m-text tracking-tight mb-1">내 이력서</h1>
           <p className="text-[13px] text-m-muted">
-            PDF, DOCX, TXT 파일을 저장하고 서버에서 기본 파싱 결과를 관리합니다.
+            PDF, DOCX, TXT 파일을 저장하고 원본 문서를 미리 확인합니다.
           </p>
         </div>
         <button
@@ -405,66 +390,42 @@ export default function ResumesPage() {
                 </div>
               )}
 
-              <div className="mb-4 flex items-center gap-1 bg-m-surface-alt p-1 rounded-xl w-fit">
-                <button
-                  onClick={() => setViewMode('preview')}
-                  className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
-                    viewMode === 'preview' ? 'bg-white text-m-primary shadow-sm' : 'text-m-muted hover:text-m-text'
-                  }`}
-                >
-                  파일 미리보기
-                </button>
-                <button
-                  onClick={() => setViewMode('data')}
-                  className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
-                    viewMode === 'data' ? 'bg-white text-m-primary shadow-sm' : 'text-m-muted hover:text-m-text'
-                  }`}
-                >
-                  파싱 데이터
-                </button>
+              <div className="mb-4">
+                <h3 className="text-[14px] font-semibold text-m-text">파일 미리보기</h3>
               </div>
 
-              {viewMode === 'preview' ? (
-                <div className="rounded-2xl border border-m-border bg-m-surface-alt overflow-hidden aspect-[1/1.4] relative">
-                  {isPreviewLoading ? (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <Icon name="sparkle" size={32} className="animate-spin text-m-primary" />
-                        <p className="text-[13px] text-m-muted font-medium">문서를 불러오는 중...</p>
-                      </div>
+              <div className="rounded-2xl border border-m-border bg-m-surface-alt overflow-hidden aspect-[1/1.4] relative">
+                {isPreviewLoading ? (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <Icon name="sparkle" size={32} className="animate-spin text-m-primary" />
+                      <p className="text-[13px] text-m-muted font-medium">문서를 불러오는 중...</p>
                     </div>
-                  ) : previewUrl && !isPreviewError ? (
-                    <iframe
-                      src={previewUrl}
-                      className="w-full h-full border-none"
-                      title="Resume Preview"
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center p-8 text-center">
-                      <div className="max-w-[240px]">
-                        <div className="w-12 h-12 rounded-full bg-m-danger-soft text-m-danger flex items-center justify-center mx-auto mb-3">
-                          <Icon name="x" size={24} />
-                        </div>
-                        <p className="text-[14px] font-semibold text-m-text mb-1">미리보기를 불러올 수 없음</p>
-                        <p className="text-[12px] text-m-muted">
-                          파일이 없거나 불러오는 중 에러가 발생했습니다. 나중에 다시 시도해 주세요.
-                        </p>
+                  </div>
+                ) : previewUrl && !isPreviewError ? (
+                  <iframe
+                    src={previewUrl}
+                    className="w-full h-full border-none"
+                    title="Resume Preview"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center p-8 text-center">
+                    <div className="max-w-[240px]">
+                      <div className="w-12 h-12 rounded-full bg-m-danger-soft text-m-danger flex items-center justify-center mx-auto mb-3">
+                        <Icon name="x" size={24} />
                       </div>
+                      <p className="text-[14px] font-semibold text-m-text mb-1">미리보기를 불러올 수 없음</p>
+                      <p className="text-[12px] text-m-muted">
+                        파일이 없거나 불러오는 중 에러가 발생했습니다. 나중에 다시 시도해 주세요.
+                      </p>
                     </div>
-                  )}
-                </div>
-              ) : (
-                <ResumeParsedDataEditor
-                  key={`${activeResume.resume_id}-${activeResume.updated_at}`}
-                  resume={activeResume}
-                  isSaving={updateMutation.isPending}
-                  onSave={(data) => updateMutation.mutate({ resumeId: activeResume.resume_id, data })}
-                />
-              )}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="h-full flex items-center justify-center text-[14px] text-m-subtle">
-              이력서를 등록하면 파싱 결과가 표시됩니다.
+              이력서를 등록하면 파일 미리보기가 표시됩니다.
             </div>
           )}
         </div>
@@ -627,18 +588,18 @@ function AnalysisStepper({
 
 function getUploadFlowHeading(status: UploadFlowStatus): string {
   if (status === 'uploading') return '이력서를 업로드하고 있어요';
-  if (status === 'analyzing') return 'AI가 이력서를 분석하고 있어요';
+  if (status === 'analyzing') return '이력서를 처리하고 있어요';
   if (status === 'matching') return '맞춤 채용공고를 준비하고 있어요';
-  if (status === 'complete') return '분석 완료!';
-  if (status === 'error') return '분석을 완료하지 못했어요';
+  if (status === 'complete') return '업로드 완료!';
+  if (status === 'error') return '업로드를 완료하지 못했어요';
   return '이력서를 준비하고 있어요';
 }
 
 function getUploadFlowSubtext(status: UploadFlowStatus): string {
   if (status === 'uploading') return '파일을 서버에 저장하고 텍스트 추출을 준비하는 중입니다.';
-  if (status === 'analyzing') return '경력, 스킬, 프로젝트, 자기소개서 목차를 구조화하는 중입니다.';
-  if (status === 'matching') return '매칭 화면에서 사용할 이력서 분석 데이터를 정리하는 중입니다.';
-  if (status === 'complete') return '이력서 구조화 데이터가 준비되었습니다. 상세 결과를 확인해 보세요.';
-  if (status === 'error') return '파일 형식, 용량 또는 파싱 오류를 확인한 뒤 다시 시도해 주세요.';
+  if (status === 'analyzing') return '문서 내용을 읽고 서비스에서 사용할 정보를 정리하는 중입니다.';
+  if (status === 'matching') return '매칭 화면에서 사용할 이력서 정보를 준비하는 중입니다.';
+  if (status === 'complete') return '이력서 파일이 저장되었습니다. 미리보기에서 원본을 확인해 보세요.';
+  if (status === 'error') return '파일 형식, 용량 또는 업로드 오류를 확인한 뒤 다시 시도해 주세요.';
   return '잠시만 기다려 주세요.';
 }

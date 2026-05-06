@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { Resume, ResumeUpdatePayload } from './types';
+import type { Resume } from './types';
 
 export interface UploadResumeParams {
   file: File;
@@ -34,11 +34,6 @@ export const resumesApi = {
     await apiClient.delete(`/resumes/${resumeId}`);
   },
 
-  updateResume: async (resumeId: number, data: ResumeUpdatePayload): Promise<Resume> => {
-    const res = await apiClient.patch<Resume>(`/resumes/${resumeId}`, data);
-    return res.data;
-  },
-  
   getResumeFileUrl: (resumeId: number): string => {
     return `${apiClient.defaults.baseURL}/resumes/${resumeId}/file`;
   },

@@ -171,6 +171,37 @@ function splitProjectText(value: string): string[] {
   return splitProjectItems(fromBlocks(value));
 }
 
+function collectProjectItems(parsed: ResumeParsedData): string[] {
+  const candidates = [
+    ...splitProjectItems(parsed.projects),
+    ...splitProjectItems(parsed.sections?.projects ? [parsed.sections.projects] : []),
+    ...projectItemsFromCoverLetterSections(parsed.cover_letter_sections),
+  ];
+  return dedupeItems(candidates);
+}
+
+function projectItemsFromCoverLetterSections(sections: Record<string, string> | undefined): string[] {
+  return Object.entries(sections ?? {})
+    .filter(([title]) => {
+      const compact = normalizeHeading(title);
+      return compact.includes('프로젝트') || compact.includes('기술역량');
+    })
+    .map(([title, content]) => `${title}\n${content}`)
+    .filter((item) => item.trim());
+}
+
+function dedupeItems(items: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  items.forEach((item) => {
+    const key = normalizeHeading(item);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    result.push(item);
+  });
+  return result;
+}
+
 function normalizeCoverLetterSections(
   coverLetter?: string | null,
   sections?: Record<string, string>,
@@ -214,6 +245,7 @@ function normalizeCoverLetterSections(
 
 function createFormState(resume: Resume): ParsedFormState {
   const parsed = resume.parsed_data ?? EMPTY_PARSED_DATA;
+  const projectItems = collectProjectItems(parsed);
   return {
     title: resume.title,
     rawText: resume.raw_text ?? '',
@@ -227,7 +259,7 @@ function createFormState(resume: Resume): ParsedFormState {
     education: toLines(parsed.education),
     training: toLines(parsed.training),
     experiences: toLines(parsed.experiences),
-    projects: toBlocks(splitProjectItems(parsed.projects)),
+    projects: toBlocks(projectItems),
     certifications: toLines(parsed.certifications),
     awards: toLines(parsed.awards),
     languages: toLines(parsed.languages),
@@ -369,7 +401,7 @@ export default function ResumeParsedDataEditor({
         <InfoBlock label="학력" items={parsed.education} />
         <InfoBlock label="교육/훈련" items={parsed.training} />
         <InfoBlock label="경력사항" items={parsed.experiences} />
-        <ProjectBlock items={splitProjectItems(parsed.projects)} />
+        <ProjectBlock items={collectProjectItems(parsed)} />
         <InfoBlock label="자격증" items={parsed.certifications} />
         <InfoBlock label="수상" items={parsed.awards} />
         <InfoBlock label="어학" items={parsed.languages} />

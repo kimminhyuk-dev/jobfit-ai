@@ -171,28 +171,6 @@ class ResumeService:
             raise
         self._unlink_file(file_path)
 
-    def update_resume_content(
-        self,
-        resume_id: int,
-        *,
-        user_id: int,
-        title: str | None,
-        raw_text: str | None,
-        parsed_data: dict | None,
-        request_ip: str | None,
-    ) -> Resume:
-        resume = self.resume_repository.get_by_id(resume_id, user_id)
-        if resume is None:
-            raise ResumeNotFoundError
-        return self._update_resume_content(
-            resume,
-            actor_id=user_id,
-            title=title,
-            raw_text=raw_text,
-            parsed_data=parsed_data,
-            request_ip=request_ip,
-        )
-
     def update_resume_content_for_admin(
         self,
         resume_id: int,
