@@ -41,3 +41,11 @@ class ResumeDetail(ResumeListItem):
 
     raw_text: str | None
     parsed_data: dict[str, Any] | None
+
+
+class ResumeUpdate(BaseModel):
+    """이력서 파싱 정보 수정 요청"""
+
+    title: str | None = Field(default=None, max_length=120)
+    raw_text: str | None = None
+    parsed_data: dict[str, Any] | None = None

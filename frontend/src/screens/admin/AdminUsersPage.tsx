@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useMemo } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '../../api/admin';
 import Icon from '../../components/ui/Icon';
-import type { User, Resume } from '../../api/types';
+import ResumeParsedDataEditor from '../../components/resume/ResumeParsedDataEditor';
+import type { ApiError, Resume, ResumeUpdatePayload } from '../../api/types';
 
 function formatFileSize(size: number): string {
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))}KB`;
@@ -12,10 +13,10 @@ function formatFileSize(size: number): string {
 }
 
 export default function AdminUsersPage() {
+  const queryClient = useQueryClient();
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const { data: users = [], isLoading: isListLoading } = useQuery({
     queryKey: ['admin', 'users'],
@@ -34,40 +35,45 @@ export default function AdminUsersPage() {
     enabled: selectedResumeId !== null,
   });
 
+  const updateMutation = useMutation<Resume, ApiError, { resumeId: number; data: ResumeUpdatePayload }>({
+    mutationFn: ({ resumeId, data }) => adminApi.updateResumeDetail(resumeId, data),
+    onSuccess: (resume) => {
+      setError(null);
+      queryClient.setQueryData(['admin', 'resume', resume.resume_id], resume);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'user', selectedUserId] });
+    },
+    onError: (err: ApiError) => {
+      setError(err.message || '이력서 수정에 실패했습니다.');
+    },
+  });
+
+  const {
+    data: previewBlob,
+    isFetching: isPreviewLoading,
+    isError: isPreviewError,
+  } = useQuery({
+    queryKey: ['admin', 'resume-file', selectedResumeId],
+    queryFn: () => adminApi.getResumeFileBlob(selectedResumeId as number),
+    enabled: selectedResumeId !== null,
+  });
+
+  const previewUrl = useMemo(() => {
+    if (!previewBlob) return null;
+    return URL.createObjectURL(previewBlob);
+  }, [previewBlob]);
+
   const handleUserClick = (userId: number) => {
     setSelectedUserId(userId);
     setSelectedResumeId(null);
   };
 
   useEffect(() => {
-    if (selectedResumeId) {
-      let isMounted = true;
-      setIsPreviewLoading(true);
-
-      adminApi.getResumeFileBlob(selectedResumeId)
-        .then(blob => {
-          if (!isMounted) return;
-          const url = URL.createObjectURL(blob);
-          setPreviewUrl(url);
-          setIsPreviewLoading(false);
-        })
-        .catch(err => {
-          if (!isMounted) return;
-          console.error('Failed to load admin PDF preview:', err);
-          setIsPreviewLoading(false);
-          setPreviewUrl(null);
-        });
-
-      return () => {
-        isMounted = false;
-        if (previewUrl) {
-          URL.revokeObjectURL(previewUrl);
-        }
-      };
-    } else {
-      setPreviewUrl(null);
-    }
-  }, [selectedResumeId]);
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   return (
     <div className="flex flex-col h-full max-h-[calc(100vh-100px)] overflow-hidden">
@@ -77,6 +83,12 @@ export default function AdminUsersPage() {
           <p className="text-[13px] text-m-muted mt-1">등록된 사용자 목록과 이력서 정보를 확인합니다.</p>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-xl border border-m-danger bg-m-danger-soft p-3 text-[13px] text-m-danger">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-12 gap-6 h-full overflow-hidden">
         {/* 사용자 목록 */}
@@ -183,39 +195,20 @@ export default function AdminUsersPage() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-6">
-                    {/* 데이터 영역 */}
-                    <div className="space-y-6">
-                      <div>
-                        <h3 className="text-[13px] font-semibold text-m-text mb-2">추출 정보</h3>
-                        <div className="bg-m-surface-alt p-3 rounded-xl space-y-2">
-                          <div className="flex justify-between">
-                            <span className="text-[12px] text-m-subtle">이메일</span>
-                            <span className="text-[12px] text-m-muted">{resumeDetail?.parsed_data?.emails?.[0] || '-'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-[12px] text-m-subtle">연락처</span>
-                            <span className="text-[12px] text-m-muted">{resumeDetail?.parsed_data?.phones?.[0] || '-'}</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1 pt-2">
-                            {resumeDetail?.parsed_data?.skills?.map((s: string) => (
-                              <span key={s} className="px-1.5 py-0.5 bg-white border border-m-border rounded text-[10px] text-m-muted">
-                                {s}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
+                  <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6">
+                    {resumeDetail ? (
+                      <ResumeParsedDataEditor
+                        key={`${resumeDetail.resume_id}-${resumeDetail.updated_at}`}
+                        resume={resumeDetail}
+                        isSaving={updateMutation.isPending}
+                        onSave={(data) => updateMutation.mutate({ resumeId: resumeDetail.resume_id, data })}
+                      />
+                    ) : (
+                      <div className="rounded-xl bg-m-surface-alt p-4 text-[13px] text-m-subtle">
+                        이력서 상세 정보를 불러오는 중...
                       </div>
+                    )}
 
-                      <div>
-                        <h3 className="text-[13px] font-semibold text-m-text mb-2">원문 텍스트</h3>
-                        <div className="bg-m-surface-alt p-3 rounded-xl max-h-[300px] overflow-y-auto text-[11px] leading-relaxed text-m-muted whitespace-pre-wrap">
-                          {resumeDetail?.raw_text || '텍스트가 없습니다.'}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 파일 프리뷰 */}
                     <div>
                       <h3 className="text-[13px] font-semibold text-m-text mb-2">파일 미리보기</h3>
                       <div className="rounded-xl border border-m-border bg-m-surface-alt overflow-hidden aspect-[1/1.4] relative">
@@ -223,7 +216,7 @@ export default function AdminUsersPage() {
                           <div className="absolute inset-0 flex items-center justify-center">
                             <Icon name="sparkle" size={24} className="animate-spin text-m-primary" />
                           </div>
-                        ) : previewUrl ? (
+                        ) : previewUrl && !isPreviewError ? (
                           <iframe
                             src={previewUrl}
                             className="w-full h-full border-none"

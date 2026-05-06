@@ -9,6 +9,7 @@ import type {
   PostCreate,
   PostUpdate,
   Resume,
+  ResumeUpdatePayload,
   User,
 } from './types';
 import type { GetJobsParams } from './jobs';
@@ -37,6 +38,11 @@ export const adminApi = {
 
   getResumeDetail: async (resumeId: number): Promise<Resume> => {
     const res = await apiClient.get<Resume>(`/admin/users/resumes/${resumeId}`);
+    return res.data;
+  },
+
+  updateResumeDetail: async (resumeId: number, data: ResumeUpdatePayload): Promise<Resume> => {
+    const res = await apiClient.patch<Resume>(`/admin/users/resumes/${resumeId}`, data);
     return res.data;
   },
 

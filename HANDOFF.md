@@ -50,6 +50,10 @@
   - 사용자 대시보드/채용공고/이력서 화면은 실제 API 연결 완료, 매칭 화면은 mock 데이터 기반 UI 구현
   - 관리자 대시보드/카테고리/Q&A 게시글 화면은 mock 데이터 기반 UI 구현
 - 관리자 사용자 관리 화면 구현 완료 (사용자 목록, 상세 정보, 이력서 파싱 데이터 및 파일 프리뷰)
+- 사용자/관리자 이력서 화면에서 파싱 데이터(프로필, 이메일, 연락처, 링크, 기술, 학력, 교육, 경력, 프로젝트, 자격증, 자기소개서 목차, 수상, 어학, 원문)를 조회·수정 가능
+- 이력서 파싱 데이터 화면은 1/2/3차 프로젝트와 자기소개서 목차를 개별 카드로 분리해 표시
+- 루트 `package.json` 편의 스크립트(`dev`, `build`, `lint`)는 실제 Next.js/FastAPI 경로 기준으로 정리됨
+- Next.js Turbopack root는 `frontend`로 고정되어 루트 `package-lock.json`이 있어도 alias/라우트 해석이 흔들리지 않음
 - 프론트엔드 공통 API 클라이언트가 백엔드 공통 에러 응답 `{ code, message, details }`를 수신하도록 구성됨
 - 프론트엔드 계획 스택 반영 완료
   - React 19 적용
@@ -152,7 +156,13 @@
 - `GET /resumes` — 현재 사용자의 이력서 목록 조회
 - `GET /resumes/{resume_id}` — 현재 사용자의 이력서 상세 및 파싱 결과 조회
 - `GET /resumes/{resume_id}/file` — 이력서 원본 파일 스트리밍 (프리뷰용, 인증 헤더 기반 Blob URL 대응)
+- `PATCH /resumes/{resume_id}` — 현재 사용자의 이력서 제목/추출 원문/파싱 JSON 수정
 - `DELETE /resumes/{resume_id}` — 현재 사용자의 이력서 소프트 삭제 + 추출 원문/파싱 결과 삭제 + 저장 파일 삭제
+- `GET /admin/users` — 관리자 사용자 목록 조회
+- `GET /admin/users/{user_id}` — 관리자 사용자 상세 및 해당 사용자의 이력서 목록 조회
+- `GET /admin/users/resumes/{resume_id}` — 관리자 이력서 상세 및 파싱 결과 조회
+- `PATCH /admin/users/resumes/{resume_id}` — 관리자 이력서 제목/추출 원문/파싱 JSON 수정
+- `GET /admin/users/resumes/{resume_id}/file` — 관리자 이력서 원본 파일 스트리밍 (프리뷰용, 파일 미존재 시 404)
 - 지원 파일: PDF, DOCX, TXT, 최대 10MB
 - 파싱 상태: `PENDING` / `COMPLETED` / `FAILED`
 - 파싱 결과: 프로필 후보, 이메일, 전화번호, URL, 기술 키워드, 섹션별 원문(학력/교육/경력/프로젝트/자격증/자기소개서/수상/어학), AI 분석용 하이라이트, 추출 텍스트 길이
@@ -196,9 +206,16 @@
 - 사용자 대시보드 "프로필 수정" 모달 추가
 - 사용자 이력서 화면(`/user/resumes`) 실제 API 연결 완료
   - `GET /resumes`, `GET /resumes/{resume_id}`, `POST /resumes`, `DELETE /resumes/{resume_id}` 연동
+  - `GET /resumes/{resume_id}/file` Blob 조회 기반 PDF 파일 미리보기 연동
   - PDF/DOCX/TXT 업로드 UI, 기본 이력서 설정, 파싱 상태/오류 표시
   - 업로드/AI 분석/맞춤 채용공고 준비 3단계 진행 상태 카드 표시
-  - 이메일/전화번호/링크/기술 키워드 기본 파싱 결과와 추출 텍스트 표시
+  - 이메일/전화번호/링크/기술 키워드/학력/교육/경력/프로젝트/자격증/자기소개서 목차/수상/어학/추출 텍스트 표시 및 수정
+  - 프로젝트 항목과 자기소개서 목차는 한 덩어리 텍스트가 아니라 개별 카드로 분리 표시
+- 관리자 사용자 관리 화면(`/admin/users`) 실제 API 연결 완료
+  - 사용자 목록 클릭 시 사용자 상세, 이력서 목록, 이력서 파싱 데이터 표시
+  - 관리자 전용 이력서 상세/파일 Blob API로 파싱 정보와 PDF 프리뷰 표시
+  - 관리자도 사용자 이력서의 파싱 데이터와 추출 원문 수정 가능
+  - 1/2/3차 프로젝트 및 자기소개서 목차를 카드 단위로 구분해 가독성 개선
 - IT 채용 Mock 화면 추가 (`/user/mock-jobs`, `/admin/mock-jobs`)
   - `MockJobItem` 타입 + 20개 IT 기업 Mock 데이터 (Work24 테이블 구조 기반)
   - 카테고리 필터 탭 (백엔드/프론트엔드/AI·ML/DevOps·SRE/모바일/데이터/QA·보안/게임)
@@ -305,6 +322,49 @@
 - `ai_context/API_SPEC.md`
 
 ## 최근 검증
+
+2026-05-06 관리자 이력서 파싱 데이터 가독성 개선:
+
+- `ResumeParsedDataEditor` 표시 개선
+  - `projects` 값이 한 문자열에 `1차/2차/3차` 형태로 뭉쳐 있어도 화면에서 프로젝트별 카드로 분리 표시
+  - 프로젝트 수정 저장 시에도 분리된 배열 형태로 정리
+  - `cover_letter_sections` 또는 자기소개서 원문에 섞인 `지원동기/성장과정/성격의 장단점/입사 후 포부` 등 목차를 개별 카드로 분리 표시
+  - 자기소개서 목차 개수를 배지로 표시해 관리자 화면에서 빠르게 스캔 가능
+- 검증:
+  - `.\.venv\Scripts\python.exe -m compileall app` 통과
+  - `npm run lint` 통과
+  - `npm run build` 통과 (20개 App Router 경로 생성)
+
+2026-05-06 이력서 파싱 상세 표시 및 수정 기능 추가:
+
+- 백엔드:
+  - `ResumeUpdate` 스키마 추가
+  - `PATCH /resumes/{resume_id}` 추가: 본인 이력서 제목/추출 원문/파싱 JSON 수정
+  - `PATCH /admin/users/resumes/{resume_id}` 추가: 관리자 이력서 제목/추출 원문/파싱 JSON 수정
+  - `ResumeRepository.update_resume_content()`, `ResumeService.update_resume_content()`, `update_resume_content_for_admin()` 추가
+- 프론트엔드:
+  - `ResumeParsedDataEditor` 공통 컴포넌트 추가
+  - 사용자 이력서 화면과 관리자 사용자 관리 화면에서 프로필, 이메일, 연락처, 링크, 기술, 학력, 교육/훈련, 경력사항, 프로젝트, 자격증, 자기소개서/목차, 수상, 어학, 추출 원문 표시
+  - 사용자와 관리자 모두 편집 모드에서 파싱 데이터와 원문을 수정해 저장 가능
+- 검증:
+  - `.\.venv\Scripts\python.exe -m compileall app` 통과
+  - `npm run lint` 통과
+  - `npm run build` 통과 (20개 App Router 경로 생성)
+  - FastAPI route 확인: `PATCH /resumes/{resume_id}`, `PATCH /admin/users/resumes/{resume_id}` 등록 확인
+
+2026-05-06 이력서 프리뷰/관리자 사용자 화면 빌드 오류 수정:
+
+- `frontend/src/app/admin/users/page.tsx`: 기존 프로젝트 패턴에 맞게 `@/` alias import를 상대 경로 import로 수정
+- `frontend/next.config.ts`: Turbopack root를 `frontend` 실행 디렉터리로 고정해 루트 `package-lock.json` 때문에 workspace root가 잘못 잡히던 문제 해결
+- 루트 `package.json`: `dev:backend`를 `uvicorn app.main:app` 기준으로 수정하고 루트 `build`/`lint` 편의 스크립트 추가
+- `.gitignore`: 루트 `node_modules/` ignore 추가
+- `frontend/src/screens/user/ResumesPage.tsx`, `frontend/src/screens/admin/AdminUsersPage.tsx`: PDF 프리뷰 Blob 로딩을 TanStack Query 기반으로 정리하고 object URL revoke 처리
+- `backend/app/api/admin_users.py`: 관리자 이력서 파일 프리뷰 요청 시 실제 파일이 없으면 404로 응답하도록 보강
+- 검증:
+  - `.\.venv\Scripts\python.exe -m compileall app` 통과
+  - `npm run lint` 통과 (`frontend`, 루트 스크립트 모두 확인)
+  - `npm run build` 통과 (`frontend`, 루트 스크립트 모두 확인, 20개 App Router 경로 생성)
+  - `.\.venv\Scripts\python.exe -c "from app.main import app; print(app.title)"` 통과 (`jobfit-ai`)
 
 2026-05-06 이력서 PDF 프리뷰 500 에러 수정 및 안정화:
 

@@ -122,3 +122,26 @@ class ResumeRepository:
         resume.parse_error = None
         self.db.flush()
         return resume
+
+    def update_resume_content(
+        self,
+        resume: Resume,
+        *,
+        title: str | None,
+        raw_text: str | None,
+        parsed_data: dict | None,
+        actor_id: int,
+        request_ip: str | None,
+    ) -> Resume:
+        if title is not None:
+            resume.title = title
+        if raw_text is not None:
+            resume.raw_text = raw_text
+        if parsed_data is not None:
+            resume.parsed_data = parsed_data
+            resume.parse_status = "COMPLETED"
+            resume.parse_error = None
+        resume.updated_by = actor_id
+        resume.updated_ip = request_ip
+        self.db.flush()
+        return resume

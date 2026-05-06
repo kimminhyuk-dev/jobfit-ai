@@ -87,6 +87,12 @@ export interface Resume {
   parsed_data?: ResumeParsedData | null;
 }
 
+export interface ResumeUpdatePayload {
+  title?: string;
+  raw_text?: string | null;
+  parsed_data?: ResumeParsedData | null;
+}
+
 // 채용공고 (mock UI용)
 export interface Job {
   id: string;

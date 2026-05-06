@@ -2,16 +2,19 @@
 관리자용 회원 관리 API 라우터
 """
 
-from fastapi import APIRouter, Depends, status
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin_user
+from app.api.deps import get_client_ip, get_current_admin_user
 from app.core.database import get_db
 from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
+from app.models.user import User
 from app.repositories.user_repository import UserRepository
-from app.schemas.resume import ResumeDetail, ResumeListItem
+from app.schemas.resume import ResumeDetail, ResumeListItem, ResumeUpdate
 from app.schemas.user import UserResponse
 from app.services.resume_service import ResumeNotFoundError, ResumeService
 from app.services.user_service import UserService
@@ -31,7 +34,7 @@ def get_resume_service(db: Session = Depends(get_db)) -> ResumeService:
 def list_users(
     skip: int = 0,
     limit: int = 100,
-    current_admin: UserResponse = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ) -> list[UserResponse]:
     """관리자가 전체 회원 목록을 조회한다."""
@@ -43,7 +46,7 @@ def list_users(
 @router.get("/{user_id}", response_model=dict)
 def get_user_detail(
     user_id: int,
-    current_admin: UserResponse = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
     resume_service: ResumeService = Depends(get_resume_service),
 ) -> dict:
@@ -67,7 +70,7 @@ def get_user_detail(
 @router.get("/resumes/{resume_id}", response_model=ResumeDetail)
 def get_user_resume_detail(
     resume_id: int,
-    current_admin: UserResponse = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_admin_user),
     resume_service: ResumeService = Depends(get_resume_service),
 ) -> ResumeDetail:
     """관리자가 특정 이력서의 상세 정보(파싱 데이터 포함)를 조회한다."""
@@ -82,10 +85,37 @@ def get_user_resume_detail(
     return ResumeDetail.model_validate(resume)
 
 
+@router.patch("/resumes/{resume_id}", response_model=ResumeDetail)
+def update_user_resume_detail(
+    resume_id: int,
+    payload: ResumeUpdate,
+    request: Request,
+    current_admin: User = Depends(get_current_admin_user),
+    resume_service: ResumeService = Depends(get_resume_service),
+) -> ResumeDetail:
+    """관리자가 특정 이력서의 제목/추출 원문/파싱 결과를 수정한다."""
+    try:
+        resume = resume_service.update_resume_content_for_admin(
+            resume_id,
+            actor_id=current_admin.user_id,
+            title=payload.title,
+            raw_text=payload.raw_text,
+            parsed_data=payload.parsed_data,
+            request_ip=get_client_ip(request),
+        )
+    except ResumeNotFoundError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.RESUME_NOT_FOUND,
+            message="이력서를 찾을 수 없습니다.",
+        )
+    return ResumeDetail.model_validate(resume)
+
+
 @router.get("/resumes/{resume_id}/file")
 def get_user_resume_file(
     resume_id: int,
-    current_admin: UserResponse = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_admin_user),
     resume_service: ResumeService = Depends(get_resume_service),
 ) -> FileResponse:
     """관리자가 특정 이력서 파일을 스트리밍한다 (프리뷰용)."""
@@ -96,6 +126,14 @@ def get_user_resume_file(
             status_code=status.HTTP_404_NOT_FOUND,
             code=ErrorCode.RESUME_NOT_FOUND,
             message="이력서를 찾을 수 없습니다.",
+        )
+
+    file_path = Path(resume.file_path)
+    if not file_path.is_file():
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.RESUME_NOT_FOUND,
+            message="이력서 파일을 실제 저장소에서 찾을 수 없습니다.",
         )
 
     return FileResponse(

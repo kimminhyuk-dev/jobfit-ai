@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Icon from '../../components/ui/Icon';
+import ResumeParsedDataEditor from '../../components/resume/ResumeParsedDataEditor';
 import { resumesApi, type UploadResumeParams } from '../../api/resumes';
-import type { ApiError, Resume, ResumeParsedData } from '../../api/types';
+import type { ApiError, Resume, ResumeUpdatePayload } from '../../api/types';
 
 const MAX_RESUME_UPLOAD_BYTES = 10 * 1024 * 1024;
 const ALLOWED_RESUME_EXTENSIONS = ['.pdf', '.docx', '.txt'];
@@ -44,8 +45,6 @@ export default function ResumesPage() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Resume | null>(null);
   const [viewMode, setViewMode] = useState<'preview' | 'data'>('preview');
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [uploadFlow, setUploadFlow] = useState<UploadFlow>({
     status: 'idle',
     progress: 0,
@@ -102,37 +101,44 @@ export default function ResumesPage() {
     },
   });
 
+  const updateMutation = useMutation<Resume, ApiError, { resumeId: number; data: ResumeUpdatePayload }>({
+    mutationFn: ({ resumeId, data }) => resumesApi.updateResume(resumeId, data),
+    onSuccess: (resume) => {
+      setError(null);
+      setSelected(resume);
+      queryClient.setQueryData(['resume', resume.resume_id], resume);
+      queryClient.invalidateQueries({ queryKey: ['resumes'] });
+    },
+    onError: (err: ApiError) => {
+      setError(err.message || '이력서 수정에 실패했습니다.');
+    },
+  });
+
   const activeResume = selectedDetail ?? selected ?? resumes[0] ?? null;
+  const previewResumeId = activeResume?.resume_id ?? null;
+
+  const {
+    data: previewBlob,
+    isFetching: isPreviewLoading,
+    isError: isPreviewError,
+  } = useQuery({
+    queryKey: ['resume-file', previewResumeId],
+    queryFn: () => resumesApi.getResumeFileBlob(previewResumeId as number),
+    enabled: previewResumeId !== null && viewMode === 'preview',
+  });
+
+  const previewUrl = useMemo(() => {
+    if (!previewBlob) return null;
+    return URL.createObjectURL(previewBlob);
+  }, [previewBlob]);
 
   useEffect(() => {
-    if (activeResume && viewMode === 'preview') {
-      let isMounted = true;
-      setIsPreviewLoading(true);
-      
-      resumesApi.getResumeFileBlob(activeResume.resume_id)
-        .then(blob => {
-          if (!isMounted) return;
-          const url = URL.createObjectURL(blob);
-          setPreviewUrl(url);
-          setIsPreviewLoading(false);
-        })
-        .catch(err => {
-          if (!isMounted) return;
-          console.error('Failed to load PDF preview:', err);
-          setIsPreviewLoading(false);
-          setPreviewUrl(null);
-        });
-
-      return () => {
-        isMounted = false;
-        if (previewUrl) {
-          URL.revokeObjectURL(previewUrl);
-        }
-      };
-    } else {
-      setPreviewUrl(null);
-    }
-  }, [activeResume?.resume_id, viewMode]);
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const isUploadFlowVisible = uploadFlow.status !== 'idle';
 
@@ -427,7 +433,7 @@ export default function ResumesPage() {
                         <p className="text-[13px] text-m-muted font-medium">문서를 불러오는 중...</p>
                       </div>
                     </div>
-                  ) : previewUrl ? (
+                  ) : previewUrl && !isPreviewError ? (
                     <iframe
                       src={previewUrl}
                       className="w-full h-full border-none"
@@ -448,26 +454,12 @@ export default function ResumesPage() {
                   )}
                 </div>
               ) : (
-                <>
-                  <div className="mb-5">
-                    <h3 className="text-[14px] font-semibold text-m-text mb-3">기본 파싱 결과</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
-                      <ParsedBlock label="이메일" items={activeResume.parsed_data?.emails ?? []} />
-                      <ParsedBlock label="전화번호" items={activeResume.parsed_data?.phones ?? []} />
-                      <ParsedBlock label="링크" items={activeResume.parsed_data?.urls ?? []} />
-                      <ParsedBlock label="기술 키워드" items={activeResume.parsed_data?.skills ?? []} />
-                    </div>
-                  </div>
-
-                  {activeResume.parsed_data && <StructuredParsedData parsedData={activeResume.parsed_data} />}
-
-                  <div>
-                    <h3 className="text-[14px] font-semibold text-m-text mb-3">추출 텍스트</h3>
-                    <div className="max-h-[240px] overflow-auto scrollbar-thin rounded-xl bg-m-surface-alt p-4 text-[12px] leading-relaxed text-m-muted whitespace-pre-wrap">
-                      {activeResume.raw_text || '추출된 텍스트가 없습니다.'}
-                    </div>
-                  </div>
-                </>
+                <ResumeParsedDataEditor
+                  key={`${activeResume.resume_id}-${activeResume.updated_at}`}
+                  resume={activeResume}
+                  isSaving={updateMutation.isPending}
+                  onSave={(data) => updateMutation.mutate({ resumeId: activeResume.resume_id, data })}
+                />
               )}
             </div>
           ) : (
@@ -477,52 +469,6 @@ export default function ResumesPage() {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function StructuredParsedData({ parsedData }: { parsedData: ResumeParsedData }) {
-  const profileItems = [
-    parsedData.profile?.name && `이름: ${parsedData.profile.name}`,
-    parsedData.profile?.birth_date && `생년월일: ${parsedData.profile.birth_date}`,
-    parsedData.profile?.address && `주소: ${parsedData.profile.address}`,
-  ].filter(Boolean) as string[];
-
-  const blocks = [
-    { label: '프로필', items: profileItems },
-    { label: '학력', items: parsedData.education ?? [] },
-    { label: '교육/훈련', items: parsedData.training ?? [] },
-    { label: '경력', items: parsedData.experiences ?? [] },
-    { label: '자격증', items: parsedData.certifications ?? [] },
-    { label: '수상', items: parsedData.awards ?? [] },
-    { label: '어학', items: parsedData.languages ?? [] },
-  ].filter((block) => block.items.length > 0);
-
-  const projects = parsedData.projects ?? [];
-  const coverLetterSections = parsedData.cover_letter_sections;
-  const hasCoverLetterSections = coverLetterSections && Object.keys(coverLetterSections).length > 0;
-  const hasCoverLetterFallback = Boolean(parsedData.cover_letter) && !hasCoverLetterSections;
-
-  if (blocks.length === 0 && projects.length === 0 && !parsedData.cover_letter) return null;
-
-  return (
-    <div className="mb-5">
-      <h3 className="text-[14px] font-semibold text-m-text mb-3">AI 분석용 구조화 데이터</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {blocks.map((block) => (
-          <TextListBlock key={block.label} label={block.label} items={block.items} />
-        ))}
-      </div>
-      {projects.length > 0 && <ProjectsBlock items={projects} />}
-      {hasCoverLetterSections && <CoverLetterSectionsBlock sections={coverLetterSections!} />}
-      {hasCoverLetterFallback && (
-        <div className="mt-3 rounded-xl bg-m-surface-alt p-3">
-          <p className="text-[11px] text-m-subtle mb-2">자기소개서</p>
-          <p className="max-h-[240px] overflow-auto whitespace-pre-wrap text-[12px] leading-relaxed text-m-muted">
-            {parsedData.cover_letter}
-          </p>
-        </div>
-      )}
     </div>
   );
 }
@@ -695,71 +641,4 @@ function getUploadFlowSubtext(status: UploadFlowStatus): string {
   if (status === 'complete') return '이력서 구조화 데이터가 준비되었습니다. 상세 결과를 확인해 보세요.';
   if (status === 'error') return '파일 형식, 용량 또는 파싱 오류를 확인한 뒤 다시 시도해 주세요.';
   return '잠시만 기다려 주세요.';
-}
-
-function TextListBlock({ label, items }: { label: string; items: string[] }) {
-  return (
-    <div className="rounded-xl bg-m-surface-alt p-3 min-h-[86px]">
-      <p className="text-[11px] text-m-subtle mb-2">{label}</p>
-      <ul className="space-y-1.5">
-        {items.map((item, index) => (
-          <li key={`${label}-${index}`} className="text-[12px] leading-relaxed text-m-muted whitespace-pre-wrap">
-            {item}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function ProjectsBlock({ items }: { items: string[] }) {
-  return (
-    <div className="mt-3 rounded-xl bg-m-surface-alt p-3">
-      <p className="text-[11px] text-m-subtle mb-2">프로젝트 ({items.length}건)</p>
-      <div className="flex flex-col gap-2">
-        {items.map((project, index) => (
-          <div key={index} className="rounded-lg bg-white border border-m-border p-2.5">
-            <p className="text-[12px] leading-relaxed text-m-muted whitespace-pre-wrap">{project}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CoverLetterSectionsBlock({ sections }: { sections: Record<string, string> }) {
-  const entries = Object.entries(sections).filter(([, v]) => v.trim());
-  if (entries.length === 0) return null;
-  return (
-    <div className="mt-3 rounded-xl bg-m-surface-alt p-3">
-      <p className="text-[11px] text-m-subtle mb-3">자기소개서 ({entries.length}개 항목)</p>
-      <div className="flex flex-col gap-4">
-        {entries.map(([title, content]) => (
-          <div key={title}>
-            <p className="text-[12px] font-semibold text-m-text mb-1">{title}</p>
-            <p className="text-[12px] leading-relaxed text-m-muted whitespace-pre-wrap">{content}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ParsedBlock({ label, items }: { label: string; items: string[] }) {
-  return (
-    <div className="rounded-xl bg-m-surface-alt p-3 min-h-[86px]">
-      <p className="text-[11px] text-m-subtle mb-2">{label}</p>
-      {items.length === 0 ? (
-        <p className="text-[12px] text-m-subtle">없음</p>
-      ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {items.map((item) => (
-            <span key={item} className="px-2 py-1 rounded-full bg-white border border-m-border text-[11px] text-m-muted">
-              {item}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }

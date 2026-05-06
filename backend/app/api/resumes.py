@@ -15,7 +15,7 @@ from app.core.database import get_db
 from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
 from app.models.user import User
-from app.schemas.resume import ResumeDetail, ResumeListItem
+from app.schemas.resume import ResumeDetail, ResumeListItem, ResumeUpdate
 from app.services.resume_service import (
     ResumeFileTooLargeError,
     ResumeNotFoundError,
@@ -137,6 +137,33 @@ def get_resume_file(
         media_type=resume.content_type,
         filename=resume.original_filename,
     )
+
+
+@router.patch("/{resume_id}", response_model=ResumeDetail)
+def update_resume(
+    resume_id: int,
+    payload: ResumeUpdate,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    resume_service: ResumeService = Depends(get_resume_service),
+) -> ResumeDetail:
+    """현재 사용자의 이력서 제목/추출 원문/파싱 결과를 수정한다."""
+    try:
+        resume = resume_service.update_resume_content(
+            resume_id,
+            user_id=current_user.user_id,
+            title=payload.title,
+            raw_text=payload.raw_text,
+            parsed_data=payload.parsed_data,
+            request_ip=get_client_ip(request),
+        )
+    except ResumeNotFoundError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.RESUME_NOT_FOUND,
+            message="이력서를 찾을 수 없습니다.",
+        )
+    return ResumeDetail.model_validate(resume)
 
 
 @router.delete("/{resume_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -171,6 +171,79 @@ class ResumeService:
             raise
         self._unlink_file(file_path)
 
+    def update_resume_content(
+        self,
+        resume_id: int,
+        *,
+        user_id: int,
+        title: str | None,
+        raw_text: str | None,
+        parsed_data: dict | None,
+        request_ip: str | None,
+    ) -> Resume:
+        resume = self.resume_repository.get_by_id(resume_id, user_id)
+        if resume is None:
+            raise ResumeNotFoundError
+        return self._update_resume_content(
+            resume,
+            actor_id=user_id,
+            title=title,
+            raw_text=raw_text,
+            parsed_data=parsed_data,
+            request_ip=request_ip,
+        )
+
+    def update_resume_content_for_admin(
+        self,
+        resume_id: int,
+        *,
+        actor_id: int,
+        title: str | None,
+        raw_text: str | None,
+        parsed_data: dict | None,
+        request_ip: str | None,
+    ) -> Resume:
+        resume = self.resume_repository.get_by_id_no_user(resume_id)
+        if resume is None:
+            raise ResumeNotFoundError
+        return self._update_resume_content(
+            resume,
+            actor_id=actor_id,
+            title=title,
+            raw_text=raw_text,
+            parsed_data=parsed_data,
+            request_ip=request_ip,
+        )
+
+    def _update_resume_content(
+        self,
+        resume: Resume,
+        *,
+        actor_id: int,
+        title: str | None,
+        raw_text: str | None,
+        parsed_data: dict | None,
+        request_ip: str | None,
+    ) -> Resume:
+        normalized_title = title.strip() if title is not None else None
+        if normalized_title == "":
+            normalized_title = None
+        try:
+            updated = self.resume_repository.update_resume_content(
+                resume,
+                title=normalized_title,
+                raw_text=raw_text,
+                parsed_data=parsed_data,
+                actor_id=actor_id,
+                request_ip=request_ip,
+            )
+            self.db.commit()
+        except SQLAlchemyError:
+            self.db.rollback()
+            raise
+        self.db.refresh(updated)
+        return updated
+
     @staticmethod
     def _unlink_file(file_path: Path) -> None:
         try:
