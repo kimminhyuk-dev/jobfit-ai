@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     resume_upload_dir: str = "data/resumes"
     resume_max_upload_mb: int = 10
 
+    # Google Gemini API (Free Tier 사용 가능)
+    gemini_api_key: str = ""
+
 
 # 전역 싱글톤
 settings = Settings()

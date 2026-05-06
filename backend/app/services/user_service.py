@@ -162,6 +162,12 @@ class UserService:
         self.db.refresh(user)
         return user
 
+    def delete_me(self, user: User, request_ip: str | None = None) -> None:
+        """계정을 소프트 삭제하고 모든 세션을 강제 만료한다."""
+        self.refresh_token_repository.revoke_all_by_user(user.user_id)
+        self.user_repository.soft_delete(user, request_ip=request_ip)
+        self.db.commit()
+
     def create_token_pair(self, user: User, ip: str | None = None) -> tuple[str, str]:
         """Access + Refresh Token 쌍을 발급하고 Refresh Token을 DB에 저장한다."""
         access_token = create_access_token(str(user.user_id))

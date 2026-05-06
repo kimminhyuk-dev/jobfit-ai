@@ -59,6 +59,13 @@ class UserRepository:
         self.db.flush()
         return user
 
+    def soft_delete(self, user: User, request_ip: str | None) -> User:
+        user.is_deleted = True
+        user.updated_by = user.user_id
+        user.updated_ip = request_ip
+        self.db.flush()
+        return user
+
     def create(self, user_create: UserCreate, hashed_password: str, request_ip: str | None) -> User:
         user = User(
             email=str(user_create.email),

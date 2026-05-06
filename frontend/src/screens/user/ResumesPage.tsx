@@ -302,14 +302,17 @@ function StructuredParsedData({ parsedData }: { parsedData: ResumeParsedData }) 
     { label: '학력', items: parsedData.education ?? [] },
     { label: '교육/훈련', items: parsedData.training ?? [] },
     { label: '경력', items: parsedData.experiences ?? [] },
-    { label: '프로젝트', items: parsedData.projects ?? [] },
     { label: '자격증', items: parsedData.certifications ?? [] },
     { label: '수상', items: parsedData.awards ?? [] },
     { label: '어학', items: parsedData.languages ?? [] },
   ].filter((block) => block.items.length > 0);
 
-  const hasCoverLetter = Boolean(parsedData.cover_letter);
-  if (blocks.length === 0 && !hasCoverLetter) return null;
+  const projects = parsedData.projects ?? [];
+  const coverLetterSections = parsedData.cover_letter_sections;
+  const hasCoverLetterSections = coverLetterSections && Object.keys(coverLetterSections).length > 0;
+  const hasCoverLetterFallback = Boolean(parsedData.cover_letter) && !hasCoverLetterSections;
+
+  if (blocks.length === 0 && projects.length === 0 && !parsedData.cover_letter) return null;
 
   return (
     <div className="mb-5">
@@ -319,10 +322,12 @@ function StructuredParsedData({ parsedData }: { parsedData: ResumeParsedData }) 
           <TextListBlock key={block.label} label={block.label} items={block.items} />
         ))}
       </div>
-      {hasCoverLetter && (
+      {projects.length > 0 && <ProjectsBlock items={projects} />}
+      {hasCoverLetterSections && <CoverLetterSectionsBlock sections={coverLetterSections!} />}
+      {hasCoverLetterFallback && (
         <div className="mt-3 rounded-xl bg-m-surface-alt p-3">
           <p className="text-[11px] text-m-subtle mb-2">자기소개서</p>
-          <p className="max-h-[180px] overflow-auto whitespace-pre-wrap text-[12px] leading-relaxed text-m-muted">
+          <p className="max-h-[240px] overflow-auto whitespace-pre-wrap text-[12px] leading-relaxed text-m-muted">
             {parsedData.cover_letter}
           </p>
         </div>
@@ -336,12 +341,45 @@ function TextListBlock({ label, items }: { label: string; items: string[] }) {
     <div className="rounded-xl bg-m-surface-alt p-3 min-h-[86px]">
       <p className="text-[11px] text-m-subtle mb-2">{label}</p>
       <ul className="space-y-1.5">
-        {items.slice(0, 8).map((item, index) => (
-          <li key={`${label}-${index}`} className="text-[12px] leading-relaxed text-m-muted">
+        {items.map((item, index) => (
+          <li key={`${label}-${index}`} className="text-[12px] leading-relaxed text-m-muted whitespace-pre-wrap">
             {item}
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function ProjectsBlock({ items }: { items: string[] }) {
+  return (
+    <div className="mt-3 rounded-xl bg-m-surface-alt p-3">
+      <p className="text-[11px] text-m-subtle mb-2">프로젝트 ({items.length}건)</p>
+      <div className="flex flex-col gap-2">
+        {items.map((project, index) => (
+          <div key={index} className="rounded-lg bg-white border border-m-border p-2.5">
+            <p className="text-[12px] leading-relaxed text-m-muted whitespace-pre-wrap">{project}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CoverLetterSectionsBlock({ sections }: { sections: Record<string, string> }) {
+  const entries = Object.entries(sections).filter(([, v]) => v.trim());
+  if (entries.length === 0) return null;
+  return (
+    <div className="mt-3 rounded-xl bg-m-surface-alt p-3">
+      <p className="text-[11px] text-m-subtle mb-3">자기소개서 ({entries.length}개 항목)</p>
+      <div className="flex flex-col gap-4">
+        {entries.map(([title, content]) => (
+          <div key={title}>
+            <p className="text-[12px] font-semibold text-m-text mb-1">{title}</p>
+            <p className="text-[12px] leading-relaxed text-m-muted whitespace-pre-wrap">{content}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

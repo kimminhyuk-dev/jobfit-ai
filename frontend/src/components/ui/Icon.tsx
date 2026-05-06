@@ -43,6 +43,9 @@ const iconPaths = {
   'map-pin': <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></>,
   'building': <><rect x="4" y="2" width="16" height="20" rx="2" /><path d="M9 22v-4h6v4" /><path d="M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01" /></>,
   'dollar': <><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></>,
+  'credit-card': <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></>,
+  'shield': <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></>,
+  'trash': <><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></>,
   google: (
     <>
       <path d="M21 12c0-.6-.1-1.2-.2-1.8H12v3.6h5c-.2 1.2-.9 2.2-2 2.9v2.4h3.2c1.9-1.7 2.8-4.3 2.8-7.1z" fill="#4285f4" stroke="none" />

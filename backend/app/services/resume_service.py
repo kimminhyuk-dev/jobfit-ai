@@ -16,6 +16,7 @@ from app.services.resume_parser import (
     ResumeParseError,
     extract_resume_text,
     parse_resume_text,
+    parse_resume_with_llm,
 )
 
 
@@ -40,6 +41,17 @@ ALLOWED_CONTENT_TYPES = {
 ALLOWED_SUFFIXES = {".pdf", ".docx", ".txt"}
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_with_best_available(raw_text: str) -> dict:
+    """GEMINI_API_KEY가 있으면 LLM 파서, 없거나 실패하면 정규식 파서로 폴백."""
+    api_key = settings.gemini_api_key
+    if api_key:
+        try:
+            return parse_resume_with_llm(raw_text, api_key)
+        except Exception as exc:
+            logger.warning("LLM 파싱 실패, 정규식 파서로 폴백: %s", exc)
+    return parse_resume_text(raw_text)
 
 
 class ResumeService:
@@ -92,7 +104,7 @@ class ResumeService:
         parse_error: str | None = None
         try:
             raw_text = extract_resume_text(file_path, content_type)
-            parsed_data = parse_resume_text(raw_text)
+            parsed_data = _parse_with_best_available(raw_text)
         except ResumeParseError as exc:
             parse_status = "FAILED"
             parse_error = str(exc)
@@ -160,9 +172,20 @@ class ResumeService:
             logger.warning("이력서 파일 삭제에 실패했습니다: %s", file_path)
 
     def _refresh_parsed_data_if_empty(self, resume: Resume) -> None:
-        if not resume.raw_text or not self._needs_parsed_data_refresh(resume.parsed_data):
+        if not self._needs_parsed_data_refresh(resume.parsed_data):
             return
-        parsed_data = parse_resume_text(resume.raw_text)
+        # 파일이 존재하면 최신 전처리 기준으로 텍스트 재추출 (r 아티팩트 정규화 포함)
+        raw_text = resume.raw_text
+        if resume.file_path:
+            file_path = Path(resume.file_path)
+            if file_path.is_file():
+                try:
+                    raw_text = extract_resume_text(file_path, resume.content_type)
+                except ResumeParseError:
+                    pass
+        if not raw_text:
+            return
+        parsed_data = _parse_with_best_available(raw_text)
         self.resume_repository.update_parsed_data(resume, parsed_data)
         self.db.commit()
         self.db.refresh(resume)
@@ -172,6 +195,9 @@ class ResumeService:
         if parsed_data is None:
             return True
         if "profile" not in parsed_data or "sections" not in parsed_data:
+            return True
+        # LLM 키가 있는데 regex로 파싱된 이력서면 LLM으로 재파싱
+        if settings.gemini_api_key and parsed_data.get("parsed_by") is None:
             return True
         return not any(
             parsed_data.get(key)

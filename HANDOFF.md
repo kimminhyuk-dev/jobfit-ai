@@ -300,6 +300,55 @@
 
 ## 최근 검증
 
+2026-05-06 이력서 파서 개선 — 프로젝트 전체 표시 + 자기소개서 목차 구조화:
+
+- `resume_parser.py` 버그 수정 및 기능 추가
+  - `_classify_section_header`: `startswith` 매칭 강화 — "프로젝트 1차: 쇼핑몰" 같은 본문 제목 라인이 섹션 헤더로 오인식되어 누락되던 문제 수정
+  - `_detect_sections`: 자기소개서 소제목("성장과정", "지원동기", "성격의 장단점", "입사 후 포부")을 섹션 헤더로 처리하면서도 텍스트 내용에 포함 — `_parse_cover_letter_sections`가 구조화 시 활용
+  - `_group_section_items()` 신설: 빈 줄 구분자로 프로젝트 섹션을 개별 항목 블록으로 그룹화 (1차/2차/3차 분리)
+  - `_parse_cover_letter_sections()` 신설: 자기소개서 텍스트를 소제목별로 분리해 `dict[str, str]` 반환
+  - `_match_cover_letter_subsection()` 신설: 소제목 매칭 헬퍼
+  - `COVER_LETTER_SECTION_LABELS`, `_COVER_LETTER_SUBSECTION_COMPACT` 상수 추가
+  - `parse_resume_text()`: `projects`를 `_group_section_items` 기반 블록 리스트로, `cover_letter_sections` 필드 추가
+  - `parse_resume_with_llm()`: `cover_letter_sections` 필드 추가 (LLM 결과도 소제목 파싱 적용)
+  - 모듈 주석 `ANTHROPIC_API_KEY` → `GEMINI_API_KEY` 수정
+  - `_normalize_pdf_text` 중복 "# 3." 주석 수정
+- `frontend/src/api/types.ts`: `ResumeParsedData`에 `cover_letter_sections?: Record<string, string>` 추가
+- `frontend/src/screens/user/ResumesPage.tsx`:
+  - `TextListBlock`: `slice(0, 8)` 제한 제거, `whitespace-pre-wrap` 추가
+  - `ProjectsBlock` 신설: 각 프로젝트를 별도 카드로 표시 (1차/2차/3차 모두 표시)
+  - `CoverLetterSectionsBlock` 신설: 소제목별 자기소개서 목차 표시
+  - `StructuredParsedData`: 위 두 컴포넌트 적용, 자기소개서 섹션 분리 표시
+- `python -m compileall app/services/resume_parser.py` 통과
+- `npm run lint` 통과 (경고 0개)
+- `npm run build` 통과 (19개 라우트)
+
+2026-05-04 내 정보·결제·관리자 구분 구현:
+
+- `DELETE /auth/me` 계정 탈퇴 엔드포인트 추가
+  - `UserRepository.soft_delete()`: is_deleted=True, updated_by/ip 갱신
+  - `UserService.delete_me()`: 모든 RefreshToken revoke 후 소프트 삭제
+  - 탈퇴 후 Access/Refresh Token 쿠키 자동 삭제
+- 프론트엔드 `/user/profile` 내 정보 페이지 추가
+  - 기본 정보(이름 수정), 비밀번호 변경, 계정 탈퇴 3개 탭
+  - 계정 탈퇴는 "탈퇴합니다" 입력 확인 모달 포함
+  - `authApi.deleteMe()` 연결, 탈퇴 후 /login 리다이렉트
+- 프론트엔드 `/user/payment` 결제 페이지 추가
+  - Free/Pro/Enterprise 3개 플랜 카드 UI
+  - 월간/연간 토글 (연간 20% 할인)
+  - 카드 결제 폼 (mock — 실제 PG 미연동)
+  - 결제 완료 성공 화면
+- `UserLayout` 네비게이션에 "내 정보"(/user/profile), "요금제"(/user/payment) 추가
+  - "IT 채용 (Mock)" 항목 제거 (Admin 전용)
+- `AdminLayout` 관리자 구분 강화
+  - 사이드바: 진한 네이비(#0f172a) 배경으로 사용자 영역과 명확히 구분
+  - 상단 ADMIN 빨간 배지, 네이바 섹션 레이블 추가
+  - 탑바: 좌측 빨간 보더 + "ADMIN MODE" 점멸 표시
+  - 사이드바 하단 "사용자 화면으로" 링크 추가
+- `Icon.tsx`에 `credit-card`, `shield`, `trash` 아이콘 추가
+- `python -m compileall app` 통과 (에러 없음)
+- `npm run build` 통과 (19개 라우트: /user/profile, /user/payment 포함)
+
 2026-05-04 이력서 등록 API + 기본 파싱 + 감사 IP 보강:
 
 - `AuditMixin` 기준 대부분의 주요 테이블은 이미 `created_at`, `created_by`, `created_ip`, `updated_at`, `updated_by`, `updated_ip` 감사 컬럼을 갖고 있음을 확인
@@ -549,6 +598,8 @@ npm run dev
 1. **Claude API 연동** — `POST /ai/analyze` 이력서 vs 공고 강점·약점·개선 제안 분석
 2. **벡터 임베딩** — sentence-transformers + pgvector 매칭 점수 계산
 3. 이력서 파싱 재시도 API/관리자 파싱 실패 모니터링 범위 결정
+4. **결제 PG 연동** — 현재 결제 페이지는 mock UI만 구현, 실제 PG(토스페이먼츠 등) 연동 필요
+5. **이력서 파서 개선** — DOCX 테이블 내용 추출, AI 입력용 `format_resume_for_ai()` 함수 추가
 
 ### 🟡 우선순위 중간
 4. PDF/DOCX 실제 샘플 업로드 검증 (`pypdf`, `python-docx` 설치 후)

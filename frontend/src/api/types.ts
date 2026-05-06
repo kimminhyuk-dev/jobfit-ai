@@ -64,6 +64,7 @@ export interface ResumeParsedData {
   projects?: string[];
   certifications?: string[];
   cover_letter?: string | null;
+  cover_letter_sections?: Record<string, string>;
   awards?: string[];
   languages?: string[];
   highlights?: Record<string, string[]>;

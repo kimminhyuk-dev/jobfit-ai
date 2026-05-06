@@ -36,4 +36,8 @@ export const authApi = {
     const res = await apiClient.patch<User>('/auth/me', body);
     return res.data;
   },
+
+  deleteMe: async (): Promise<void> => {
+    await apiClient.delete('/auth/me');
+  },
 };

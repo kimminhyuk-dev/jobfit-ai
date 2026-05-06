@@ -166,6 +166,19 @@ def update_me(
     return UserResponse.model_validate(user)
 
 
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_me(
+    request: Request,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
+) -> Response:
+    """현재 로그인 사용자의 계정을 소프트 삭제하고 모든 세션을 강제 만료한다."""
+    user_service.delete_me(current_user, request_ip=get_client_ip(request))
+    _clear_token_cookies(response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 # ── 쿠키 헬퍼 ──────────────────────────────────────────────────────────────
 
 def _set_token_cookies(response: Response, access_token: str, refresh_token: str) -> None:

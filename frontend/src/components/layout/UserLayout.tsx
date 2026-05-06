@@ -10,9 +10,10 @@ import { useAuth } from '../../stores/authContext';
 const navItems = [
   { to: '/user/dashboard', label: '홈', icon: 'home' as const },
   { to: '/user/jobs', label: '추천 공고', icon: 'briefcase' as const, badge: 28 },
-  { to: '/user/mock-jobs', label: 'IT 채용 (Mock)', icon: 'layers' as const },
   { to: '/user/matches', label: 'AI 매칭', icon: 'sparkle' as const },
   { to: '/user/resumes', label: '내 이력서', icon: 'file' as const },
+  { to: '/user/profile', label: '내 정보', icon: 'user' as const },
+  { to: '/user/payment', label: '요금제', icon: 'credit-card' as const },
 ];
 
 export default function UserLayout({ children }: { children: ReactNode }) {
