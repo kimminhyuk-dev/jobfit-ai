@@ -93,7 +93,16 @@ SECTION_ALIASES = {
         "experience",
         "employment",
     ],
-    "projects": ["프로젝트", "주요프로젝트", "수행프로젝트", "project", "projects"],
+    "projects": [
+        "프로젝트",
+        "주요프로젝트",
+        "수행프로젝트",
+        "포트폴리오",
+        "작업물",
+        "portfolio",
+        "project",
+        "projects",
+    ],
     "certifications": [
         "자격증",
         "자격사항",
@@ -189,6 +198,45 @@ COVER_LETTER_SECTION_LABELS = [
 # compact 형태로 미리 계산 (_compact_header_text 와 동일 규칙: 비알파뉴메릭 제거 + 소문자)
 _COVER_LETTER_SUBSECTION_COMPACT = frozenset(
     _compact_header_text(label) for label in COVER_LETTER_SECTION_LABELS
+)
+
+_AMBIGUOUS_COVER_LETTER_SUBSECTION_COMPACT = frozenset(
+    _compact_header_text(label)
+    for label in [
+        "기술역량",
+        "기술 역량",
+        "기술역량 및 프로젝트",
+        "기술 역량 및 프로젝트",
+        "프로젝트 내용",
+        "프로젝트 후기",
+        "프로젝트를 통해 배운 점",
+        "프로젝트 수행 내용",
+        "프로젝트 성과",
+        "보유역량",
+        "핵심역량",
+        "역량 및 경험",
+        "경험 및 경력기술서",
+        "경력기술서",
+        "주요경험",
+        "사회경험",
+        "직무경험",
+        "프로젝트 경험",
+        "프로젝트 수행 경험",
+    ]
+)
+
+_NON_COVER_LETTER_SECTION_KEYS = frozenset(
+    {
+        "profile",
+        "education",
+        "training",
+        "experience",
+        "projects",
+        "certifications",
+        "skills",
+        "awards",
+        "languages",
+    }
 )
 
 SCHOOL_LEVEL_PATTERNS: list[tuple[str, str]] = [
@@ -477,8 +525,8 @@ def _drop_cover_letter_like_items(items: list[str]) -> list[str]:
 
 
 def _looks_like_cover_letter_item(text: str) -> bool:
-    compact = _compact_header_text(text)
-    return any(label in compact for label in _COVER_LETTER_SUBSECTION_COMPACT)
+    first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
+    return _match_cover_letter_subsection(first_line) is not None
 
 
 def _compact_contact_text(text: str) -> str:
@@ -686,16 +734,21 @@ def _detect_sections(text: str) -> dict[str, str]:
     current_key: str | None = None
 
     for line in lines:
-        if _match_cover_letter_subsection(line):
-            current_key = "cover_letter"
-            sections.setdefault(current_key, []).append(line)
-            continue
-
         section_key = _classify_section_header(line)
         if section_key:
             current_key = section_key
             sections.setdefault(current_key, [])
             continue
+
+        cover_letter_subsection = _match_cover_letter_subsection(line)
+        if cover_letter_subsection and _should_use_cover_letter_subsection(
+            current_key,
+            cover_letter_subsection,
+        ):
+            current_key = "cover_letter"
+            sections.setdefault(current_key, []).append(line)
+            continue
+
         if current_key:
             sections[current_key].append(line)
 
@@ -812,6 +865,19 @@ def _match_cover_letter_subsection(line: str) -> str | None:
         if compact == _compact_header_text(label):
             return label
     return None
+
+
+def _should_use_cover_letter_subsection(
+    current_key: str | None,
+    subsection_label: str,
+) -> bool:
+    """포트폴리오/경력 본문을 자기소개서 목차로 오인하지 않도록 제한한다."""
+    if current_key == "cover_letter":
+        return True
+    if current_key in _NON_COVER_LETTER_SECTION_KEYS:
+        return False
+    compact = _compact_header_text(subsection_label)
+    return compact not in _AMBIGUOUS_COVER_LETTER_SUBSECTION_COMPACT
 
 
 def _compact_cover_letter_heading(text: str) -> str:
