@@ -2,6 +2,9 @@
 이력서 API 라우터
 """
 
+import logging
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -119,6 +122,14 @@ def get_resume_file(
             status_code=status.HTTP_404_NOT_FOUND,
             code=ErrorCode.RESUME_NOT_FOUND,
             message="이력서를 찾을 수 없습니다.",
+        )
+
+    file_path = Path(resume.file_path)
+    if not file_path.is_file():
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.RESUME_NOT_FOUND,
+            message="이력서 파일을 실제 저장소에서 찾을 수 없습니다.",
         )
 
     return FileResponse(

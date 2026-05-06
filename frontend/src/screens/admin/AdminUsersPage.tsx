@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '../../api/admin';
 import Icon from '../../components/ui/Icon';
@@ -14,6 +14,8 @@ function formatFileSize(size: number): string {
 export default function AdminUsersPage() {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   const { data: users = [], isLoading: isListLoading } = useQuery({
     queryKey: ['admin', 'users'],
@@ -36,6 +38,36 @@ export default function AdminUsersPage() {
     setSelectedUserId(userId);
     setSelectedResumeId(null);
   };
+
+  useEffect(() => {
+    if (selectedResumeId) {
+      let isMounted = true;
+      setIsPreviewLoading(true);
+
+      adminApi.getResumeFileBlob(selectedResumeId)
+        .then(blob => {
+          if (!isMounted) return;
+          const url = URL.createObjectURL(blob);
+          setPreviewUrl(url);
+          setIsPreviewLoading(false);
+        })
+        .catch(err => {
+          if (!isMounted) return;
+          console.error('Failed to load admin PDF preview:', err);
+          setIsPreviewLoading(false);
+          setPreviewUrl(null);
+        });
+
+      return () => {
+        isMounted = false;
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+        }
+      };
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [selectedResumeId]);
 
   return (
     <div className="flex flex-col h-full max-h-[calc(100vh-100px)] overflow-hidden">
@@ -186,12 +218,22 @@ export default function AdminUsersPage() {
                     {/* 파일 프리뷰 */}
                     <div>
                       <h3 className="text-[13px] font-semibold text-m-text mb-2">파일 미리보기</h3>
-                      <div className="rounded-xl border border-m-border bg-m-surface-alt overflow-hidden aspect-[1/1.4]">
-                        <iframe
-                          src={adminApi.getResumeFileUrl(selectedResumeId)}
-                          className="w-full h-full border-none"
-                          title="Resume File Preview"
-                        />
+                      <div className="rounded-xl border border-m-border bg-m-surface-alt overflow-hidden aspect-[1/1.4] relative">
+                        {isPreviewLoading ? (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Icon name="sparkle" size={24} className="animate-spin text-m-primary" />
+                          </div>
+                        ) : previewUrl ? (
+                          <iframe
+                            src={previewUrl}
+                            className="w-full h-full border-none"
+                            title="Resume File Preview"
+                          />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center p-4 text-center">
+                            <p className="text-[11px] text-m-subtle">파일을 불러올 수 없습니다.</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

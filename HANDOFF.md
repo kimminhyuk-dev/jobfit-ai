@@ -151,7 +151,7 @@
 - `POST /resumes` — 현재 사용자의 이력서 파일 업로드, 원본 저장, 텍스트 추출, 기본 파싱 결과 저장
 - `GET /resumes` — 현재 사용자의 이력서 목록 조회
 - `GET /resumes/{resume_id}` — 현재 사용자의 이력서 상세 및 파싱 결과 조회
-- `GET /resumes/{resume_id}/file` — 이력서 원본 파일 스트리밍 (프리뷰용)
+- `GET /resumes/{resume_id}/file` — 이력서 원본 파일 스트리밍 (프리뷰용, 인증 헤더 기반 Blob URL 대응)
 - `DELETE /resumes/{resume_id}` — 현재 사용자의 이력서 소프트 삭제 + 추출 원문/파싱 결과 삭제 + 저장 파일 삭제
 - 지원 파일: PDF, DOCX, TXT, 최대 10MB
 - 파싱 상태: `PENDING` / `COMPLETED` / `FAILED`
@@ -306,20 +306,20 @@
 
 ## 최근 검증
 
-2026-05-06 이력서 PDF 프리뷰 및 관리자 사용자 관리 기능 고도화:
+2026-05-06 이력서 PDF 프리뷰 500 에러 수정 및 안정화:
 
-- 백엔드: 이력서 원본 파일 스트리밍 API(`GET /resumes/{id}/file`) 구현
-- 백엔드: 관리자 전용 사용자 목록(`GET /admin/users`) 및 상세 조회(`GET /admin/users/{id}`) API 구현
-- 프론트엔드: 이력서 상세 페이지에 PDF 프리뷰(`iframe`) 및 탭(파싱 데이터/프리뷰) 도입
-- 프론트엔드: 관리자용 사용자 관리 화면(`AdminUsersPage`) 신설 및 사이드바 연결
-- 환경 설정: 인텔리제이 `.idea` 설정(파이썬 인터프리터, 소스 루트) 직접 수정하여 참조 에러 해결
-- 프로젝트 문서(ai_context, AGENTS.md 등) 최신화
-- 검증
+- 백엔드: `GET /resumes/{id}/file` API에 파일 존재 여부 체크 로직 추가 및 `Path` 참조 오류 수정
+- 프론트엔드: `iframe`의 `src`에 직접 URL을 넣는 방식에서 `axios`로 Blob 데이터를 받아 `URL.createObjectURL`을 사용하는 방식으로 변경
+  - 브라우저가 `iframe` 요청 시 인증 쿠키를 누락하거나 CORS 정책으로 차단되는 문제 해결
+  - PDF 로딩 상태 표시(스켈레톤/스피너) 및 에러 처리 UI 보강
+- 관리자 페이지: `AdminUsersPage`에도 동일한 Blob URL 방식 프리뷰 적용 및 `adminApi`에 `getResumeFileBlob` 추가
+- 검증:
   - `python -m compileall app` 통과
-  - 관리자 사용자 목록 API (`GET /admin/users`) 200 응답 및 사용자 목록 확인
-  - 사용자 상세 API (`GET /admin/users/{id}`) 200 응답 및 이력서 데이터 확인
-  - 이력서 파일 스트리밍 API (`GET /resumes/{id}/file`) 200 응답 및 PDF 콘텐츠 타입 확인
-  - 인텔리제이 프로젝트 뷰에서 `backend` 폴더가 Source Root로 정상 표시됨을 확인
+  - 사용자 페이지 이력서 PDF 프리뷰 정상 출력 확인 (Blob URL 생성 확인)
+  - 관리자 페이지 사용자별 이력서 PDF 프리뷰 정상 출력 확인
+  - 존재하지 않는 파일 요청 시 백엔드에서 404 에러 코드로 응답 확인
+
+2026-05-06 이력서 PDF 프리뷰 및 관리자 사용자 관리 기능 고도화:
 
 2026-05-06 이력서 업로드 진행 UI 및 취약점 점검:
 

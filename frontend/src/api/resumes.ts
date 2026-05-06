@@ -37,4 +37,11 @@ export const resumesApi = {
   getResumeFileUrl: (resumeId: number): string => {
     return `${apiClient.defaults.baseURL}/resumes/${resumeId}/file`;
   },
+
+  getResumeFileBlob: async (resumeId: number): Promise<Blob> => {
+    const res = await apiClient.get(`/resumes/${resumeId}/file`, {
+      responseType: 'blob',
+    });
+    return res.data;
+  },
 };

@@ -44,6 +44,8 @@ export default function ResumesPage() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Resume | null>(null);
   const [viewMode, setViewMode] = useState<'preview' | 'data'>('preview');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [uploadFlow, setUploadFlow] = useState<UploadFlow>({
     status: 'idle',
     progress: 0,
@@ -101,6 +103,37 @@ export default function ResumesPage() {
   });
 
   const activeResume = selectedDetail ?? selected ?? resumes[0] ?? null;
+
+  useEffect(() => {
+    if (activeResume && viewMode === 'preview') {
+      let isMounted = true;
+      setIsPreviewLoading(true);
+      
+      resumesApi.getResumeFileBlob(activeResume.resume_id)
+        .then(blob => {
+          if (!isMounted) return;
+          const url = URL.createObjectURL(blob);
+          setPreviewUrl(url);
+          setIsPreviewLoading(false);
+        })
+        .catch(err => {
+          if (!isMounted) return;
+          console.error('Failed to load PDF preview:', err);
+          setIsPreviewLoading(false);
+          setPreviewUrl(null);
+        });
+
+      return () => {
+        isMounted = false;
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+        }
+      };
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [activeResume?.resume_id, viewMode]);
+
   const isUploadFlowVisible = uploadFlow.status !== 'idle';
 
   useEffect(() => {
@@ -387,11 +420,32 @@ export default function ResumesPage() {
 
               {viewMode === 'preview' ? (
                 <div className="rounded-2xl border border-m-border bg-m-surface-alt overflow-hidden aspect-[1/1.4] relative">
-                  <iframe
-                    src={resumesApi.getResumeFileUrl(activeResume.resume_id)}
-                    className="w-full h-full border-none"
-                    title="Resume Preview"
-                  />
+                  {isPreviewLoading ? (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <Icon name="sparkle" size={32} className="animate-spin text-m-primary" />
+                        <p className="text-[13px] text-m-muted font-medium">문서를 불러오는 중...</p>
+                      </div>
+                    </div>
+                  ) : previewUrl ? (
+                    <iframe
+                      src={previewUrl}
+                      className="w-full h-full border-none"
+                      title="Resume Preview"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center p-8 text-center">
+                      <div className="max-w-[240px]">
+                        <div className="w-12 h-12 rounded-full bg-m-danger-soft text-m-danger flex items-center justify-center mx-auto mb-3">
+                          <Icon name="x" size={24} />
+                        </div>
+                        <p className="text-[14px] font-semibold text-m-text mb-1">미리보기를 불러올 수 없음</p>
+                        <p className="text-[12px] text-m-muted">
+                          파일이 없거나 불러오는 중 에러가 발생했습니다. 나중에 다시 시도해 주세요.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>

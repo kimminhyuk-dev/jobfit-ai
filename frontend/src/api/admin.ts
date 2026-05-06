@@ -44,6 +44,13 @@ export const adminApi = {
     return `${apiClient.defaults.baseURL}/admin/users/resumes/${resumeId}/file`;
   },
 
+  getResumeFileBlob: async (resumeId: number): Promise<Blob> => {
+    const res = await apiClient.get(`/admin/users/resumes/${resumeId}/file`, {
+      responseType: 'blob',
+    });
+    return res.data;
+  },
+
   getJobs: async (params: GetJobsParams = {}): Promise<JobPostingListResponse> => {
     const res = await apiClient.get<JobPostingListResponse>('/jobs', { params });
     return res.data;
