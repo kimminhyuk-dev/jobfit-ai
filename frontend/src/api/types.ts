@@ -44,6 +44,34 @@ export interface SignupRequest {
 }
 
 // 이력서
+export interface ResumeProjectData {
+  name?: string | null;
+  period?: string | null;
+  role?: string | null;
+  description?: string | null;
+  review?: string | null;
+  tech_stack?: string[];
+  raw_text?: string | null;
+}
+
+export interface ResumeProjectResponse extends ResumeProjectData {
+  project_id: number;
+  resume_id: number;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResumeCoverLetterSectionResponse {
+  section_id: number;
+  resume_id: number;
+  order_index: number;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ResumeParsedData {
   profile?: {
     name?: string | null;
@@ -62,7 +90,8 @@ export interface ResumeParsedData {
   education?: string[];
   training?: string[];
   experiences?: string[];
-  projects?: string[];
+  // projects는 구조화 객체 또는 구버전 문자열 배열 모두 허용
+  projects?: (ResumeProjectData | string)[];
   certifications?: string[];
   cover_letter?: string | null;
   cover_letter_sections?: Record<string, string>;
@@ -87,12 +116,17 @@ export interface Resume {
   updated_at: string;
   raw_text?: string | null;
   parsed_data?: ResumeParsedData | null;
+  // 구조화 서브테이블 (관리자 상세 조회 시 포함)
+  structured_projects?: ResumeProjectResponse[];
+  structured_cover_letter_sections?: ResumeCoverLetterSectionResponse[];
 }
 
 export interface ResumeUpdatePayload {
   title?: string;
   raw_text?: string | null;
   parsed_data?: ResumeParsedData | null;
+  structured_projects?: ResumeProjectData[] | null;
+  structured_cover_letter_sections?: { title: string; content: string }[] | null;
 }
 
 // 채용공고 (mock UI용)

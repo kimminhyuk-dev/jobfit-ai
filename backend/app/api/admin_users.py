@@ -14,7 +14,13 @@ from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
-from app.schemas.resume import ResumeDetail, ResumeListItem, ResumeUpdate
+from app.schemas.resume import (
+    ResumeDetail,
+    ResumeCoverLetterSectionResponse,
+    ResumeListItem,
+    ResumeProjectResponse,
+    ResumeUpdate,
+)
 from app.schemas.user import UserResponse
 from app.services.resume_service import ResumeNotFoundError, ResumeService
 from app.services.user_service import UserService
@@ -73,7 +79,7 @@ def get_user_resume_detail(
     current_admin: User = Depends(get_current_admin_user),
     resume_service: ResumeService = Depends(get_resume_service),
 ) -> ResumeDetail:
-    """관리자가 특정 이력서의 상세 정보(파싱 데이터 포함)를 조회한다."""
+    """관리자가 특정 이력서의 상세 정보(파싱 데이터 + 구조화 테이블)를 조회한다."""
     try:
         resume = resume_service.get_resume_for_admin(resume_id)
     except ResumeNotFoundError:
@@ -82,7 +88,16 @@ def get_user_resume_detail(
             code=ErrorCode.RESUME_NOT_FOUND,
             message="이력서를 찾을 수 없습니다.",
         )
-    return ResumeDetail.model_validate(resume)
+
+    structured_projects = resume_service.get_structured_projects(resume_id)
+    structured_cls = resume_service.get_structured_cover_letter_sections(resume_id)
+
+    detail = ResumeDetail.model_validate(resume)
+    detail.structured_projects = [ResumeProjectResponse.model_validate(p) for p in structured_projects]
+    detail.structured_cover_letter_sections = [
+        ResumeCoverLetterSectionResponse.model_validate(s) for s in structured_cls
+    ]
+    return detail
 
 
 @router.patch("/resumes/{resume_id}", response_model=ResumeDetail)
@@ -93,12 +108,19 @@ def update_user_resume_detail(
     current_admin: User = Depends(get_current_admin_user),
     resume_service: ResumeService = Depends(get_resume_service),
 ) -> ResumeDetail:
-    """관리자가 특정 이력서의 제목/추출 원문/파싱 결과를 수정한다."""
+    """관리자가 특정 이력서의 제목/추출 원문/파싱 결과/구조화 데이터를 수정한다."""
     parsed_data = (
         payload.parsed_data.model_dump(mode="json")
         if payload.parsed_data is not None
         else None
     )
+    structured_projects = (
+        [p.model_dump(mode="json") for p in payload.structured_projects]
+        if payload.structured_projects is not None
+        else None
+    )
+    structured_cls = payload.structured_cover_letter_sections
+
     try:
         resume = resume_service.update_resume_content_for_admin(
             resume_id,
@@ -106,6 +128,8 @@ def update_user_resume_detail(
             title=payload.title,
             raw_text=payload.raw_text,
             parsed_data=parsed_data,
+            structured_projects=structured_projects,
+            structured_cover_letter_sections=structured_cls,
             request_ip=get_client_ip(request),
         )
     except ResumeNotFoundError:
@@ -114,7 +138,16 @@ def update_user_resume_detail(
             code=ErrorCode.RESUME_NOT_FOUND,
             message="이력서를 찾을 수 없습니다.",
         )
-    return ResumeDetail.model_validate(resume)
+
+    structured_projects_rows = resume_service.get_structured_projects(resume_id)
+    structured_cls_rows = resume_service.get_structured_cover_letter_sections(resume_id)
+
+    detail = ResumeDetail.model_validate(resume)
+    detail.structured_projects = [ResumeProjectResponse.model_validate(p) for p in structured_projects_rows]
+    detail.structured_cover_letter_sections = [
+        ResumeCoverLetterSectionResponse.model_validate(s) for s in structured_cls_rows
+    ]
+    return detail
 
 
 @router.get("/resumes/{resume_id}/file")

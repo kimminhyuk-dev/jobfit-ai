@@ -22,6 +22,20 @@ class ResumeProfileData(BaseModel):
     address: str | None = None
 
 
+class ResumeProjectData(BaseModel):
+    """파싱된 개별 프로젝트 구조화 데이터"""
+
+    model_config = ConfigDict(extra="allow")
+
+    name: str | None = None
+    period: str | None = None
+    role: str | None = None
+    description: str | None = None
+    review: str | None = None
+    tech_stack: list[str] = Field(default_factory=list)
+    raw_text: str | None = None
+
+
 class ResumeParsedData(BaseModel):
     """이력서 파싱 결과 JSON 구조"""
 
@@ -37,7 +51,8 @@ class ResumeParsedData(BaseModel):
     education: list[str] = Field(default_factory=list)
     training: list[str] = Field(default_factory=list)
     experiences: list[str] = Field(default_factory=list)
-    projects: list[str] = Field(default_factory=list)
+    # projects는 구조화 객체 배열. 구 포맷(str 배열) 호환을 위해 Any 허용.
+    projects: list[Any] = Field(default_factory=list)
     certifications: list[str] = Field(default_factory=list)
     cover_letter: str | None = None
     cover_letter_sections: dict[str, str] = Field(default_factory=dict)
@@ -47,6 +62,43 @@ class ResumeParsedData(BaseModel):
     text_length: int = 0
     parsed_by: str | None = None
 
+
+# --- 구조화 테이블 응답 스키마 ---
+
+class ResumeProjectResponse(BaseModel):
+    """resume_projects 행 응답"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    project_id: int
+    resume_id: int
+    order_index: int
+    name: str | None
+    period: str | None
+    role: str | None
+    description: str | None
+    review: str | None
+    tech_stack: list[str] = Field(default_factory=list)
+    raw_text: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ResumeCoverLetterSectionResponse(BaseModel):
+    """resume_cover_letter_sections 행 응답"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    section_id: int
+    resume_id: int
+    order_index: int
+    title: str
+    content: str
+    created_at: datetime
+    updated_at: datetime
+
+
+# --- 목록·상세 응답 ---
 
 class ResumeListItem(BaseModel):
     """이력서 목록 응답"""
@@ -67,10 +119,12 @@ class ResumeListItem(BaseModel):
 
 
 class ResumeDetail(ResumeListItem):
-    """이력서 상세 응답"""
+    """이력서 상세 응답 (파싱 데이터 + 구조화 테이블 포함)"""
 
     raw_text: str | None
     parsed_data: ResumeParsedData | None
+    structured_projects: list[ResumeProjectResponse] = Field(default_factory=list)
+    structured_cover_letter_sections: list[ResumeCoverLetterSectionResponse] = Field(default_factory=list)
 
 
 class ResumeUpdate(BaseModel):
@@ -79,3 +133,7 @@ class ResumeUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=120)
     raw_text: str | None = None
     parsed_data: ResumeParsedData | None = None
+    # 구조화 프로젝트 직접 수정 (선택)
+    structured_projects: list[ResumeProjectData] | None = None
+    # 구조화 자기소개서 목차 직접 수정 (선택): [{title, content}]
+    structured_cover_letter_sections: list[dict[str, str]] | None = None

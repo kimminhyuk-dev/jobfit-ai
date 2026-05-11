@@ -55,6 +55,29 @@ def _parse_with_best_available(raw_text: str) -> dict[str, Any]:
     return parse_resume_text(raw_text)
 
 
+def _extract_structured_projects(parsed_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """parsed_data에서 구조화 프로젝트 목록을 추출한다."""
+    projects = parsed_data.get("projects") or []
+    result = []
+    for p in projects:
+        if isinstance(p, dict):
+            result.append(p)
+        elif isinstance(p, str) and p.strip():
+            # 구버전 호환: 문자열이면 raw_text로 포장
+            result.append({"raw_text": p, "name": None, "period": None,
+                           "role": None, "description": None, "review": None,
+                           "tech_stack": []})
+    return result
+
+
+def _extract_structured_sections(parsed_data: dict[str, Any]) -> list[dict[str, str]]:
+    """parsed_data.cover_letter_sections를 [{title, content}] 목록으로 변환한다."""
+    sections = parsed_data.get("cover_letter_sections") or {}
+    if isinstance(sections, dict):
+        return [{"title": k, "content": v} for k, v in sections.items() if k and v]
+    return []
+
+
 class ResumeService:
     """이력서 관련 비즈니스 로직"""
 
@@ -69,7 +92,6 @@ class ResumeService:
         resume = self.resume_repository.get_by_id(resume_id, user_id)
         if resume is None:
             raise ResumeNotFoundError
-        self._refresh_parsed_data_if_empty(resume)
         return resume
 
     def get_resume_for_admin(self, resume_id: int) -> Resume:
@@ -77,8 +99,13 @@ class ResumeService:
         resume = self.resume_repository.get_by_id_no_user(resume_id)
         if resume is None:
             raise ResumeNotFoundError
-        self._refresh_parsed_data_if_empty(resume)
         return resume
+
+    def get_structured_projects(self, resume_id: int):
+        return self.resume_repository.get_projects(resume_id)
+
+    def get_structured_cover_letter_sections(self, resume_id: int):
+        return self.resume_repository.get_cover_letter_sections(resume_id)
 
     def create_resume(
         self,
@@ -143,6 +170,11 @@ class ResumeService:
                 actor_id=user_id,
                 request_ip=request_ip,
             )
+
+            # 구조화 서브테이블 저장
+            if parsed_data:
+                self._save_structured_data(resume.resume_id, parsed_data, user_id, request_ip)
+
             self.db.commit()
         except SQLAlchemyError:
             self.db.rollback()
@@ -180,6 +212,8 @@ class ResumeService:
         title: str | None,
         raw_text: str | None,
         parsed_data: dict[str, Any] | None,
+        structured_projects: list[dict[str, Any]] | None,
+        structured_cover_letter_sections: list[dict[str, str]] | None,
         request_ip: str | None,
     ) -> Resume:
         resume = self.resume_repository.get_by_id_no_user(resume_id)
@@ -191,6 +225,8 @@ class ResumeService:
             title=title,
             raw_text=raw_text,
             parsed_data=parsed_data,
+            structured_projects=structured_projects,
+            structured_cover_letter_sections=structured_cover_letter_sections,
             request_ip=request_ip,
         )
 
@@ -202,6 +238,8 @@ class ResumeService:
         title: str | None,
         raw_text: str | None,
         parsed_data: dict[str, Any] | None,
+        structured_projects: list[dict[str, Any]] | None = None,
+        structured_cover_letter_sections: list[dict[str, str]] | None = None,
         request_ip: str | None,
     ) -> Resume:
         normalized_title = title.strip() if title is not None else None
@@ -216,12 +254,43 @@ class ResumeService:
                 actor_id=actor_id,
                 request_ip=request_ip,
             )
+
+            # 구조화 서브테이블 갱신
+            if structured_projects is not None:
+                self.resume_repository.replace_projects(
+                    resume.resume_id, structured_projects, actor_id, request_ip
+                )
+            elif parsed_data is not None:
+                self._save_structured_data(resume.resume_id, parsed_data, actor_id, request_ip)
+
+            if structured_cover_letter_sections is not None:
+                self.resume_repository.replace_cover_letter_sections(
+                    resume.resume_id, structured_cover_letter_sections, actor_id, request_ip
+                )
+
             self.db.commit()
         except SQLAlchemyError:
             self.db.rollback()
             raise
         self.db.refresh(updated)
         return updated
+
+    def _save_structured_data(
+        self,
+        resume_id: int,
+        parsed_data: dict[str, Any],
+        actor_id: int,
+        request_ip: str | None,
+    ) -> None:
+        """parsed_data에서 구조화 서브테이블을 동기화한다."""
+        projects = _extract_structured_projects(parsed_data)
+        if projects:
+            self.resume_repository.replace_projects(resume_id, projects, actor_id, request_ip)
+        sections = _extract_structured_sections(parsed_data)
+        if sections:
+            self.resume_repository.replace_cover_letter_sections(
+                resume_id, sections, actor_id, request_ip
+            )
 
     @staticmethod
     def _unlink_file(file_path: Path) -> None:
@@ -234,7 +303,6 @@ class ResumeService:
     def _refresh_parsed_data_if_empty(self, resume: Resume) -> None:
         if not self._needs_parsed_data_refresh(resume.parsed_data):
             return
-        # 파일이 존재하면 최신 전처리 기준으로 텍스트 재추출 (r 아티팩트 정규화 포함)
         raw_text = resume.raw_text
         if resume.file_path:
             file_path = Path(resume.file_path)
@@ -247,6 +315,7 @@ class ResumeService:
             return
         parsed_data = _parse_with_best_available(raw_text)
         self.resume_repository.update_parsed_data(resume, parsed_data)
+        self._save_structured_data(resume.resume_id, parsed_data, resume.user_id, None)
         self.db.commit()
         self.db.refresh(resume)
 
@@ -256,7 +325,6 @@ class ResumeService:
             return True
         if "profile" not in parsed_data or "sections" not in parsed_data:
             return True
-        # LLM 키가 있는데 regex로 파싱된 이력서면 LLM으로 재파싱
         if settings.gemini_api_key and parsed_data.get("parsed_by") is None:
             return True
         return not any(

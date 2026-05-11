@@ -1,45 +1,49 @@
-<!-- 
-프로젝트 구조와 역할 정의 파일 
-
-폴더 구조
-레이어 구조
-각 파일 역할
-프론트/백 통신 방식
--->
-
 # ARCHITECTURE
 
-## 프로젝트 구조
-- frontend: React 애플리케이션
-- backend: FastAPI 애플리케이션
-- ai_context: 프로젝트 상태 및 문서 관리 파일
+## 백엔드 레이어
 
-## 백엔드 구조
-- app/api: HTTP 요청을 받는 라우터 계층
-- app/services: 비즈니스 로직 계층
-- app/repositories: DB 접근 계층
-- app/models: SQLAlchemy ORM 모델
-- app/schemas: 요청/응답 DTO
-- app/core: 설정, DB 연결, 보안 관련 공통 모듈
+```
+api/ → service/ → repository/ → model/
+```
+
+| 계층 | 역할 |
+|---|---|
+| `api/` | HTTP 요청 수신·응답 반환만 |
+| `services/` | 비즈니스 로직 전담 |
+| `repositories/` | DB 접근만 |
+| `models/` | SQLAlchemy ORM |
+| `schemas/` | Pydantic DTO (ORM과 분리) |
+| `core/` | config, database, security, error_codes, exceptions |
 
 ## 프론트엔드 구조
-- src/app: Next.js 16 App Router 기반 페이지 구조
-- src/screens: 페이지 단위 비즈니스 로직 및 컴포넌트 조합
-- src/components: 공통 UI 컴포넌트
-- src/api: 백엔드 API 통신 모듈과 공통 타입
-- src/stores: 인증 상태와 Context Provider
-- src/lib: 공통 유틸리티
-- src/styles: 전역 스타일
-- src/components/ui: shadcn/ui 패턴 기반 공통 UI 컴포넌트
+
+```
+src/app/          Next.js 16 App Router 경로
+src/screens/      페이지 단위 로직 + 컴포넌트 조합
+src/components/   공통 UI (shadcn/ui 패턴)
+src/api/          백엔드 통신 모듈 + 공통 타입
+src/stores/       인증 상태 (authStore)
+src/lib/          공통 유틸
+```
 
 ## 통신 규칙
-- 프론트엔드는 백엔드 REST API와 통신한다
-- 백엔드는 JSON 형식으로 응답한다
-- 인증 방식은 JWT Access Token + HttpOnly Refresh Token Cookie 기반이다
-- 프론트엔드는 Access Token을 `Authorization: Bearer` 헤더에 담아 요청한다
-- API 에러 응답은 `{ code, message, details? }` 공통 포맷을 사용한다
 
-## 설계 원칙
-- model과 schema를 분리한다
-- router와 service를 분리한다
-- repository는 DB 접근만 담당한다
+- REST API, JSON 응답
+- 인증: JWT Access Token → `Authorization: Bearer`, Refresh Token → HttpOnly Cookie
+- 에러: `{ code, message, details? }` 공통 포맷
+- `withCredentials: true` (Refresh Token Cookie 포함)
+
+## 주요 DB 테이블
+
+| 테이블 | 설명 |
+|---|---|
+| `users` | 사용자 (role: USER/ADMIN) |
+| `refresh_tokens` | Refresh Token SHA-256 해시 저장 |
+| `categories` / `posts` | Q&A 게시판 |
+| `job_postings` | 채용공고 (data_source: PRODUCTION/MOCK/MANUAL) |
+| `job_sources` | 수집원 상태 관리 |
+| `batch_job_runs` | 수집 배치 이력 |
+| `common_code_groups` / `common_codes` | ALIO 공통코드 |
+| `resumes` | 이력서 메타 + 파싱 JSON |
+| `resume_projects` | 프로젝트 구조화 (name/period/role/description/review/tech_stack) |
+| `resume_cover_letter_sections` | 자기소개서 소제목별 구조화 (title/content) |

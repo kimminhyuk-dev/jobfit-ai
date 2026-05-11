@@ -293,6 +293,8 @@ def parse_resume_text(text: str) -> dict[str, Any]:
     profile = _extract_profile(text, emails, phones, urls)
     highlights = _extract_resume_highlights(text, sections)
     cover_letter_text = sections.get("cover_letter")
+    project_blocks = _group_section_items(sections.get("projects", ""))
+    structured_projects = [_parse_project_block(block) for block in project_blocks]
     return {
         "profile": profile,
         "emails": emails,
@@ -304,7 +306,7 @@ def parse_resume_text(text: str) -> dict[str, Any]:
         "education": _section_lines(sections, "education"),
         "training": _section_lines(sections, "training"),
         "experiences": _section_lines(sections, "experience"),
-        "projects": _group_section_items(sections.get("projects", "")),
+        "projects": structured_projects,
         "certifications": _section_lines(sections, "certifications"),
         "cover_letter": cover_letter_text,
         "cover_letter_sections": _parse_cover_letter_sections(cover_letter_text),
@@ -325,12 +327,25 @@ _LLM_SYSTEM_PROMPT = """당신은 한국어 이력서 파싱 전문가입니다.
   "education": ["학교명·전공·학위·기간·상태를 1줄로 합쳐서 항목마다 1개"],
   "training": ["기관명·과정명·기간을 1줄로 합쳐서 항목마다 1개"],
   "experiences": ["회사명·직책·기간·업무내용을 1줄 또는 여러 줄로 항목마다 1개"],
-  "projects": ["프로젝트명·기간·설명·기술스택을 1줄 또는 여러 줄로 항목마다 1개"],
+  "projects": [
+    {
+      "name": "프로젝트명 (없으면 null)",
+      "period": "수행 기간 (예: 2023.01~2023.06, 없으면 null)",
+      "role": "맡은 역할·담당 업무 (없으면 null)",
+      "description": "프로젝트 내용·설명·주요 기능 (없으면 null)",
+      "review": "후기·배운 점·성과 (없으면 null)",
+      "tech_stack": ["사용 기술 키워드 배열, 없으면 []"]
+    }
+  ],
   "certifications": ["자격증명·발급기관·취득일을 1줄로 항목마다 1개"],
   "skills": ["기술 키워드 단어 단위"],
   "awards": ["수상명·수여기관·날짜를 1줄로 항목마다 1개"],
   "languages": ["언어·수준·점수를 1줄로 항목마다 1개"],
-  "cover_letter": "자기소개서·지원동기·성장과정·입사포부·성격장단점 전체 텍스트 또는 null"
+  "cover_letter": "자기소개서·지원동기·성장과정·입사포부·성격장단점 전체 텍스트 또는 null",
+  "cover_letter_sections": {
+    "소제목1(예:성장과정)": "해당 소제목의 내용 전체",
+    "소제목2(예:지원동기)": "해당 소제목의 내용 전체"
+  }
 }
 
 처리 규칙:
@@ -345,19 +360,29 @@ _LLM_SYSTEM_PROMPT = """당신은 한국어 이력서 파싱 전문가입니다.
 
 3. 섹션 분류 규칙:
    - 'PROGRAMMING SKILLS', 'TECH STACK', '기술스택', '보유기술' → skills에 키워드 단위로 분리
-   - 자기소개, 지원동기, 성격의 장단점, 성장과정, 입사 후 포부 내용 → cover_letter
+   - 자기소개, 지원동기, 성격의 장단점, 성장과정, 입사 후 포부 내용 → cover_letter 및 cover_letter_sections
    - 학원·부트캠프·교육기관·연수 → training (education이 아님)
    - 대학교·대학원·고등학교 → education
    - 회사에서 한 업무·직책·재직기간 → experiences
-   - 개발한 서비스·앱·시스템 → projects
+   - 개발한 서비스·앱·시스템 → projects (name/period/role/description/review/tech_stack 구조로 분리)
    - 지원동기·입사 후 포부·기술역량 및 프로젝트·프로젝트 후기처럼 자기소개서 목차 아래에 있는 내용은 experiences/projects에 넣지 말고 cover_letter에만 넣을 것
 
-4. 없는 섹션은 빈 배열 [], 없는 단일값은 null
-5. 텍스트 전체를 빠짐없이 분석하고 내용이 잘리지 않도록 할 것
-6. projects는 절대 요약하거나 병합하지 말 것
-   - "1차", "2차", "3차", "프로젝트 1", "프로젝트명"처럼 새 항목이 시작되면 반드시 별도 배열 요소로 반환
+4. projects 추출 규칙:
+   - 절대 요약하거나 병합하지 말 것
+   - "1차", "2차", "3차", "프로젝트 1", "프로젝트명"처럼 새 항목이 시작되면 반드시 별도 객체로 반환
    - 입력에 제공된 프로젝트 후보가 있으면 각 후보를 하나의 projects 항목으로 유지
-   - 프로젝트가 3개면 projects 배열도 3개 이상이어야 함"""
+   - 프로젝트가 3개면 projects 배열도 3개 이상이어야 함
+   - 각 프로젝트 내 "맡은 역할:", "담당:", "역할:" 레이블 뒤 내용 → role
+   - 각 프로젝트 내 "내용:", "설명:", "주요 기능:", "개요:" 레이블 뒤 내용 → description
+   - 각 프로젝트 내 "후기:", "배운 점:", "성과:", "느낀 점:" 레이블 뒤 내용 → review
+   - 기술 키워드는 tech_stack 배열에 분리해 넣을 것
+
+5. cover_letter_sections 추출 규칙:
+   - 자기소개서 내 "성장과정", "지원동기", "성격의 장단점", "입사 후 포부" 등 소제목을 키로, 내용을 값으로 추출
+   - 소제목 앞에 번호(1., 가. 등)가 있어도 소제목 텍스트만 키로 사용
+   - 자기소개서 내용이 있으면 반드시 섹션으로 분리할 것
+
+6. 없는 섹션은 빈 배열 [], 없는 단일값은 null, 없는 객체는 {}"""
 
 # Free Tier에서 사용 가능한 모델 우선순위 목록
 _GEMINI_MODEL_CANDIDATES = [
@@ -371,13 +396,19 @@ def parse_resume_with_llm(raw_text: str, api_key: str) -> dict:
     """Gemini로 이력서 섹션을 구조화한다.
     연락처(이메일·전화·URL)는 정규식으로 별도 추출해 신뢰도를 높인다.
     모델은 Free Tier 가용 여부에 따라 순서대로 시도한다.
+    projects는 구조화 객체 배열로 반환한다.
     """
     genai = importlib.import_module("google.generativeai")
     genai.configure(api_key=api_key)
 
     source_text = _clean_extracted_text(raw_text)
     rule_based = parse_resume_text(source_text)
-    project_candidates = _normalize_list_value(rule_based.get("projects"))
+    project_candidates = rule_based.get("projects", [])
+    # rule-based는 text 블록 리스트 → LLM 힌트용으로 사용
+    project_candidates_text = [
+        p if isinstance(p, str) else _json.dumps(p, ensure_ascii=False)
+        for p in project_candidates
+    ]
 
     emails = _extract_emails(source_text)
     compact_contact = _compact_contact_text(source_text)
@@ -386,7 +417,7 @@ def parse_resume_with_llm(raw_text: str, api_key: str) -> dict:
     ) + re.findall(r"(?:\+82[-.]?)?0?1[016789][-.]?\d{3,4}[-.]?\d{4}", compact_contact)
     phones = sorted({_normalize_phone(p) for p in phone_candidates})
     urls = _extract_urls(source_text)
-    user_prompt = _build_llm_resume_prompt(source_text, project_candidates)
+    user_prompt = _build_llm_resume_prompt(source_text, project_candidates_text)
 
     last_exc: Exception | None = None
     response = None
@@ -413,10 +444,22 @@ def parse_resume_with_llm(raw_text: str, api_key: str) -> dict:
     llm_experiences = _drop_cover_letter_like_items(
         _normalize_list_value(llm.get("experiences"))
     )
-    llm_projects = _drop_cover_letter_like_items(
-        _split_project_items_from_values(_normalize_list_value(llm.get("projects")))
-    )
-    projects = _merge_project_candidates(llm_projects, project_candidates)
+
+    # LLM이 구조화 객체 또는 문자열 배열을 반환할 수 있으므로 양쪽 처리
+    raw_llm_projects = llm.get("projects") or []
+    structured_projects = _normalize_structured_projects(raw_llm_projects, project_candidates_text)
+
+    # cover_letter_sections: LLM이 직접 반환하거나 cover_letter 텍스트에서 추출
+    llm_sections = llm.get("cover_letter_sections") or {}
+    if isinstance(llm_sections, dict) and llm_sections:
+        cover_letter_sections = {k: str(v) for k, v in llm_sections.items() if v}
+    else:
+        cover_letter_sections = _parse_cover_letter_sections(llm.get("cover_letter"))
+
+    # 섹션이 여전히 비어 있으면 rule-based 결과로 보완
+    if not cover_letter_sections:
+        cover_letter_sections = rule_based.get("cover_letter_sections", {})
+
     return {
         "profile": {
             "name": llm.get("name"),
@@ -436,10 +479,10 @@ def parse_resume_with_llm(raw_text: str, api_key: str) -> dict:
         "education": _normalize_list_value(llm.get("education")),
         "training": _normalize_list_value(llm.get("training")),
         "experiences": llm_experiences,
-        "projects": projects,
+        "projects": structured_projects,
         "certifications": _normalize_list_value(llm.get("certifications")),
         "cover_letter": llm.get("cover_letter"),
-        "cover_letter_sections": _parse_cover_letter_sections(llm.get("cover_letter")),
+        "cover_letter_sections": cover_letter_sections,
         "awards": _normalize_list_value(llm.get("awards")),
         "languages": _normalize_list_value(llm.get("languages")),
         "highlights": {},
@@ -474,7 +517,7 @@ def _build_llm_resume_prompt(text: str, project_candidates: list[str]) -> str:
         project_hint = (
             "\n\n[규칙 기반 프로젝트 후보]\n"
             "아래 후보는 프로젝트 섹션에서 먼저 분리한 항목입니다. "
-            "누락하거나 하나로 합치지 말고 projects 배열에 각각 반영하세요.\n"
+            "누락하거나 하나로 합치지 말고 projects 배열에 각 항목을 구조화 객체로 반영하세요.\n"
             f"{_json.dumps(project_candidates, ensure_ascii=False)}\n"
         )
     return f"{project_hint}\n\n[이력서 원문]\n{limited_text}"
@@ -517,6 +560,131 @@ def _merge_project_candidates(
     if len(rule_projects) > len(llm_projects):
         return rule_projects
     return llm_projects or rule_projects
+
+
+_PROJECT_FIELD_LABELS: dict[str, list[str]] = {
+    "role": ["맡은 역할", "담당 역할", "역할", "담당", "포지션", "직무"],
+    "description": ["프로젝트 내용", "내용", "설명", "개요", "주요 기능", "주요기능", "수행 내용", "수행내용"],
+    "review": ["후기", "배운 점", "배운점", "느낀 점", "느낀점", "성과", "결과", "회고"],
+    "period": ["기간", "수행 기간", "프로젝트 기간"],
+    "tech_stack": ["기술 스택", "기술스택", "사용 기술", "사용기술", "기술", "stack", "tech"],
+}
+_PROJECT_FIELD_LABEL_RE = re.compile(
+    r"^(?P<label>"
+    + "|".join(
+        re.escape(lbl)
+        for labels in _PROJECT_FIELD_LABELS.values()
+        for lbl in labels
+    )
+    + r")\s*[:：]\s*(?P<value>.*)$",
+    re.IGNORECASE,
+)
+
+
+def _parse_project_block(text: str) -> dict[str, Any]:
+    """단일 프로젝트 텍스트 블록에서 구조화된 필드를 추출한다."""
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    result: dict[str, Any] = {
+        "name": None,
+        "period": None,
+        "role": None,
+        "description": None,
+        "review": None,
+        "tech_stack": [],
+        "raw_text": text,
+    }
+    label_to_field = {}
+    for field, labels in _PROJECT_FIELD_LABELS.items():
+        for lbl in labels:
+            label_to_field[lbl.lower().replace(" ", "")] = field
+
+    current_field: str | None = None
+    accumulated: dict[str, list[str]] = {f: [] for f in _PROJECT_FIELD_LABELS}
+    name_candidates: list[str] = []
+
+    for line in lines:
+        m = _PROJECT_FIELD_LABEL_RE.match(line)
+        if m:
+            label_key = m.group("label").lower().replace(" ", "")
+            field = label_to_field.get(label_key)
+            if field:
+                current_field = field
+                val = m.group("value").strip()
+                if val:
+                    accumulated[field].append(val)
+                continue
+        if current_field:
+            accumulated[current_field].append(line)
+        else:
+            name_candidates.append(line)
+
+    # name: 레이블 없는 첫 번째 줄
+    if name_candidates:
+        result["name"] = name_candidates[0]
+
+    for field, lines_acc in accumulated.items():
+        joined = "\n".join(lines_acc).strip()
+        if not joined:
+            continue
+        if field == "tech_stack":
+            result["tech_stack"] = [t.strip() for t in re.split(r"[,/·|]+", joined) if t.strip()]
+        else:
+            result[field] = joined
+
+    return result
+
+
+def _normalize_structured_projects(
+    raw_projects: list,
+    rule_based_texts: list[str],
+) -> list[dict[str, Any]]:
+    """LLM이 반환한 프로젝트 배열을 구조화 dict 배열로 정규화한다.
+
+    LLM이 string 배열을 반환하면 각 문자열을 _parse_project_block으로 파싱한다.
+    LLM이 object 배열을 반환하면 필드 이름을 정규화한다.
+    rule_based_texts가 LLM보다 많으면 규칙 기반 결과를 보존한다.
+    """
+    if not raw_projects:
+        # LLM 결과 없음 → 규칙 기반 텍스트 파싱
+        return [_parse_project_block(t) for t in rule_based_texts]
+
+    first = raw_projects[0] if raw_projects else None
+    if isinstance(first, str):
+        # LLM이 문자열 배열 반환 (이전 방식 호환)
+        llm_structs = [_parse_project_block(item) for item in raw_projects if isinstance(item, str)]
+    elif isinstance(first, dict):
+        llm_structs = [_normalize_project_dict(item) for item in raw_projects if isinstance(item, dict)]
+    else:
+        llm_structs = []
+
+    # 필터: 자기소개서 목차처럼 보이는 항목 제거
+    llm_structs = [p for p in llm_structs if not _project_looks_like_cover_letter(p)]
+
+    # 규칙 기반 결과가 더 많으면 규칙 기반 우선
+    if len(rule_based_texts) > len(llm_structs):
+        return [_parse_project_block(t) for t in rule_based_texts]
+    return llm_structs or [_parse_project_block(t) for t in rule_based_texts]
+
+
+def _normalize_project_dict(raw: dict) -> dict[str, Any]:
+    """LLM이 반환한 프로젝트 dict 키를 정규화한다."""
+    tech = raw.get("tech_stack") or []
+    if isinstance(tech, str):
+        tech = [t.strip() for t in re.split(r"[,/·|]+", tech) if t.strip()]
+    return {
+        "name": raw.get("name") or None,
+        "period": raw.get("period") or None,
+        "role": raw.get("role") or None,
+        "description": raw.get("description") or None,
+        "review": raw.get("review") or None,
+        "tech_stack": tech if isinstance(tech, list) else [],
+        "raw_text": raw.get("raw_text") or None,
+    }
+
+
+def _project_looks_like_cover_letter(project: dict) -> bool:
+    name = project.get("name") or ""
+    return _looks_like_cover_letter_item(name)
 
 
 def _drop_cover_letter_like_items(items: list[str]) -> list[str]:
