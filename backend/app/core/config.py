@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     # Google Gemini API (Free Tier 사용 가능)
     gemini_api_key: str = ""
 
+    # OpenAI API (이력서 면접 연습 기능 — 저비용 모델 사용)
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-5-mini"
+    openai_max_output_tokens: int = 6000
+
 
 # 전역 싱글톤
 settings = Settings()

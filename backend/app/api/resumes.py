@@ -1,8 +1,5 @@
-"""
-이력서 API 라우터
-"""
+"""Resume API routes."""
 
-import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile, status
@@ -16,6 +13,21 @@ from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
 from app.models.user import User
 from app.schemas.resume import ResumeDetail, ResumeListItem
+from app.schemas.resume_interview import (
+    InterviewAnswerRequest,
+    InterviewAnswerResponse,
+    InterviewSessionCreateResponse,
+    InterviewSessionDetailResponse,
+)
+from app.services.interview_practice_service import (
+    InterviewPracticeEvaluationError,
+    InterviewPracticeGenerationError,
+    InterviewPracticeInvalidResumeError,
+    InterviewPracticeProviderNotConfiguredError,
+    InterviewPracticeQuestionNotFoundError,
+    InterviewPracticeService,
+    InterviewPracticeSessionNotFoundError,
+)
 from app.services.resume_service import (
     ResumeFileTooLargeError,
     ResumeNotFoundError,
@@ -30,8 +42,15 @@ UPLOAD_READ_CHUNK_SIZE = 1024 * 1024
 
 
 def get_resume_service(db: Session = Depends(get_db)) -> ResumeService:
-    """ResumeService 의존성"""
+    """ResumeService dependency."""
     return ResumeService(db)
+
+
+def get_interview_practice_service(
+    db: Session = Depends(get_db),
+) -> InterviewPracticeService:
+    """InterviewPracticeService dependency."""
+    return InterviewPracticeService(db)
 
 
 @router.get("", response_model=list[ResumeListItem])
@@ -39,7 +58,7 @@ def list_resumes(
     current_user: User = Depends(get_current_user),
     resume_service: ResumeService = Depends(get_resume_service),
 ) -> list[ResumeListItem]:
-    """현재 사용자의 이력서 목록을 조회한다."""
+    """List resumes owned by the current user."""
     resumes = resume_service.list_resumes(current_user.user_id)
     return [ResumeListItem.model_validate(resume) for resume in resumes]
 
@@ -53,7 +72,7 @@ async def create_resume(
     current_user: User = Depends(get_current_user),
     resume_service: ResumeService = Depends(get_resume_service),
 ) -> ResumeDetail:
-    """이력서 파일을 업로드하고 텍스트 추출/기본 파싱을 수행한다."""
+    """Upload a resume file and parse its content."""
     content_type = file.content_type or "application/octet-stream"
     try:
         file_bytes = await _read_upload_file_limited(file)
@@ -61,7 +80,7 @@ async def create_resume(
         raise AppException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             code=ErrorCode.RESUME_FILE_TOO_LARGE,
-            message="이력서 파일은 최대 10MB까지 업로드할 수 있습니다.",
+            message="Resume files can be up to 10MB.",
         )
 
     try:
@@ -78,13 +97,13 @@ async def create_resume(
         raise AppException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             code=ErrorCode.RESUME_FILE_TOO_LARGE,
-            message="이력서 파일은 최대 10MB까지 업로드할 수 있습니다.",
+            message="Resume files can be up to 10MB.",
         )
     except ResumeUnsupportedFileTypeError:
         raise AppException(
             status_code=status.HTTP_400_BAD_REQUEST,
             code=ErrorCode.RESUME_UNSUPPORTED_FILE_TYPE,
-            message="PDF, DOCX, TXT 파일만 업로드할 수 있습니다.",
+            message="Only PDF, DOCX, and TXT files are supported.",
         )
 
     return ResumeDetail.model_validate(resume)
@@ -96,16 +115,144 @@ def get_resume(
     current_user: User = Depends(get_current_user),
     resume_service: ResumeService = Depends(get_resume_service),
 ) -> ResumeDetail:
-    """현재 사용자의 이력서 상세를 조회한다."""
+    """Return a resume owned by the current user."""
     try:
         resume = resume_service.get_resume(resume_id, current_user.user_id)
     except ResumeNotFoundError:
         raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,
             code=ErrorCode.RESUME_NOT_FOUND,
-            message="이력서를 찾을 수 없습니다.",
+            message="Resume not found.",
         )
     return ResumeDetail.model_validate(resume)
+
+
+@router.post(
+    "/{resume_id}/interview-sessions",
+    response_model=InterviewSessionCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_resume_interview_session(
+    resume_id: int,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    interview_practice_service: InterviewPracticeService = Depends(
+        get_interview_practice_service
+    ),
+) -> InterviewSessionCreateResponse:
+    """Create an interview practice session and persist 5 questions."""
+    try:
+        return interview_practice_service.create_session(
+            resume_id=resume_id,
+            user_id=current_user.user_id,
+            request_ip=get_client_ip(request),
+        )
+    except ResumeNotFoundError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.RESUME_NOT_FOUND,
+            message="Resume not found.",
+        )
+    except InterviewPracticeInvalidResumeError:
+        raise AppException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code=ErrorCode.RESUME_NOT_PARSED,
+            message="Resume parsing must be completed before interview practice.",
+        )
+    except InterviewPracticeProviderNotConfiguredError:
+        raise AppException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code=ErrorCode.OPENAI_API_KEY_MISSING,
+            message="OpenAI API configuration is required.",
+        )
+    except InterviewPracticeGenerationError:
+        raise AppException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code=ErrorCode.INTERVIEW_QUESTION_GENERATION_FAILED,
+            message="Failed to generate interview questions. Please try again later.",
+        )
+
+
+@router.get(
+    "/{resume_id}/interview-sessions/{session_id}",
+    response_model=InterviewSessionDetailResponse,
+)
+def get_resume_interview_session(
+    resume_id: int,
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    interview_practice_service: InterviewPracticeService = Depends(
+        get_interview_practice_service
+    ),
+) -> InterviewSessionDetailResponse:
+    """Return a persisted interview session without calling OpenAI."""
+    try:
+        return interview_practice_service.get_session(
+            resume_id=resume_id,
+            session_id=session_id,
+            user_id=current_user.user_id,
+        )
+    except ResumeNotFoundError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.RESUME_NOT_FOUND,
+            message="Resume not found.",
+        )
+    except InterviewPracticeSessionNotFoundError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.INTERVIEW_SESSION_NOT_FOUND,
+            message="Interview practice session not found.",
+        )
+
+
+@router.post(
+    "/{resume_id}/interview-questions/{question_id}/answer",
+    response_model=InterviewAnswerResponse,
+)
+def submit_resume_interview_answer(
+    resume_id: int,
+    question_id: int,
+    payload: InterviewAnswerRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    interview_practice_service: InterviewPracticeService = Depends(
+        get_interview_practice_service
+    ),
+) -> InterviewAnswerResponse:
+    """Evaluate and persist one answer for an interview practice question."""
+    try:
+        return interview_practice_service.submit_answer(
+            resume_id=resume_id,
+            question_id=question_id,
+            user_id=current_user.user_id,
+            answer=payload.answer,
+            request_ip=get_client_ip(request),
+        )
+    except ResumeNotFoundError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.RESUME_NOT_FOUND,
+            message="Resume not found.",
+        )
+    except InterviewPracticeQuestionNotFoundError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.INTERVIEW_QUESTION_NOT_FOUND,
+            message="Interview question not found.",
+        )
+    except InterviewPracticeProviderNotConfiguredError:
+        raise AppException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code=ErrorCode.OPENAI_API_KEY_MISSING,
+            message="OpenAI API configuration is required.",
+        )
+    except InterviewPracticeEvaluationError:
+        raise AppException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code=ErrorCode.INTERVIEW_ANSWER_EVALUATION_FAILED,
+            message="Failed to evaluate interview answer. Please try again later.",
+        )
 
 
 @router.get("/{resume_id}/file")
@@ -114,14 +261,14 @@ def get_resume_file(
     current_user: User = Depends(get_current_user),
     resume_service: ResumeService = Depends(get_resume_service),
 ) -> FileResponse:
-    """이력서 원본 파일을 스트리밍한다 (프리뷰용)."""
+    """Stream the original resume file for preview."""
     try:
         resume = resume_service.get_resume(resume_id, current_user.user_id)
     except ResumeNotFoundError:
         raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,
             code=ErrorCode.RESUME_NOT_FOUND,
-            message="이력서를 찾을 수 없습니다.",
+            message="Resume not found.",
         )
 
     file_path = Path(resume.file_path)
@@ -129,7 +276,7 @@ def get_resume_file(
         raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,
             code=ErrorCode.RESUME_NOT_FOUND,
-            message="이력서 파일을 실제 저장소에서 찾을 수 없습니다.",
+            message="Resume file not found in storage.",
         )
 
     return FileResponse(
@@ -146,7 +293,7 @@ def delete_resume(
     current_user: User = Depends(get_current_user),
     resume_service: ResumeService = Depends(get_resume_service),
 ) -> Response:
-    """현재 사용자의 이력서를 소프트 삭제한다."""
+    """Soft-delete a resume owned by the current user."""
     try:
         resume_service.delete_resume(
             resume_id,
@@ -157,13 +304,13 @@ def delete_resume(
         raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,
             code=ErrorCode.RESUME_NOT_FOUND,
-            message="이력서를 찾을 수 없습니다.",
+            message="Resume not found.",
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 async def _read_upload_file_limited(file: UploadFile) -> bytes:
-    """설정된 최대 용량을 넘기면 전체 파일을 메모리에 올리지 않고 중단한다."""
+    """Read an upload while enforcing the configured max file size."""
     max_bytes = settings.resume_max_upload_mb * 1024 * 1024
     chunks: list[bytes] = []
     total_size = 0

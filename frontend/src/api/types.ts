@@ -129,6 +129,76 @@ export interface ResumeUpdatePayload {
   structured_cover_letter_sections?: { title: string; content: string }[] | null;
 }
 
+export type InterviewQuestionType =
+  | 'PROJECT'
+  | 'TECH_STACK'
+  | 'EXPERIENCE'
+  | 'COVER_LETTER'
+  | 'JOB_FIT';
+
+export type InterviewQuestionSource =
+  | 'parsed_data'
+  | 'project'
+  | 'cover_letter'
+  | 'tech_stack'
+  | 'experience';
+
+export type InterviewVerdict = 'GOOD' | 'PARTIAL' | 'INSUFFICIENT' | 'UNKNOWN';
+export type InterviewSessionStatus = 'IN_PROGRESS' | 'COMPLETED';
+
+export interface InterviewReference {
+  title: string;
+  url: string;
+  summary?: string | null;
+}
+
+export interface InterviewReferenceUsed {
+  title: string;
+  url: string;
+}
+
+export interface InterviewAnswerResponse {
+  answer_id: number;
+  question_id: number;
+  user_answer: string;
+  score: number;
+  max_score: number;
+  verdict: InterviewVerdict;
+  strengths: string[];
+  missing_points: string[];
+  incorrect_points: string[];
+  correct_points: string[];
+  different_points: string[];
+  feedback: string;
+  reference_based_answer: string;
+  official_references_used: InterviewReferenceUsed[];
+  model: string;
+}
+
+export interface InterviewQuestionResponse {
+  question_id: number;
+  display_order: number;
+  question: string;
+  question_type: InterviewQuestionType;
+  source: InterviewQuestionSource;
+  intent: string;
+  difficulty: string;
+  expected_keywords: string[];
+  official_references: InterviewReference[];
+  max_score: number;
+  answer: InterviewAnswerResponse | null;
+}
+
+export interface InterviewSessionResponse {
+  session_id: number;
+  resume_id: number;
+  status: InterviewSessionStatus;
+  model: string;
+  total_score: number | null;
+  max_score: number;
+  questions: InterviewQuestionResponse[];
+}
+
 // 채용공고 (mock UI용)
 export interface Job {
   id: string;

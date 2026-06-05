@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { Resume } from './types';
+import type { InterviewAnswerResponse, InterviewSessionResponse, Resume } from './types';
 
 export interface UploadResumeParams {
   file: File;
@@ -32,6 +32,41 @@ export const resumesApi = {
 
   deleteResume: async (resumeId: number): Promise<void> => {
     await apiClient.delete(`/resumes/${resumeId}`);
+  },
+
+  createInterviewSession: async (
+    resumeId: number,
+  ): Promise<InterviewSessionResponse> => {
+    const res = await apiClient.post<InterviewSessionResponse>(
+      `/resumes/${resumeId}/interview-sessions`,
+    );
+    return res.data;
+  },
+
+  getInterviewSession: async (
+    resumeId: number,
+    sessionId: number,
+  ): Promise<InterviewSessionResponse> => {
+    const res = await apiClient.get<InterviewSessionResponse>(
+      `/resumes/${resumeId}/interview-sessions/${sessionId}`,
+    );
+    return res.data;
+  },
+
+  submitInterviewAnswer: async ({
+    resumeId,
+    questionId,
+    answer,
+  }: {
+    resumeId: number;
+    questionId: number;
+    answer: string;
+  }): Promise<InterviewAnswerResponse> => {
+    const res = await apiClient.post<InterviewAnswerResponse>(
+      `/resumes/${resumeId}/interview-questions/${questionId}/answer`,
+      { answer },
+    );
+    return res.data;
   },
 
   getResumeFileUrl: (resumeId: number): string => {
