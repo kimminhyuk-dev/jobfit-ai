@@ -1,95 +1,105 @@
 # JobFit AI
 
-> AI 기반 이력서-채용공고 매칭 플랫폼. 이력서와 공고를 벡터 임베딩으로 분석하고, LLM이 매칭도·강점·약점을 해석해 커리어 의사결정을 돕습니다. MCP(Model Context Protocol) 서버를 통해 Claude Desktop에서 자연어로 직접 조회·상담할 수 있습니다.
+AI-assisted resume and job-posting matching platform for a portfolio/demo environment.
 
-**Status**: 🚧 개발 중 (2026.04 ~ )
+JobFit AI helps job seekers manage resumes, browse job postings, send a resume to a posting, track applications, and practice interview questions generated from their parsed resume. It also includes company and admin areas so the demo can show a full application flow.
 
----
+## Current Status
 
-## 프로젝트 배경
+Active development. The current app is a 3-role platform:
 
-취업 준비 과정에서 겪은 문제 의식에서 출발한 개인 포트폴리오 프로젝트입니다.
+- `USER`: job seeker pages for dashboard, jobs, applications, resumes, profile, and interview practice.
+- `COMPANY`: company login and dashboard for received applications.
+- `ADMIN`: admin dashboard, categories/posts, user/resume management, job collection controls.
 
-- 채용공고는 쏟아지지만 "내 이력서와 얼마나 맞는지" 객관적으로 확인하기 어렵다
-- LLM(ChatGPT, Claude)에 물어보면 답은 잘 해주지만, 매번 이력서와 공고를 수동으로 붙여넣어야 한다
-- MCP(Model Context Protocol)를 활용하면 AI 비서에게 영구적인 커리어 컨텍스트를 제공할 수 있지 않을까?
+## Tech Stack
 
-## 주요 기능 (계획)
+| Area | Stack |
+|---|---|
+| Backend | Python 3.12, FastAPI, SQLAlchemy 2.0, Alembic, PostgreSQL 16, Pydantic v2 |
+| Frontend | Next.js 16 App Router, React 19, TypeScript, Tailwind CSS v4 |
+| State/forms | TanStack Query, React Hook Form, Zod |
+| UI | shadcn/ui-style components, Tailwind utility classes |
+| Auth | JWT access token, HttpOnly refresh token cookie |
+| AI | OpenAI API for interview practice, Gemini fallback for resume parsing |
+| Planned matching | sentence-transformers + pgvector |
+| Infra | Docker Compose, GitHub Actions |
 
-### 핵심 기능
-- 📄 이력서 업로드 (PDF/DOCX 파싱 → 구조화)
-- 🔍 채용공고 자동 수집 (ALIO 공공기관 채용정보 API / 사람인 API / 수동 입력)
-- 🎯 이력서-공고 매칭도 계산 (벡터 임베딩 기반 코사인 유사도)
-- 🤖 LLM 분석 (강점·약점·개선 제안)
-- ⭐ 즐겨찾기 및 지원 이력 관리
+## Main Features
 
-## 기술 스택
+- Auth with signup, login, refresh, logout, current-user, profile update, and account deletion.
+- Split login portals:
+  - `/login` for normal users.
+  - `/company/login` for company and admin accounts.
+- Resume upload and parsing, including structured projects and cover letter sections.
+- OpenAI interview practice:
+  - Create an interview session from a parsed resume.
+  - Persist exactly 5 questions.
+  - Evaluate answers one at a time.
+  - Never call OpenAI during session lookup.
+  - Do not use OpenAI Web Search.
+- Job posting list/detail with filters and real backend APIs.
+- Application flow through "이력서 보내기".
+- User application history at `/user/applications`.
+- Company dashboard at `/company/dashboard`.
+- Admin user/resume/category/job controls.
+- Demo seeding scripts for accounts and mock Work24-shaped job postings.
 
-### Backend
-- **FastAPI** (Python 3.12+)
-- **SQLAlchemy 2.0** + Alembic
-- **PostgreSQL 16**
-- **Pydantic v2**
-- **python-jose** + passlib[bcrypt]
-- **httpx** (외부 API 비동기 호출)
+## Important Backend Endpoints
 
-### AI / ML
-- **Anthropic Claude API** (LLM 호출)
-- **sentence-transformers** (한국어 임베딩)
-- **pgvector** 또는 ChromaDB (벡터 저장소)
-- **MCP Python SDK**
+- Auth: `/auth/signup`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me`
+- Jobs: `GET /jobs`, `GET /jobs/filter-options`, `GET /jobs/{job_id}`
+- Applications: `POST /applications`, `GET /applications/me`
+- Company: `GET /company/dashboard`
+- Resumes: `POST /resumes`, `GET /resumes`, `GET /resumes/{id}`, `GET /resumes/{id}/file`, `DELETE /resumes/{id}`
+- Interview practice:
+  - `POST /resumes/{resume_id}/interview-sessions`
+  - `GET /resumes/{resume_id}/interview-sessions/{session_id}`
+  - `POST /resumes/{resume_id}/interview-questions/{question_id}/answer`
+- Admin: `/admin/stats`, `/admin/users`, `/admin/categories`, `/admin/job-sources/alio/collect`, `/admin/jobs/sources/mock/load`
 
-### Frontend
-- **React 19** + TypeScript
-- **Vite 8**
-- **Tailwind CSS v4**
-- **axios**
-- **TanStack Query**
-- **React Router v7**
-- **React Hook Form** + Zod
-- **shadcn/ui 스타일 컴포넌트** (Radix Slot, CVA, tailwind-merge 기반)
+## Development
 
-### Infrastructure
-- **Docker** + Docker Compose
-- **GitHub Actions** (CI)
+Backend:
 
-> 수집된 공고 데이터는 상업적 재배포 없이 개인 포트폴리오 시연 및 기능 학습 목적으로만 사용합니다.
+```powershell
+docker-compose up -d db
+cd backend
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+alembic upgrade head
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
 
-## 채용공고 수집 방향
+Frontend:
 
-- 현재 메인 공공기관 채용 수집원은 ALIO 공공기관 채용정보 API이며 `ACTIVE` 상태입니다.
-- Work24/고용24는 키는 발급됐으나 일반 사용자 API 사용 제한으로 `PENDING_APPROVAL` 보류 상태이며 기존 코드는 삭제하지 않습니다.
-- 수집원 상태는 `job_sources` 테이블에서 관리하고, `ACTIVE`가 아닌 수집원은 외부 API 호출 전 `BLOCKED`로 기록합니다.
-- ALIO 설정은 `backend/.env`에서 `ALIO_BASE_URL`, `ALIO_API_KEY`만 관리합니다.
-- ALIO 목록/상세 endpoint path는 코드 상수로 관리하며, `ALIO_RECRUIT_LIST_URL`, `ALIO_RECRUIT_DETAIL_URL` 같은 전체 URL 환경 변수는 deprecated입니다.
-- 기존 로컬 `.env`에 deprecated ALIO endpoint URL이 남아 있어도 클라이언트에서 현재 코드 상수 기반 URL로 보정합니다.
-- 프론트엔드는 외부 ALIO API를 직접 호출하지 않고 백엔드 `GET /jobs`로 DB 저장 공고만 조회합니다.
-- 자동 배치는 추후 GitHub Actions, Jenkins, APScheduler 등으로 확장하고, 현재는 관리자 수동 수집 API로 검증합니다.
+```powershell
+cd frontend
+npm install
+npm run dev
+```
 
-## 로드맵
+Root helper scripts:
 
-- [x] 프로젝트 기획 및 기술 스택 결정
-- [x] 개발환경 세팅 (Docker, FastAPI 뼈대)
-- [x] 회원/인증 시스템 (JWT + Refresh Rotation)
-- [ ] 권한/메뉴 관리 (RBAC + 매트릭스)
-- [x] 관리자 권한 기반 카테고리/Q&A 게시판 CRUD API
-- [x] 공통 에러코드 기반 API 에러 응답
-- [x] ALIO 공공기관 채용정보 수집 기반 구조 및 관리자 수동 수집 API
-- [x] 사용자 채용공고 조회 API (`GET /jobs`)
-- [ ] 이력서 파싱 (PDF → 구조화 데이터)
-- [ ] 공고 수집 자동 배치
-- [ ] 벡터 임베딩 + 매칭 알고리즘
-- [ ] LLM 분석 레이어
-- [x] React 19 + Tailwind CSS 프론트엔드 초기 구현
-- [x] TanStack Query / React Hook Form / Zod / shadcn 스타일 UI 기반 반영
-- [x] Vite 8 / Tailwind CSS v4 전환 및 프론트엔드 도구체인 최신화
-- [ ] 프론트엔드 관리자 카테고리/Q&A 화면 실제 API 연결
-- [ ] MCP 서버 구현
-- [ ] Docker Compose 통합 배포
-- [ ] 데모 영상 및 문서화
+```powershell
+npm run dev
+npm run lint
+npm run build
+```
 
-## 면책 조항
+## Verification
 
-- 본 프로젝트는 개인 포트폴리오 및 기술 학습 목적으로 제작됩니다
-- 채용 결정 또는 고용 조언의 공식 도구가 아닙니다
-- 외부 API에서 수집된 데이터의 재배포 없이 개인 사용에 한정합니다
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m compileall app
+
+cd ..\frontend
+npm run lint
+npm run build
+```
+
+## Notes
+
+- Demo company accounts are auto-created for ingested postings and use synthetic emails plus the demo password convention `admin1234`. This is not production-safe.
+- Do not commit `.env` values, API keys, tokens, or secrets.
+- `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` are intentionally synchronized.

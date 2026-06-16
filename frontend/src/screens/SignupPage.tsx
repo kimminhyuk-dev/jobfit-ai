@@ -11,8 +11,12 @@ import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { authApi } from '../api/auth';
+import type { SignupRequest } from '../api/auth';
 import { useAuth } from '../stores/authContext';
 import type { ApiError } from '../api/client';
+import type { Gender } from '../api/types';
+import AddressFields from '../components/profile/AddressFields';
+import TechStackInput from '../components/profile/TechStackInput';
 
 const signupSchema = z.object({
   name: z.string().min(1, '이름을 입력하세요.').max(50, '이름은 50자 이하로 입력하세요.'),
@@ -29,6 +33,15 @@ export default function SignupPage() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string>>({});
+
+  // 추가 프로필 (선택 입력)
+  const [birthDate, setBirthDate] = useState('');
+  const [phone, setPhone] = useState('');
+  const [gender, setGender] = useState<'' | Gender>('');
+  const [zipcode, setZipcode] = useState('');
+  const [address1, setAddress1] = useState('');
+  const [address2, setAddress2] = useState('');
+  const [techStack, setTechStack] = useState<string[]>([]);
   const {
     register,
     handleSubmit,
@@ -46,7 +59,17 @@ export default function SignupPage() {
     setError(null);
     setServerFieldErrors({});
     try {
-      const res = await authApi.signup(values);
+      const body: SignupRequest = {
+        ...values,
+        birth_date: birthDate || null,
+        phone: phone.trim() || null,
+        gender: gender || null,
+        zipcode: zipcode || null,
+        address1: address1 || null,
+        address2: address2.trim() || null,
+        tech_stack: techStack.length ? techStack : null,
+      };
+      const res = await authApi.signup(body);
       login(res.user);
       router.push('/user/resumes');
     } catch (err) {
@@ -153,6 +176,58 @@ export default function SignupPage() {
               </div>
               {fieldError('password') && <p className="mt-1 text-[12px] text-m-danger">{fieldError('password')}</p>}
             </div>
+
+            {/* 추가 정보 (선택) */}
+            <div className="pt-1">
+              <p className="text-[12px] font-semibold text-m-muted">추가 정보 <span className="font-normal text-m-subtle">(선택)</span></p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-medium text-m-muted mb-1.5">생년월일</label>
+                <Input
+                  type="date"
+                  max={new Date().toISOString().slice(0, 10)}
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                />
+                {serverFieldErrors['birth_date'] && <p className="mt-1 text-[12px] text-m-danger">{serverFieldErrors['birth_date']}</p>}
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-m-muted mb-1.5">성별</label>
+                <select
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value as '' | Gender)}
+                  className="w-full h-10 px-3 rounded-lg border border-m-border text-[14px] text-m-text bg-m-surface focus:outline-none focus:border-m-primary focus:ring-1 focus:ring-m-primary"
+                >
+                  <option value="">선택 안 함</option>
+                  <option value="MALE">남성</option>
+                  <option value="FEMALE">여성</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[12px] font-medium text-m-muted mb-1.5">전화번호</label>
+              <Input
+                inputMode="numeric"
+                placeholder="010-1234-5678"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+              {serverFieldErrors['phone'] && <p className="mt-1 text-[12px] text-m-danger">{serverFieldErrors['phone']}</p>}
+            </div>
+
+            <AddressFields
+              value={{ zipcode, address1, address2 }}
+              onChange={(next) => {
+                if (next.zipcode !== undefined) setZipcode(next.zipcode);
+                if (next.address1 !== undefined) setAddress1(next.address1);
+                if (next.address2 !== undefined) setAddress2(next.address2);
+              }}
+            />
+
+            <TechStackInput value={techStack} onChange={setTechStack} />
 
             {/* Global error */}
             {error && <Alert variant="danger">{error}</Alert>}

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -15,6 +16,9 @@ from sqlalchemy.orm import Session
 from app.models.batch_job_run import BatchJobRun
 from app.models.job_posting import JobPosting
 from app.repositories.job_posting_repository import JobPostingRepository
+from app.services.company_provisioning_service import CompanyProvisioningService
+
+logger = logging.getLogger(__name__)
 
 
 class JobPostingSaveError(Exception):
@@ -27,6 +31,26 @@ class JobPostingService:
     def __init__(self, db: Session):
         self.db = db
         self.job_posting_repository = JobPostingRepository(db)
+        self.company_provisioning_service = CompanyProvisioningService(db)
+
+    def _ensure_company_account(
+        self,
+        company_name: str | None,
+        business_number: str | None,
+    ) -> None:
+        """공고 회사의 기업계정을 보장한다. 실패해도 공고 저장은 유지한다."""
+        try:
+            self.company_provisioning_service.ensure_company(
+                company_name=company_name,
+                business_number=business_number,
+            )
+        except Exception as exc:  # noqa: BLE001 - 회사 계정 생성 실패를 격리
+            self.db.rollback()
+            logger.warning(
+                "기업계정 자동 생성 실패 (company_name=%s): %s",
+                company_name,
+                exc,
+            )
 
     def save_from_work24(
         self,
@@ -84,6 +108,11 @@ class JobPostingService:
         except Exception as exc:
             self.db.rollback()
             raise JobPostingSaveError("채용공고 저장에 실패했습니다.") from exc
+
+        self._ensure_company_account(
+            mapped_data.get("company_name"),
+            mapped_data.get("business_number"),
+        )
 
         if inserted:
             return posting, "INSERTED"
@@ -156,6 +185,11 @@ class JobPostingService:
         except Exception as exc:
             self.db.rollback()
             raise JobPostingSaveError("ALIO 채용공고 저장에 실패했습니다.") from exc
+
+        self._ensure_company_account(
+            mapped_data.get("company_name"),
+            mapped_data.get("business_number"),
+        )
 
         if inserted:
             return posting, "INSERTED"

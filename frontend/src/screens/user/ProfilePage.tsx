@@ -7,16 +7,32 @@ import Icon from '../../components/ui/Icon';
 import { useAuth } from '../../stores/authContext';
 import { authApi } from '../../api/auth';
 import type { UserUpdateRequest } from '../../api/auth';
+import type { ApiError, Gender } from '../../api/types';
+import AddressFields from '../../components/profile/AddressFields';
+import TechStackInput from '../../components/profile/TechStackInput';
 
 type Section = 'info' | 'password' | 'danger';
+
+function errorMessage(e: unknown, fallback: string): string {
+  const err = e as ApiError;
+  if (err?.details?.length) return err.details[0].msg;
+  return err?.message ?? fallback;
+}
 
 export default function ProfilePage() {
   const { user, setUser, logout } = useAuth();
   const router = useRouter();
   const [section, setSection] = useState<Section>('info');
 
-  // 이름 수정
+  // 기본 정보 수정
   const [name, setName] = useState(user?.name ?? '');
+  const [birthDate, setBirthDate] = useState(user?.birth_date ?? '');
+  const [phone, setPhone] = useState(user?.phone ?? '');
+  const [gender, setGender] = useState<'' | Gender>(user?.gender ?? '');
+  const [zipcode, setZipcode] = useState(user?.zipcode ?? '');
+  const [address1, setAddress1] = useState(user?.address1 ?? '');
+  const [address2, setAddress2] = useState(user?.address2 ?? '');
+  const [techStack, setTechStack] = useState<string[]>(user?.tech_stack ?? []);
   const [nameSuccess, setNameSuccess] = useState('');
   const [nameError, setNameError] = useState('');
 
@@ -46,23 +62,34 @@ export default function ProfilePage() {
     },
   });
 
-  function handleNameSubmit(e: React.FormEvent) {
+  function handleInfoSubmit(e: React.FormEvent) {
     e.preventDefault();
     setNameError('');
     setNameSuccess('');
     const trimmed = name.trim();
     if (!trimmed) { setNameError('이름을 입력해 주세요.'); return; }
-    if (trimmed === (user?.name ?? '')) { setNameError('변경할 내용이 없습니다.'); return; }
-    updateMutation.mutate(
-      { name: trimmed },
-      {
-        onSuccess: () => setNameSuccess('이름이 저장되었습니다.'),
-        onError: (e: unknown) => {
-          const err = e as { response?: { data?: { message?: string } } };
-          setNameError(err.response?.data?.message ?? '저장에 실패했습니다.');
-        },
+    const body: UserUpdateRequest = {
+      name: trimmed,
+      birth_date: birthDate || null,
+      phone: phone.trim() || null,
+      gender: gender || null,
+      zipcode: zipcode || null,
+      address1: address1 || null,
+      address2: address2.trim() || null,
+      tech_stack: techStack,
+    };
+    updateMutation.mutate(body, {
+      onSuccess: (updated) => {
+        setNameSuccess('저장되었습니다.');
+        // 서버 정규화 결과로 동기화 (예: 전화번호 하이픈)
+        setPhone(updated.phone ?? '');
+        setZipcode(updated.zipcode ?? '');
+        setAddress1(updated.address1 ?? '');
+        setAddress2(updated.address2 ?? '');
+        setTechStack(updated.tech_stack ?? []);
       },
-    );
+      onError: (err: unknown) => setNameError(errorMessage(err, '저장에 실패했습니다.')),
+    });
   }
 
   function handlePasswordSubmit(e: React.FormEvent) {
@@ -153,7 +180,7 @@ export default function ProfilePage() {
       {section === 'info' && (
         <div className="bg-m-surface border border-m-border rounded-xl p-5">
           <h2 className="text-[15px] font-semibold text-m-text mb-4">기본 정보 수정</h2>
-          <form onSubmit={handleNameSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleInfoSubmit} className="flex flex-col gap-4">
             <div>
               <label className="text-[12px] font-medium text-m-muted block mb-1.5">이메일</label>
               <input
@@ -173,6 +200,58 @@ export default function ProfilePage() {
                 className="w-full h-10 px-3 rounded-lg border border-m-border text-[13px] text-m-text focus:outline-none focus:border-m-primary focus:ring-1 focus:ring-m-primary"
               />
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[12px] font-medium text-m-muted block mb-1.5">생년월일</label>
+                <input
+                  type="date"
+                  value={birthDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => { setBirthDate(e.target.value); setNameError(''); setNameSuccess(''); }}
+                  className="w-full h-10 px-3 rounded-lg border border-m-border text-[13px] text-m-text focus:outline-none focus:border-m-primary focus:ring-1 focus:ring-m-primary"
+                />
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-m-muted block mb-1.5">성별</label>
+                <select
+                  value={gender}
+                  onChange={(e) => { setGender(e.target.value as '' | Gender); setNameError(''); setNameSuccess(''); }}
+                  className="w-full h-10 px-3 rounded-lg border border-m-border text-[13px] text-m-text bg-m-surface focus:outline-none focus:border-m-primary focus:ring-1 focus:ring-m-primary"
+                >
+                  <option value="">선택 안 함</option>
+                  <option value="MALE">남성</option>
+                  <option value="FEMALE">여성</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[12px] font-medium text-m-muted block mb-1.5">전화번호</label>
+              <input
+                value={phone}
+                onChange={(e) => { setPhone(e.target.value); setNameError(''); setNameSuccess(''); }}
+                inputMode="numeric"
+                maxLength={20}
+                placeholder="010-1234-5678"
+                className="w-full h-10 px-3 rounded-lg border border-m-border text-[13px] text-m-text focus:outline-none focus:border-m-primary focus:ring-1 focus:ring-m-primary"
+              />
+            </div>
+
+            <AddressFields
+              value={{ zipcode, address1, address2 }}
+              onChange={(next) => {
+                if (next.zipcode !== undefined) setZipcode(next.zipcode);
+                if (next.address1 !== undefined) setAddress1(next.address1);
+                if (next.address2 !== undefined) setAddress2(next.address2);
+                setNameError(''); setNameSuccess('');
+              }}
+            />
+
+            <TechStackInput
+              value={techStack}
+              onChange={(next) => { setTechStack(next); setNameError(''); setNameSuccess(''); }}
+            />
 
             {nameError && (
               <p className="text-[12px] text-red-600 bg-red-50 px-3 py-2 rounded-lg">{nameError}</p>

@@ -14,20 +14,34 @@ import { Input } from '../components/ui/input';
 import { authApi } from '../api/auth';
 import { useAuth } from '../stores/authContext';
 import type { ApiError } from '../api/client';
+import type { User } from '../api/types';
 
 const loginSchema = z.object({
-  email: z.string().email('올바른 이메일을 입력하세요.'),
+  email: z.string().trim().min(1, '이메일 또는 사업자번호를 입력하세요.'),
   password: z.string().min(1, '비밀번호를 입력하세요.'),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-export default function LoginPage() {
-  const router = useRouter();
-  const { login } = useAuth();
+type LoginPortal = 'user' | 'company';
 
+interface LoginPageProps {
+  portal?: LoginPortal;
+}
+
+function routeForUser(user: User): string {
+  if (user.role === 'ADMIN') return '/admin/dashboard';
+  if (user.role === 'COMPANY') return '/company/dashboard';
+  return '/user/dashboard';
+}
+
+export default function LoginPage({ portal = 'user' }: LoginPageProps) {
+  const router = useRouter();
+  const { login, logout } = useAuth();
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isCompanyPortal = portal === 'company';
+
   const {
     register,
     handleSubmit,
@@ -44,8 +58,20 @@ export default function LoginPage() {
     setError(null);
     try {
       const res = await authApi.login(values);
+      const isAllowed = isCompanyPortal
+        ? res.user.role === 'COMPANY' || res.user.role === 'ADMIN'
+        : res.user.role === 'USER';
+      if (!isAllowed) {
+        await logout();
+        setError(
+          isCompanyPortal
+            ? '기업회원 또는 관리자 계정으로 로그인하세요.'
+            : '일반회원 계정으로 로그인하세요.',
+        );
+        return;
+      }
       login(res.user);
-      router.push(res.user.role === 'ADMIN' ? '/admin/dashboard' : '/user/dashboard');
+      router.push(routeForUser(res.user));
     } catch (err) {
       const apiErr = err as ApiError;
       setError(apiErr.message ?? '로그인에 실패했습니다.');
@@ -54,9 +80,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex h-screen bg-m-bg font-sans">
-      {/* Left — form panel */}
       <div className="flex-[0_0_50%] flex flex-col bg-m-surface px-16 py-12 justify-between">
-        {/* Logo */}
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-m-primary flex items-center justify-center text-white">
             <Icon name="target" size={17} />
@@ -64,22 +88,26 @@ export default function LoginPage() {
           <span className="font-bold text-[16px] text-m-text tracking-tight">JobFit AI</span>
         </div>
 
-        {/* Form */}
         <div className="max-w-[380px] w-full mx-auto">
-          <h1 className="text-[28px] font-bold text-m-text tracking-tight leading-tight">다시 만나서 반가워요</h1>
+          <h1 className="text-[28px] font-bold text-m-text tracking-tight leading-tight">
+            {isCompanyPortal ? '기업회원 · 관리자 로그인' : '일반회원 로그인'}
+          </h1>
           <p className="text-[14px] text-m-muted mt-2 mb-8 leading-relaxed">
-            이력서를 분석하고 맞춤 채용공고를 추천해 드릴게요.
+            {isCompanyPortal
+              ? '사업자번호 또는 관리자 이메일로 접속하세요.'
+              : '이메일로 로그인하고 맞춤 채용공고를 확인하세요.'}
           </p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-            {/* Email */}
             <div>
-              <label className="block text-[12px] font-medium text-m-muted mb-1.5">이메일</label>
+              <label className="block text-[12px] font-medium text-m-muted mb-1.5">
+                {isCompanyPortal ? '이메일 또는 사업자번호' : '이메일'}
+              </label>
               <div className="relative">
                 <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  autoComplete="email"
+                  type="text"
+                  placeholder={isCompanyPortal ? 'you@example.com 또는 123-45-67890' : 'you@example.com'}
+                  autoComplete="username"
                   className="pl-10"
                   {...register('email')}
                 />
@@ -90,7 +118,6 @@ export default function LoginPage() {
               {errors.email && <p className="mt-1 text-[12px] text-m-danger">{errors.email.message}</p>}
             </div>
 
-            {/* Password */}
             <div>
               <div className="flex justify-between mb-1.5">
                 <label className="text-[12px] font-medium text-m-muted">비밀번호</label>
@@ -120,54 +147,56 @@ export default function LoginPage() {
               {errors.password && <p className="mt-1 text-[12px] text-m-danger">{errors.password.message}</p>}
             </div>
 
-            {/* Error */}
             {error && <Alert variant="danger">{error}</Alert>}
 
-            {/* Submit */}
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="mt-1"
-            >
+            <Button type="submit" disabled={isSubmitting} className="mt-1">
               {isSubmitting ? '로그인 중...' : '로그인'}
               {!isSubmitting && <Icon name="arrow" size={16} />}
             </Button>
 
-            {/* Divider */}
             <div className="flex items-center gap-3 text-m-subtle text-[12px]">
               <div className="flex-1 h-px bg-m-border" />
               또는
               <div className="flex-1 h-px bg-m-border" />
             </div>
 
-            {/* Google */}
-            <Button
-              type="button"
-              variant="outline"
-              className="font-medium"
-            >
+            <Button type="button" variant="outline" className="font-medium">
               <Icon name="google" size={16} strokeWidth={0} />
               Google로 계속하기
             </Button>
           </form>
 
           <p className="text-[13px] text-m-muted text-center mt-7">
-            계정이 없으신가요?{' '}
-            <Link href="/signup" className="text-m-primary font-medium hover:underline">
-              회원가입
-            </Link>
+            {isCompanyPortal ? (
+              <>
+                일반회원이신가요?{' '}
+                <Link href="/login" className="text-m-primary font-medium hover:underline">
+                  일반회원 로그인
+                </Link>
+              </>
+            ) : (
+              <>
+                기업회원 또는 관리자이신가요?{' '}
+                <Link href="/company/login" className="text-m-primary font-medium hover:underline">
+                  기업회원 로그인
+                </Link>
+                <br />
+                계정이 없으신가요?{' '}
+                <Link href="/signup" className="text-m-primary font-medium hover:underline">
+                  회원가입
+                </Link>
+              </>
+            )}
           </p>
         </div>
 
         <p className="text-[11px] text-m-subtle">© 2026 JobFit AI · 개인정보 보호</p>
       </div>
 
-      {/* Right — marketing panel */}
       <div
         className="flex-1 flex flex-col justify-center p-12 relative overflow-hidden"
         style={{ background: 'linear-gradient(135deg, #1d4ed8 0%, #1e1b4b 100%)' }}
       >
-        {/* Grid bg */}
         <svg className="absolute inset-0 opacity-[0.07]" width="100%" height="100%">
           <defs>
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -183,13 +212,14 @@ export default function LoginPage() {
             AI 분석 v3.2
           </div>
           <h2 className="text-[32px] font-bold text-white leading-tight tracking-tight">
-            이력서를 올리면<br />어울리는 회사가 보여요.
+            이력서를 올리면
+            <br />
+            어울리는 회사가 보여요
           </h2>
           <p className="text-[15px] text-white/80 mt-4 mb-8 leading-relaxed">
-            매일 1만 건의 채용공고와 비교 분석합니다. 내 이력의 강점과 보완할 점을 LLM이 짚어드릴게요.
+            매일 수집되는 채용공고와 비교해 강점과 보완점을 알려드립니다.
           </p>
 
-          {/* Preview card */}
           <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 flex items-center gap-4">
             <Gauge
               score={94}
@@ -205,7 +235,7 @@ export default function LoginPage() {
             />
             <div className="flex-1 min-w-0">
               <p className="text-[11px] text-white/60 font-medium tracking-widest uppercase">최고 매칭</p>
-              <p className="text-[15px] font-semibold text-white mt-1">네오랩스 · 프론트엔드 엔지니어</p>
+              <p className="text-[15px] font-semibold text-white mt-1">프론트엔드 엔지니어</p>
               <div className="flex gap-1.5 mt-2 flex-wrap">
                 {['React', 'TypeScript', 'Next.js'].map((s) => (
                   <span key={s} className="text-[11px] px-2 py-0.5 bg-white/15 rounded text-white font-medium">
@@ -216,7 +246,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Stats */}
           <div className="flex gap-8 mt-8">
             {[
               { v: '12,400+', l: '활성 채용공고' },

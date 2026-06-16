@@ -232,7 +232,6 @@ class InterviewPracticeService:
                 "description": project.description,
                 "review": project.review,
                 "tech_stack": project.tech_stack or [],
-                "raw_text": project.raw_text,
             }
             for project in self.resume_repository.get_projects(resume_id)
         ]

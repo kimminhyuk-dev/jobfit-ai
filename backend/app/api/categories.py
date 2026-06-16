@@ -19,6 +19,7 @@ from app.services.category_service import (
 
 
 router = APIRouter(prefix="/categories", tags=["categories"])
+admin_router = APIRouter(prefix="/admin/categories", tags=["admin-categories"])
 
 
 def get_category_service(db: Session = Depends(get_db)) -> CategoryService:
@@ -32,6 +33,16 @@ def list_categories(
 ) -> list[CategoryResponse]:
     """활성 카테고리 목록을 조회한다."""
     categories = category_service.list_categories()
+    return [CategoryResponse.model_validate(category) for category in categories]
+
+
+@admin_router.get("", response_model=list[CategoryResponse])
+def list_categories_for_admin(
+    current_user: User = Depends(get_current_admin_user),
+    category_service: CategoryService = Depends(get_category_service),
+) -> list[CategoryResponse]:
+    """관리자가 비활성 카테고리까지 포함해 목록을 조회한다."""
+    categories = category_service.list_categories(include_inactive=True)
     return [CategoryResponse.model_validate(category) for category in categories]
 
 

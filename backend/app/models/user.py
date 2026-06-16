@@ -3,7 +3,9 @@ User 모델
 회원 정보를 담는 테이블
 """
 
-from sqlalchemy import BigInteger, String
+from datetime import date
+
+from sqlalchemy import JSON, BigInteger, Date, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -50,6 +52,41 @@ class User(Base, AuditMixin, SoftDeleteMixin):
         nullable=True,
         comment="이름",
     )
+    birth_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        comment="생년월일",
+    )
+    phone: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="전화번호 (010-1234-5678 형식 정규화 저장)",
+    )
+    gender: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+        comment="성별: MALE / FEMALE",
+    )
+    zipcode: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+        comment="우편번호 (5자리, 주소검색 API)",
+    )
+    address1: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="기본주소 (주소검색 API 자동입력)",
+    )
+    address2: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="상세주소 (사용자 입력)",
+    )
+    tech_stack: Mapped[list | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="기술스택 문자열 배열",
+    )
 
     # 상태
     status: Mapped[str] = mapped_column(
@@ -63,7 +100,13 @@ class User(Base, AuditMixin, SoftDeleteMixin):
         nullable=False,
         default="USER",
         server_default="USER",
-        comment="권한: USER / ADMIN",
+        comment="권한: USER / COMPANY / ADMIN",
+    )
+    admin_level: Mapped[str | None] = mapped_column(
+        String(1),
+        nullable=True,
+        comment="관리자 등급 (ADMIN 전용): A / B / C. "
+        "A=B·C 권한부여+계정삭제, B=C 권한부여, C=기본 관리자",
     )
 
     def __repr__(self) -> str:

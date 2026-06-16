@@ -1,9 +1,13 @@
 import { apiClient } from './client';
-import type { JobPostingListResponse } from './types';
+import type { JobFilterOptions, JobPostingItem, JobPostingListResponse } from './types';
 
 export interface GetJobsParams {
   source?: string;
   keyword?: string;
+  region?: string;
+  education?: string;
+  employment_type?: string;
+  ncs_category?: string;
   location_code?: string;
   employment_type_code?: string;
   education_code?: string;
@@ -16,7 +20,20 @@ export interface GetJobsParams {
 
 export const jobsApi = {
   getJobs: async (params: GetJobsParams = {}): Promise<JobPostingListResponse> => {
-    const res = await apiClient.get<JobPostingListResponse>('/jobs', { params });
+    const clean = Object.fromEntries(
+      Object.entries(params).filter(([, v]) => v !== '' && v !== undefined && v !== null),
+    );
+    const res = await apiClient.get<JobPostingListResponse>('/jobs', { params: clean });
+    return res.data;
+  },
+
+  getJob: async (jobId: number): Promise<JobPostingItem> => {
+    const res = await apiClient.get<JobPostingItem>(`/jobs/${jobId}`);
+    return res.data;
+  },
+
+  getFilterOptions: async (): Promise<JobFilterOptions> => {
+    const res = await apiClient.get<JobFilterOptions>('/jobs/filter-options');
     return res.data;
   },
 };

@@ -17,6 +17,14 @@ class JobPostingRepository:
     def __init__(self, db: Session):
         self.db = db
 
+    def get_by_id(self, job_id: int) -> JobPosting | None:
+        stmt = (
+            select(JobPosting)
+            .where(JobPosting.job_id == job_id)
+            .where(JobPosting.is_deleted.is_(False))
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
     def get_by_source(self, source: str, source_job_id: str) -> JobPosting | None:
         stmt = (
             select(JobPosting)
@@ -102,6 +110,20 @@ class JobPostingRepository:
             if value:
                 conditions.append(getattr(JobPosting, field_name) == value)
 
+        # 텍스트 기반 필터 (사람인/잡코리아식 지역·학력·직종 선택)
+        region = _clean(filters.get("region"))
+        if region:
+            conditions.append(JobPosting.location.ilike(f"{region}%"))
+        education = _clean(filters.get("education"))
+        if education:
+            conditions.append(JobPosting.education.ilike(f"%{education}%"))
+        employment_type = _clean(filters.get("employment_type"))
+        if employment_type:
+            conditions.append(JobPosting.employment_type.ilike(f"%{employment_type}%"))
+        ncs_category = _clean(filters.get("ncs_category"))
+        if ncs_category:
+            conditions.append(JobPosting.ncs_category.ilike(f"%{ncs_category}%"))
+
         total_stmt = select(func.count()).select_from(JobPosting).where(*conditions)
         total = int(self.db.execute(total_stmt).scalar_one())
 
@@ -117,6 +139,62 @@ class JobPostingRepository:
 
     def count_all(self) -> int:
         stmt = select(func.count()).select_from(JobPosting)
+        return int(self.db.execute(stmt).scalar_one())
+
+    def filter_options(self) -> dict[str, list[str]]:
+        """실제 공고 데이터에서 지역/학력/고용형태/직종 선택지를 추출한다."""
+
+        def raw_distinct(column) -> list[str]:
+            stmt = (
+                select(column, func.count())
+                .where(JobPosting.is_deleted.is_(False))
+                .where(column.isnot(None))
+                .group_by(column)
+                .order_by(func.count().desc())
+            )
+            return [v for v, _ in self.db.execute(stmt).all() if v and v.strip()]
+
+        def atomic(values: list[str], sep: str = ",") -> list[str]:
+            ordered: list[str] = []
+            for value in values:
+                for part in value.split(sep):
+                    token = part.strip()
+                    if token and token not in ordered:
+                        ordered.append(token)
+            return ordered
+
+        regions: list[str] = []
+        for location in raw_distinct(JobPosting.location):
+            head = location.split()[0].strip()
+            if head and head not in regions:
+                regions.append(head)
+
+        return {
+            "regions": regions,
+            "educations": atomic(raw_distinct(JobPosting.education)),
+            "employment_types": atomic(raw_distinct(JobPosting.employment_type)),
+            "job_categories": atomic(raw_distinct(JobPosting.ncs_category)),
+        }
+
+    def count_by_company(
+        self,
+        business_number: str | None,
+        company_name: str | None,
+    ) -> int:
+        """기업의 사업자번호/회사명과 일치하는 등록 공고 수를 센다."""
+        identifiers = []
+        if business_number:
+            identifiers.append(JobPosting.business_number == business_number)
+        if company_name:
+            identifiers.append(JobPosting.company_name == company_name)
+        if not identifiers:
+            return 0
+        stmt = (
+            select(func.count())
+            .select_from(JobPosting)
+            .where(JobPosting.is_deleted.is_(False))
+            .where(or_(*identifiers))
+        )
         return int(self.db.execute(stmt).scalar_one())
 
 

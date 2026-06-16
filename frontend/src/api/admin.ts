@@ -1,6 +1,8 @@
 import { apiClient } from './client';
 import type {
   AdminStats,
+  AdminUser,
+  AlioCollectResponse,
   Category,
   CategoryCreate,
   CategoryUpdate,
@@ -10,13 +12,26 @@ import type {
   PostUpdate,
   Resume,
   ResumeUpdatePayload,
-  User,
 } from './types';
 import type { GetJobsParams } from './jobs';
 
 export interface AdminUserDetail {
-  user: User;
+  user: AdminUser;
   resumes: Resume[];
+}
+
+export interface AdminUserListParams {
+  skip?: number;
+  limit?: number;
+  role?: 'USER' | 'COMPANY' | 'ADMIN';
+  q?: string;
+  admin_identifier?: string;
+  admin_level?: 'A' | 'B' | 'C' | '';
+  name?: string;
+  birth_date?: string;
+  company_name?: string;
+  business_number?: string;
+  representative_name?: string;
 }
 
 export const adminApi = {
@@ -25,9 +40,11 @@ export const adminApi = {
     return res.data;
   },
 
-  // 회원 관리
-  listUsers: async (params: { skip?: number; limit?: number } = {}): Promise<User[]> => {
-    const res = await apiClient.get<User[]>('/admin/users', { params });
+  listUsers: async (params: AdminUserListParams = {}): Promise<AdminUser[]> => {
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([, value]) => value !== '' && value !== undefined),
+    );
+    const res = await apiClient.get<AdminUser[]>('/admin/users', { params: cleanParams });
     return res.data;
   },
 
@@ -62,9 +79,19 @@ export const adminApi = {
     return res.data;
   },
 
-  // 카테고리
+  collectAlioJobs: async (data: {
+    keyword?: string;
+    start_page?: number;
+    max_pages?: number;
+    display?: number;
+    idempotency_key?: string;
+  } = {}): Promise<AlioCollectResponse> => {
+    const res = await apiClient.post<AlioCollectResponse>('/admin/job-sources/alio/collect', data);
+    return res.data;
+  },
+
   listCategories: async (): Promise<Category[]> => {
-    const res = await apiClient.get<Category[]>('/categories');
+    const res = await apiClient.get<Category[]>('/admin/categories');
     return res.data;
   },
 
@@ -82,7 +109,6 @@ export const adminApi = {
     await apiClient.delete(`/categories/${id}`);
   },
 
-  // 게시글
   listPosts: async (params: { offset?: number; limit?: number; category_id?: number } = {}): Promise<Post[]> => {
     const res = await apiClient.get<Post[]>('/posts', { params });
     return res.data;

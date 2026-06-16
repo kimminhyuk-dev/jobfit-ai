@@ -1,0 +1,72 @@
+"""Application(지원/이력서 보내기) API routes."""
+
+from fastapi import APIRouter, Depends, Request, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_client_ip, get_current_user
+from app.core.database import get_db
+from app.core.error_codes import ErrorCode
+from app.core.exceptions import AppException
+from app.models.user import User
+from app.schemas.application import (
+    ApplicationCreateRequest,
+    ApplicationResponse,
+    MyApplicationItem,
+)
+from app.services.application_service import (
+    ApplicationAlreadyExistsError,
+    ApplicationJobNotFoundError,
+    ApplicationResumeNotFoundError,
+    ApplicationService,
+)
+
+router = APIRouter(prefix="/applications", tags=["applications"])
+
+
+def get_application_service(db: Session = Depends(get_db)) -> ApplicationService:
+    """ApplicationService dependency."""
+    return ApplicationService(db)
+
+
+@router.post("", response_model=ApplicationResponse, status_code=status.HTTP_201_CREATED)
+def create_application(
+    payload: ApplicationCreateRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    application_service: ApplicationService = Depends(get_application_service),
+) -> ApplicationResponse:
+    """선택한 이력서로 공고에 지원한다(이력서 보내기)."""
+    try:
+        return application_service.apply(
+            user_id=current_user.user_id,
+            job_id=payload.job_id,
+            resume_id=payload.resume_id,
+            request_ip=get_client_ip(request),
+        )
+    except ApplicationResumeNotFoundError as exc:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.RESUME_NOT_FOUND,
+            message="이력서를 찾을 수 없습니다.",
+        ) from exc
+    except ApplicationJobNotFoundError as exc:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.JOB_NOT_FOUND,
+            message="공고를 찾을 수 없습니다.",
+        ) from exc
+    except ApplicationAlreadyExistsError as exc:
+        raise AppException(
+            status_code=status.HTTP_409_CONFLICT,
+            code=ErrorCode.APPLICATION_ALREADY_EXISTS,
+            message="이미 지원한 공고입니다.",
+        ) from exc
+
+
+@router.get("/me", response_model=list[MyApplicationItem])
+def list_my_applications(
+    current_user: User = Depends(get_current_user),
+    application_service: ApplicationService = Depends(get_application_service),
+) -> list[MyApplicationItem]:
+    """내 지원현황을 최신순으로 조회한다."""
+    return application_service.list_my_applications(current_user.user_id)

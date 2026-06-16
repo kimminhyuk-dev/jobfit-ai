@@ -1,10 +1,26 @@
 import { apiClient } from './client';
-import type { AuthResponse, User } from './types';
+import type { AuthResponse, Gender, User } from './types';
 
-export interface UserUpdateRequest {
+export interface ProfileFields {
+  birth_date?: string | null;
+  phone?: string | null;
+  gender?: Gender | null;
+  zipcode?: string | null;
+  address1?: string | null;
+  address2?: string | null;
+  tech_stack?: string[] | null;
+}
+
+export interface UserUpdateRequest extends ProfileFields {
   name?: string;
   current_password?: string;
   new_password?: string;
+}
+
+export interface SignupRequest extends ProfileFields {
+  email: string;
+  password: string;
+  name: string;
 }
 
 export const authApi = {
@@ -13,7 +29,7 @@ export const authApi = {
     return res.data;
   },
 
-  signup: async (body: { email: string; password: string; name: string }): Promise<AuthResponse> => {
+  signup: async (body: SignupRequest): Promise<AuthResponse> => {
     const res = await apiClient.post<AuthResponse>('/auth/signup', body);
     return res.data;
   },

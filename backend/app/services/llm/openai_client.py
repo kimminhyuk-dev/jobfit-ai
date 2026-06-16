@@ -17,7 +17,7 @@ from app.prompts.resume_interview import (
 
 logger = logging.getLogger(__name__)
 
-QUESTION_GENERATION_MIN_OUTPUT_TOKENS = 6000
+QUESTION_GENERATION_MIN_OUTPUT_TOKENS = 3000
 
 
 class OpenAIClientError(Exception):
@@ -37,6 +37,7 @@ class OpenAIClient:
         api_key: str | None = None,
         model: str | None = None,
         max_output_tokens: int | None = None,
+        reasoning_effort: str | None = None,
     ) -> None:
         self.api_key = api_key if api_key is not None else settings.openai_api_key
         self.model = model or settings.openai_model
@@ -44,6 +45,11 @@ class OpenAIClient:
             max_output_tokens
             if max_output_tokens is not None
             else settings.openai_max_output_tokens
+        )
+        self.reasoning_effort = (
+            reasoning_effort
+            if reasoning_effort is not None
+            else settings.openai_reasoning_effort
         )
 
     @property
@@ -86,24 +92,30 @@ class OpenAIClient:
         except ImportError as exc:  # pragma: no cover
             raise OpenAIClientError("The openai package is not installed.") from exc
 
+        request_kwargs: dict[str, Any] = {
+            "model": self.model,
+            "input": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "max_output_tokens": max_output_tokens or self.max_output_tokens,
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": schema["name"],
+                    "schema": schema["schema"],
+                    "strict": schema.get("strict", True),
+                }
+            },
+        }
+        # reasoning 모델(gpt-5 계열, o 시리즈)만 reasoning.effort를 받는다.
+        # 낮은 effort는 추론 토큰을 줄여 응답 지연을 크게 단축한다.
+        if self.reasoning_effort and _supports_reasoning(self.model):
+            request_kwargs["reasoning"] = {"effort": self.reasoning_effort}
+
         try:
             client = openai.OpenAI(api_key=self.api_key)
-            response = client.responses.create(
-                model=self.model,
-                input=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                max_output_tokens=max_output_tokens or self.max_output_tokens,
-                text={
-                    "format": {
-                        "type": "json_schema",
-                        "name": schema["name"],
-                        "schema": schema["schema"],
-                        "strict": schema.get("strict", True),
-                    }
-                },
-            )
+            response = client.responses.create(**request_kwargs)
         except Exception as exc:  # noqa: BLE001 - SDK exceptions vary by version
             logger.warning(
                 "OpenAI API call failed: %s: %s",
@@ -122,6 +134,12 @@ class OpenAIClient:
         except json.JSONDecodeError as exc:
             logger.warning("OpenAI response JSON parsing failed: %s", exc)
             raise OpenAIClientError("OpenAI response was not valid JSON.") from exc
+
+
+def _supports_reasoning(model: str) -> bool:
+    """reasoning.effort 파라미터를 지원하는 모델인지 판별한다."""
+    name = (model or "").lower()
+    return name.startswith("gpt-5") or name.startswith("o1") or name.startswith("o3") or name.startswith("o4")
 
 
 def _extract_output_text(response: Any) -> str:

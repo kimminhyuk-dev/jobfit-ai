@@ -9,7 +9,8 @@ import { useAuth } from '../../stores/authContext';
 
 const navItems = [
   { to: '/user/dashboard', label: '홈', icon: 'home' as const },
-  { to: '/user/jobs', label: '추천 공고', icon: 'briefcase' as const, badge: 28 },
+  { to: '/user/jobs', label: '추천 공고', icon: 'briefcase' as const },
+  { to: '/user/applications', label: '지원 현황', icon: 'flag' as const },
   { to: '/user/matches', label: 'AI 매칭', icon: 'sparkle' as const },
   { to: '/user/resumes', label: '내 이력서', icon: 'file' as const },
   { to: '/user/profile', label: '내 정보', icon: 'user' as const },
@@ -68,22 +69,7 @@ export default function UserLayout({ children }: { children: ReactNode }) {
                 }`}
             >
               <Icon name={item.icon} size={16} />
-              {!collapsed && (
-                <>
-                  <span className="flex-1">{item.label}</span>
-                  {item.badge && (
-                    <span
-                      className={`text-[11px] px-1.5 py-0.5 rounded-full font-semibold font-mono ${
-                        isActive
-                          ? 'bg-m-primary text-white'
-                          : 'bg-m-surface-alt text-m-subtle'
-                      }`}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </>
-              )}
+              {!collapsed && <span className="flex-1">{item.label}</span>}
             </Link>
             );
           })}
@@ -151,6 +137,15 @@ export default function UserLayout({ children }: { children: ReactNode }) {
             />
           </div>
           <div className="flex-1" />
+          {user?.role === 'ADMIN' && (
+            <Link
+              href="/admin/dashboard"
+              className="h-9 px-3.5 flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 text-[13px] font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
+            >
+              <Icon name="target" size={14} />
+              관리자 페이지
+            </Link>
+          )}
           <button className="relative w-9 h-9 flex items-center justify-center rounded-lg border border-m-border bg-m-surface text-m-muted hover:bg-m-surface-alt transition-colors">
             <Icon name="bell" size={16} />
             <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-m-danger rounded-full border border-m-surface" />

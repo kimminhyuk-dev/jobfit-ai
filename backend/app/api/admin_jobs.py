@@ -5,7 +5,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin_user
+from app.api.deps import get_current_a_admin_user, get_current_admin_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.error_codes import ErrorCode
@@ -60,7 +60,7 @@ def get_mock_loader_service(
 )
 def collect_alio_jobs(
     collect_request: AlioCollectRequest,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(get_current_a_admin_user),
     collection_service: AlioCollectionService = Depends(get_alio_collection_service),
 ) -> AlioCollectResponse:
     """관리자가 ALIO 공공기관 채용정보 수집을 수동 실행한다."""

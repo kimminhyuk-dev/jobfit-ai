@@ -10,14 +10,20 @@ INTERVIEW_QUESTION_COUNT = 5
 
 INTERVIEW_QUESTION_SYSTEM_PROMPT = """You are an expert technical interviewer for junior software developer candidates.
 
-Generate exactly 5 interview practice questions from only the provided resume data.
+Generate exactly 5 realistic interview practice questions from only the provided resume data.
 
 Rules:
 - Write all question text, intent, keywords, and summaries in Korean.
 - Use only the provided parsed resume data, projects, cover letter sections, and official reference materials.
 - Do not invent experience, projects, companies, schools, certifications, skills, achievements, facts, or URLs.
 - Include official references only when the reference appears in the provided official_reference_materials input.
-- Keep output concise: question <= 120 Korean characters, intent <= 80 Korean characters, each keyword <= 20 Korean characters.
+- Write question text like a real Korean interviewer speaking to the candidate in polite conversational style.
+- Ask one focused question at a time using natural Korean polite endings.
+- Prefer conversational follow-up forms equivalent to "could you explain how you handled it?", "what criteria did you use?", or "why did you choose that approach?"
+- Avoid textbook or AI-like command endings equivalent to "explain", "describe", "list", or "state".
+- Never copy sample project names, sample technologies, or sample domain details into the generated question.
+- When asking about a project, use only the project names, technologies, decisions, validation work, trade-offs, or troubleshooting details found in the provided resume data.
+- Keep output concise: question <= 150 Korean characters, intent <= 80 Korean characters, each keyword <= 20 Korean characters.
 - Include 3 to 5 expected_keywords per question.
 - For official_references, use [] unless a provided official reference is directly relevant. If used, include at most 1 reference per question and keep summary <= 60 Korean characters.
 - Return structured JSON only.
@@ -57,6 +63,7 @@ Rules:
 - missing_points: at most 2 short bullets for "아쉬운 점".
 - correct_points: exactly 1 short bullet for "맞은 부분"; use [] only if there is no meaningful correct part.
 - different_points: exactly 1 short bullet for "다른 부분"; use [] if there is no clear wrong or different part.
+- Use these meanings for evaluation arrays: strengths = strong parts, missing_points = missing or weak parts, correct_points = correct parts, different_points = wrong or different parts.
 - reference_based_answer: 2 to 3 short Korean sentences.
 - feedback: one short Korean sentence.
 - Return structured JSON only.
@@ -77,9 +84,13 @@ def build_question_generation_prompt(
     reference_materials: list[dict[str, Any]],
 ) -> str:
     """Build the user prompt for question generation."""
-    return f"""Create exactly 5 concise Korean interview practice questions.
+    return f"""Create exactly 5 natural Korean interview practice questions.
 
 Use only the data below. If a category has little data, make the best question possible from the available resume data without inventing facts.
+Make each question sound like a real interviewer speaking in the room, not like a written exam.
+Use only concrete project names, technologies, and situations present in the input resume data.
+Do not use placeholder examples or any project/technology/domain detail that is not present in the input.
+Convert resume facts into realistic follow-up questions about how the candidate made decisions, validated behavior, handled trade-offs, or solved issues.
 Keep the JSON compact. Do not write long explanations.
 
 [parsed_data]

@@ -11,8 +11,11 @@ from app.api import (
     admin_jobs_router,
     admin_stats_router,
     admin_users_router,
+    admin_categories_router,
+    applications_router,
     auth_router,
     categories_router,
+    company_router,
     jobs_router,
     posts_router,
     resumes_router,
@@ -44,8 +47,11 @@ app.include_router(posts_router)
 app.include_router(admin_jobs_router)
 app.include_router(admin_stats_router)
 app.include_router(admin_users_router)
+app.include_router(admin_categories_router)
 app.include_router(jobs_router)
 app.include_router(resumes_router)
+app.include_router(applications_router)
+app.include_router(company_router)
 
 
 @app.get("/")

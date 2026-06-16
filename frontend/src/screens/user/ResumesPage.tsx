@@ -570,13 +570,23 @@ function InterviewPracticePanel({
         </div>
       )}
 
-      {canStart && !session && (
+      {canStart && isCreating && (
+        <div className="rounded-xl border border-m-border bg-m-surface p-6 flex flex-col items-center justify-center gap-3 text-center">
+          <Icon name="sparkle" size={24} className="animate-spin text-m-primary" />
+          <p className="text-[13px] font-semibold text-m-text">면접 질문을 생성하고 있어요</p>
+          <p className="text-[12px] text-m-muted">
+            이력서를 분석해 질문 5개를 만드는 중입니다. 최대 1분 정도 걸릴 수 있어요.
+          </p>
+        </div>
+      )}
+
+      {canStart && !session && !isCreating && (
         <div className="rounded-xl border border-dashed border-m-border bg-m-surface p-4 text-[13px] text-m-muted">
           면접 연습을 시작하면 이 이력서 기반 질문 5개가 생성됩니다.
         </div>
       )}
 
-      {session && (
+      {session && !isCreating && (
         <div className="grid grid-cols-1 gap-3">
           <div className="flex flex-wrap items-center gap-2 text-[12px] text-m-muted">
             <span className="px-2 py-1 rounded-full bg-m-surface text-m-text font-semibold">

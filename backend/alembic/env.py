@@ -42,6 +42,8 @@ from app.models import resume  # noqa: F401
 from app.models import resume_project  # noqa: F401
 from app.models import resume_cover_letter_section  # noqa: F401
 from app.models import resume_interview  # noqa: F401
+from app.models import company  # noqa: F401
+from app.models import application  # noqa: F401
 
 # ─────────────────────────────────────────────
 # 3) alembic.ini 읽기

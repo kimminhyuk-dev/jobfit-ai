@@ -9,7 +9,7 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ── 401 자동 Refresh 인터셉터 ────────────────────────────────────���─────────
+// ── 401 자동 Refresh 인터셉터 ─────────────────────────────────────────────
 // Access Token 쿠키가 만료되면 /auth/refresh를 호출해 조용히 갱신한다.
 let isRefreshing = false;
 let pendingQueue: Array<{
@@ -64,6 +64,19 @@ apiClient.interceptors.response.use(
       code: 'NETWORK_ERROR',
       message: '서버에 연결할 수 없습니다.',
     };
+
+    // 시스템 오류(서버 5xx · 네트워크 끊김)는 전역 팝업으로 알린다.
+    // 필드 검증(422)·인증(401)은 각 화면에서 인라인 처리하므로 제외한다.
+    const status = error.response?.status;
+    const isSystemError = !error.response || (status !== undefined && status >= 500);
+    if (isSystemError && typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('app:toast', {
+          detail: { type: 'error', message: apiErr.message },
+        }),
+      );
+    }
+
     return Promise.reject(apiErr);
   },
 );

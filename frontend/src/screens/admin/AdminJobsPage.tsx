@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Icon from '../../components/ui/Icon';
 import { adminApi } from '../../api/admin';
+import { useAuth } from '../../stores/authContext';
 import type { JobPostingItem } from '../../api/types';
 
 const LOGO_COLORS = ['#1d4ed8', '#0f766e', '#7c3aed', '#ea580c', '#0284c7', '#15803d', '#b45309'];
@@ -72,15 +73,44 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 }
 
 export default function AdminJobsPage() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [selected, setSelected] = useState<JobPostingItem | null>(null);
   const [query, setQuery] = useState('');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('ALIO');
+  const [collectMessage, setCollectMessage] = useState<string | null>(null);
+  const [alioForm, setAlioForm] = useState({
+    keyword: '',
+    start_page: '1',
+    max_pages: '1',
+    display: '20',
+  });
 
   const apiSource = sourceFilter === '전체' ? undefined : sourceFilter;
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin', 'jobs', apiSource],
     queryFn: () => adminApi.getJobs({ source: apiSource, size: 100 }),
+  });
+
+  const collectAlioMutation = useMutation({
+    mutationFn: () =>
+      adminApi.collectAlioJobs({
+        keyword: alioForm.keyword.trim() || undefined,
+        start_page: Number(alioForm.start_page) || 1,
+        max_pages: Number(alioForm.max_pages) || 1,
+        display: Number(alioForm.display) || 20,
+        idempotency_key: `admin-alio-${Date.now()}`,
+      }),
+    onSuccess: (run) => {
+      setCollectMessage(
+        `ALIO 수집 완료: 신규 ${run.inserted_count}건, 갱신 ${run.updated_count}건, 실패 ${run.failed_count}건`,
+      );
+      queryClient.invalidateQueries({ queryKey: ['admin', 'jobs'] });
+    },
+    onError: (err: { response?: { data?: { message?: string } }; message?: string }) => {
+      setCollectMessage(err.response?.data?.message ?? err.message ?? 'ALIO 수집에 실패했습니다.');
+    },
   });
 
   const items = data?.items ?? [];
@@ -103,6 +133,77 @@ export default function AdminJobsPage() {
               관리자
             </span>
           </div>
+
+          {user?.admin_level === 'A' && (
+            <form
+              className="mb-3 rounded-xl p-3"
+              style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                collectAlioMutation.mutate();
+              }}
+            >
+              <div className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: '#0f172a' }}>
+                <Icon name="sparkle" size={14} />
+                ALIO 임의 수집
+              </div>
+              <input
+                value={alioForm.keyword}
+                onChange={(e) => setAlioForm((prev) => ({ ...prev, keyword: e.target.value }))}
+                placeholder="키워드 선택 입력"
+                className="mb-2 h-8 w-full rounded-lg px-2.5 text-[12px] focus:outline-none"
+                style={{ border: '1px solid #e2e8f0', background: '#fff', color: '#0f172a' }}
+              />
+              <div className="grid grid-cols-3 gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  value={alioForm.start_page}
+                  onChange={(e) => setAlioForm((prev) => ({ ...prev, start_page: e.target.value }))}
+                  title="시작 페이지"
+                  className="h-8 rounded-lg px-2 text-[12px] focus:outline-none"
+                  style={{ border: '1px solid #e2e8f0', background: '#fff', color: '#0f172a' }}
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={alioForm.max_pages}
+                  onChange={(e) => setAlioForm((prev) => ({ ...prev, max_pages: e.target.value }))}
+                  title="가져올 페이지 수"
+                  className="h-8 rounded-lg px-2 text-[12px] focus:outline-none"
+                  style={{ border: '1px solid #e2e8f0', background: '#fff', color: '#0f172a' }}
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={alioForm.display}
+                  onChange={(e) => setAlioForm((prev) => ({ ...prev, display: e.target.value }))}
+                  title="페이지당 건수"
+                  className="h-8 rounded-lg px-2 text-[12px] focus:outline-none"
+                  style={{ border: '1px solid #e2e8f0', background: '#fff', color: '#0f172a' }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={collectAlioMutation.isPending}
+                className="mt-2 flex h-8 w-full items-center justify-center gap-1.5 rounded-lg text-[12px] font-semibold text-white disabled:opacity-60"
+                style={{ background: '#2563eb' }}
+              >
+                {collectAlioMutation.isPending ? '수집 중...' : '지정 조건으로 수집'}
+              </button>
+            </form>
+          )}
+
+          {collectMessage && (
+            <div
+              className="mb-3 rounded-lg px-3 py-2 text-[12px]"
+              style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}
+            >
+              {collectMessage}
+            </div>
+          )}
 
           {/* Source filter tabs */}
           <div className="flex gap-1 mb-3 flex-wrap">

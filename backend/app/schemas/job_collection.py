@@ -119,6 +119,7 @@ class JobPostingResponse(BaseModel):
     ministry_code: str | None
     posted_at: datetime | None
     deadline: datetime | None
+    raw_content: str | None = None
     data_source: str
     status: str
     collected_at: datetime
@@ -131,6 +132,15 @@ class JobPostingListResponse(BaseModel):
     total: int
     page: int
     size: int
+
+
+class JobFilterOptionsResponse(BaseModel):
+    """공고 필터 선택지(실데이터 기반)"""
+
+    regions: list[str]
+    educations: list[str]
+    employment_types: list[str]
+    job_categories: list[str]
 
 
 class MockLoadRequest(BaseModel):

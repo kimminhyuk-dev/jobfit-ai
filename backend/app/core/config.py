@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_model: str = "gpt-5-mini"
     openai_max_output_tokens: int = 6000
+    # 추론 모델(gpt-5 계열)의 reasoning 강도. 낮을수록 응답이 빠르다.
+    # 허용: "minimal" | "low" | "medium" | "high"
+    openai_reasoning_effort: str = "low"
 
 
 # 전역 싱글톤

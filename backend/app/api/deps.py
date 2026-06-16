@@ -48,6 +48,19 @@ def get_current_admin_user(
     return current_user
 
 
+def get_current_a_admin_user(
+    current_user: User = Depends(get_current_admin_user),
+) -> User:
+    """현재 사용자가 A등급 관리자 권한인지 확인한다."""
+    if current_user.admin_level != "A":
+        raise AppException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code=ErrorCode.FORBIDDEN,
+            message="A등급 관리자 권한이 필요합니다.",
+        )
+    return current_user
+
+
 def get_client_ip(request: Request) -> str | None:
     """프록시 환경을 고려해 요청 클라이언트 IP를 얻는다."""
     forwarded_for = request.headers.get("x-forwarded-for")

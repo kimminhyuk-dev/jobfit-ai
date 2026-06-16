@@ -18,14 +18,38 @@ export interface ApiResponse<T> {
 }
 
 // 인증
+export type Gender = 'MALE' | 'FEMALE';
+
 export interface User {
   user_id: number;
   email: string;
   name: string;
   status: 'ACTIVE' | 'INACTIVE';
-  role: 'USER' | 'ADMIN';
+  role: 'USER' | 'COMPANY' | 'ADMIN';
+  admin_level: 'A' | 'B' | 'C' | null;
+  birth_date: string | null;
+  phone: string | null;
+  gender: Gender | null;
+  zipcode: string | null;
+  address1: string | null;
+  address2: string | null;
+  tech_stack: string[] | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface AdminCompanySummary {
+  company_id: number;
+  user_id: number;
+  company_name: string | null;
+  business_number: string | null;
+  representative_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminUser extends User {
+  company: AdminCompanySummary | null;
 }
 
 export interface AuthResponse {
@@ -242,6 +266,7 @@ export interface JobPostingItem {
   ministry_code: string | null;
   posted_at: string | null;
   deadline: string | null;
+  raw_content?: string | null;
   status: string;
   collected_at: string;
 }
@@ -251,6 +276,26 @@ export interface JobPostingListResponse {
   total: number;
   page: number;
   size: number;
+}
+
+export interface JobFilterOptions {
+  regions: string[];
+  educations: string[];
+  employment_types: string[];
+  job_categories: string[];
+}
+
+export interface AlioCollectResponse {
+  job_code: string;
+  status: string;
+  collected_count: number;
+  inserted_count: number;
+  updated_count: number;
+  skipped_count: number;
+  failed_count: number;
+  error_code: string | null;
+  error_message: string | null;
+  run_id: number;
 }
 
 // 스킬
@@ -274,12 +319,59 @@ export interface Analysis {
   recommendations: AnalysisItem[];
 }
 
-// 지원 현황
+// 지원 현황 (mock UI용)
 export interface Application {
   company: string;
   stage: string;
   date: string;
   color: string;
+}
+
+// 지원(이력서 보내기) — 백엔드 응답
+export type ApplicationStatus = 'SUBMITTED' | 'VIEWED' | 'ACCEPTED' | 'REJECTED';
+
+export interface JobApplicationResponse {
+  application_id: number;
+  job_id: number;
+  resume_id: number;
+  company_id: number | null;
+  status: ApplicationStatus;
+  applied_at: string;
+}
+
+export interface MyApplication {
+  application_id: number;
+  job_id: number;
+  job_title: string;
+  company_name: string | null;
+  source_url: string | null;
+  resume_id: number;
+  resume_title: string;
+  status: ApplicationStatus;
+  applied_at: string;
+}
+
+// 기업회원 대시보드
+export interface CompanyApplicant {
+  application_id: number;
+  applicant_name: string | null;
+  applicant_email: string;
+  job_id: number;
+  job_title: string;
+  resume_id: number;
+  resume_title: string;
+  status: ApplicationStatus;
+  applied_at: string;
+}
+
+export interface CompanyDashboard {
+  company_id: number;
+  company_name: string | null;
+  business_number: string | null;
+  received_count: number;
+  pending_count: number;
+  posting_count: number;
+  applicants: CompanyApplicant[];
 }
 
 // 카테고리

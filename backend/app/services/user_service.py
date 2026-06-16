@@ -18,6 +18,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import User
+from app.repositories.company_repository import CompanyRepository
 from app.repositories.refresh_token_repository import RefreshTokenRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import LoginRequest
@@ -50,6 +51,7 @@ class UserService:
     def __init__(self, db: Session):
         self.db = db
         self.user_repository = UserRepository(db)
+        self.company_repository = CompanyRepository(db)
         self.refresh_token_repository = RefreshTokenRepository(db)
 
     def signup(self, user_create: UserCreate, request_ip: str | None) -> User:
@@ -69,12 +71,25 @@ class UserService:
         return user
 
     def login(self, login_request: LoginRequest) -> User:
-        user = self.user_repository.get_by_email(str(login_request.email))
+        login_id = str(login_request.email).strip()
+        user = self._get_login_user(login_id)
         if user is None or not verify_password(login_request.password, user.password):
             raise InvalidCredentialsError
         if user.status != "ACTIVE":
             raise InactiveUserError
         return user
+
+    def _get_login_user(self, login_id: str) -> User | None:
+        if "@" in login_id:
+            return self.user_repository.get_by_email(login_id)
+
+        business_number = "".join(ch for ch in login_id if ch.isdigit())
+        if len(business_number) == 10:
+            company = self.company_repository.get_by_business_number(business_number)
+            if company is not None:
+                return self.user_repository.get_by_id(company.user_id)
+
+        return self.user_repository.get_by_email(login_id)
 
     def refresh(self, refresh_token: str, ip: str | None = None) -> tuple["User", str, str]:
         """
@@ -149,11 +164,18 @@ class UserService:
                 raise InvalidCurrentPasswordError
             new_hashed = hash_password(user_update.new_password)
 
+        # 요청에 실제로 포함된 프로필 필드만 변경한다(부분 수정).
+        profile_changes = user_update.model_dump(
+            exclude_unset=True,
+            exclude={"name", "current_password", "new_password"},
+        )
+
         user = self.user_repository.update(
             user,
             name=user_update.name,
             hashed_password=new_hashed,
             request_ip=request_ip,
+            profile_changes=profile_changes,
         )
         if new_hashed:
             # 비밀번호 변경 시 모든 세션 강제 만료
