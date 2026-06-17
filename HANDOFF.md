@@ -27,14 +27,22 @@ The app is now a 3-role demo platform:
 - Login portal split:
   - `/login`: USER only.
   - `/company/login`: COMPANY and ADMIN.
+- The frontend sends the active login portal to `/auth/login`; the backend refuses mismatched roles before issuing cookies. A wrong-role account therefore behaves like a failed login and does not create a temporary session or trigger browser password-success warnings. The login screen also rejects any mismatched-role response defensively and shows portal-specific invalid-login messages. Role checks normalize role strings before comparison so `ADMIN` accounts can log in through `/company/login` while `USER` accounts remain blocked there.
 - Root redirect sends ADMIN to `/admin/dashboard`, COMPANY to `/company/dashboard`, USER to `/user/dashboard`.
+- Login page supports "아이디 저장" and "자동 로그인" via client `localStorage` (`frontend/src/lib/loginPrefs.ts`). Both options always render unchecked by default, even if older saved preferences exist; login/signup pages skip cookie-based session restore so they do not call `/auth/me` or `/auth/refresh` while showing the login form. Protected pages still restore the existing cookie session so a successful login is not cleared during navigation.
+- Login inputs use floating labels ("아이디" / "비밀번호") on the field border; portal id field accepts email or business number.
 - User profile includes optional `birth_date`, `phone`, `gender`, `zipcode`, `address1`, `address2`, and `tech_stack`.
 - Daum/Kakao postcode lookup is used on the frontend without an API key.
 
 ### Resume And Interview Practice
 
 - Resume upload/list/detail/file/delete endpoints are implemented.
+- New resume uploads accept `PDF, PNG, JPG, JPEG, GIF` up to 10MB. DOCX is intentionally blocked instead of attempting browser-native preview, matching the job-board pattern of using an internal resume view plus downloadable/preview-safe attachments.
 - Parsed resume data includes structured projects and cover letter sections.
+- `/user/resumes` no longer auto-loads DOCX originals into an iframe. PDF/TXT legacy originals use the file preview path when preview-safe; PNG/JPG/JPEG/GIF show as image previews; legacy DOCX falls back to parsed text/parsed data so opening the page does not trigger a browser download.
+- `GET /resumes/{resume_id}/file` returns the original file with inline content disposition for preview-friendly file types.
+- Frontend API errors are sanitized into user-facing messages; system/network failures no longer emit a global "server connection" toast. User login failures show "아이디 또는 비밀번호를 확인해주세요."; company/admin login failures show "사업자등록번호 또는 이메일을 확인해주세요."
+- External webfont imports were removed in favor of a stable system font stack to reduce font/layout shift during refresh and page navigation.
 - OpenAI-based interview practice is implemented:
   - Session creation generates and stores exactly 5 questions once.
   - Session lookup returns saved questions and answers without calling OpenAI.
@@ -54,19 +62,32 @@ The app is now a 3-role demo platform:
 - User job list is a full-width list; job detail is `/user/jobs/{jobId}`.
 - "이력서 보내기" creates an `applications` row.
 - Duplicate active application per `(user_id, job_id)` is blocked.
+- The `l4m5n6o7p8q9` migration adding `applications.viewed_at` has been applied locally; missing this column caused `/applications` to fail during resume submission and appear as a browser CORS error.
 - User application page exists at `/user/applications`.
+- Application status flow is `SUBMITTED`(지원 완료) → `VIEWED`(이력서 열람); a company opening an applicant's resume flips the status to VIEWED and stamps `applications.viewed_at` once. The applicant sees the viewed state and viewed time.
+- `DELETE /applications/{id}` soft-cancels a user's own application; the partial unique index lets the user re-apply to the same job afterward.
+- User-side UI is wired: the job list (`/user/jobs`) and job detail show "지원완료" with an "이미 지원한 공고입니다" toast when the job is already in `GET /applications/me`; `ApplyModal` also toasts on the `APPLICATION_001` conflict. `/user/applications` shows a "지원취소" button (SUBMITTED/VIEWED only) that calls `DELETE /applications/{id}` and refetches.
 - Active endpoints:
   - `POST /applications`
   - `GET /applications/me`
+  - `DELETE /applications/{application_id}` (cancel)
 
 ### Company Platform
 
 - `companies` table links one company record to one `users.role = COMPANY` login account.
 - Company dedupe key is `bn:{digits}` when `business_number` exists, else `nm:{company_name}`.
 - Company accounts are auto-created on job ingestion and also ensured at application time.
+- Company dashboard self-heals missing `companies` rows for active `COMPANY` users by creating a minimal company profile, so a valid company login opens an empty dashboard instead of failing with `COMPANY_NOT_FOUND`.
+- Company dashboard UI now includes unread-application alerting, status summary, recent applicant overview, operational status, refresh action, and a richer empty state instead of only showing the applicant table.
+- The applicant table has an "이력서 보기" action that opens `ApplicantResumeModal`; opening it calls `GET /company/applications/{id}/resume`, which marks the application VIEWED and returns resume metadata plus parsed summary data. The modal then loads `GET /company/applications/{id}/resume/file` and shows the original PDF/image in a document-style preview, with a download button for the same original file. After viewing, the dashboard query is invalidated so the unread alert (`pending_count` = unviewed/SUBMITTED count) decreases.
+- The resume modal has a "면접 이메일 보내기" button that is a placeholder only (shows a "준비 중" toast); no email is sent yet.
+- Company posting management lives at `/company/jobs` (linked from the dashboard header). Companies can create/edit/delete their own `source="MANUAL"` postings, hide/unhide them with status `HIDDEN`, and view all postings matched by `business_number`/`company_name`. Externally collected postings are read-only (`editable=false`). Public `GET /jobs` excludes `HIDDEN` postings unless explicitly filtered by status.
 - Demo company accounts use synthetic emails under `company.jobfit.local` and the demo password convention `admin1234`. This is portfolio/demo-only and not production safe.
-- Company dashboard endpoint:
+- Company endpoints:
   - `GET /company/dashboard`
+  - `GET /company/applications/{application_id}/resume` (view applicant resume + mark VIEWED)
+  - `GET /company/applications/{application_id}/resume/file` (preview/download original resume file)
+  - `GET /company/jobs`, `POST /company/jobs`, `GET /company/jobs/{job_id}`, `PATCH /company/jobs/{job_id}`, `DELETE /company/jobs/{job_id}`
 
 ### Admin
 
@@ -106,6 +127,7 @@ Backend:
 
 - `backend/app/api/applications.py`
 - `backend/app/api/company.py`
+- `backend/app/api/resumes.py`
 - `backend/app/api/jobs.py`
 - `backend/app/api/admin_jobs.py`
 - `backend/app/api/admin_users.py`
@@ -142,6 +164,10 @@ Frontend:
 - `frontend/src/screens/admin/AdminJobsPage.tsx`
 - `frontend/src/app/company/login/page.tsx`
 - `frontend/src/app/company/dashboard/page.tsx`
+- `frontend/src/app/company/jobs/page.tsx`
+- `frontend/src/components/company/ApplicantResumeModal.tsx`
+- `frontend/src/components/company/CompanyJobDetailModal.tsx`
+- `frontend/src/components/company/CompanyJobFormModal.tsx`
 - `frontend/src/app/user/jobs/[jobId]/page.tsx`
 - `frontend/src/app/user/applications/page.tsx`
 - `frontend/src/components/jobs/ApplyModal.tsx`
@@ -157,6 +183,8 @@ Frontend:
 - `frontend/src/api/auth.ts`
 - `frontend/src/api/client.ts`
 - `frontend/src/api/types.ts`
+- `frontend/src/lib/loginPrefs.ts`
+- `frontend/src/stores/authStore.tsx`
 
 ## Verification
 
@@ -169,11 +197,42 @@ Most recent checks completed:
 - `git diff --check`
 - Replacement-character search across `frontend/src`, `backend/app`, `backend/alembic`, and `HANDOFF.md`
 
+Latest resume preview fix verified:
+
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
+
+Latest file-format/error/font handling verified:
+
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
+
+Latest role-aware login fix verified:
+
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
+
+Latest applications/CORS masking fix verified:
+
+- `cd backend; .\.venv\Scripts\alembic.exe upgrade head`
+- `cd backend; .\.venv\Scripts\python.exe -c "from app.core.database import engine; from sqlalchemy import inspect; cols=[c['name'] for c in inspect(engine).get_columns('applications')]; print('viewed_at' in cols); print('company_id' in cols)"`
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `curl.exe -i -X OPTIONS http://localhost:8004/applications -H "Origin: http://localhost:3000" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: content-type"`
+
+Latest company resume preview/download and posting hide-management verified:
+
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
+
 All blocking checks passed. `git diff --check` only prints line-ending warnings in this workspace.
 
 ## Known Remaining Work
 
-- Company self-signup, company layout beyond the current dashboard, and optional company job posting are not implemented.
+- Company self-signup and broader company layout beyond the current dashboard/jobs screens are not implemented.
 - Full admin A/B/C account-management actions are not implemented.
 - `frontend/src/screens/user/MatchesPage.tsx` still uses old mock matching stats.
 - Actual vector embedding/matching with sentence-transformers + pgvector is planned but not implemented.

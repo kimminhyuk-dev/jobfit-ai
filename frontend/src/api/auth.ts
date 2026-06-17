@@ -24,7 +24,11 @@ export interface SignupRequest extends ProfileFields {
 }
 
 export const authApi = {
-  login: async (body: { email: string; password: string }): Promise<AuthResponse> => {
+  login: async (body: {
+    email: string;
+    password: string;
+    portal?: 'user' | 'company';
+  }): Promise<AuthResponse> => {
     const res = await apiClient.post<AuthResponse>('/auth/login', body);
     return res.data;
   },

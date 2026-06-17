@@ -349,6 +349,7 @@ export interface MyApplication {
   resume_title: string;
   status: ApplicationStatus;
   applied_at: string;
+  viewed_at?: string | null;
 }
 
 // 기업회원 대시보드
@@ -362,6 +363,7 @@ export interface CompanyApplicant {
   resume_title: string;
   status: ApplicationStatus;
   applied_at: string;
+  viewed_at?: string | null;
 }
 
 export interface CompanyDashboard {
@@ -372,6 +374,63 @@ export interface CompanyDashboard {
   pending_count: number;
   posting_count: number;
   applicants: CompanyApplicant[];
+}
+
+// 기업이 열람하는 지원자 이력서 상세 (열람 시 상태가 VIEWED로 전환됨)
+export interface CompanyApplicantResume {
+  application_id: number;
+  status: ApplicationStatus;
+  applied_at: string;
+  viewed_at: string | null;
+  applicant_name: string | null;
+  applicant_email: string;
+  job_title: string;
+  resume_id: number;
+  resume_title: string;
+  original_filename: string;
+  content_type: string;
+  file_size: number;
+  parse_status: string;
+  parsed_data: ResumeParsedData | null;
+  structured_projects: ResumeProjectResponse[];
+  structured_cover_letter_sections: ResumeCoverLetterSectionResponse[];
+}
+
+// 기업 공고 관리
+export type CompanyJobStatus = 'OPEN' | 'CLOSED' | 'HIDDEN';
+
+export interface CompanyJob {
+  job_id: number;
+  title: string;
+  company_name: string | null;
+  location: string | null;
+  employment_type: string | null;
+  career_level: string | null;
+  education: string | null;
+  ncs_category: string | null;
+  salary_text: string | null;
+  raw_content: string | null;
+  deadline: string | null;
+  posted_at: string | null;
+  status: string;
+  source: string;
+  data_source: string;
+  editable: boolean;
+  applicant_count: number;
+  created_at: string;
+}
+
+export interface CompanyJobPayload {
+  title: string;
+  location?: string | null;
+  employment_type?: string | null;
+  career_level?: string | null;
+  education?: string | null;
+  ncs_category?: string | null;
+  salary_text?: string | null;
+  raw_content?: string | null;
+  deadline?: string | null;
+  status?: CompanyJobStatus;
 }
 
 // 카테고리

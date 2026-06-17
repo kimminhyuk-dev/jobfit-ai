@@ -22,6 +22,49 @@ function flushQueue(err: unknown) {
   pendingQueue = [];
 }
 
+function getLoginPortal(error: AxiosError<ApiError>): string | null {
+  const data = error.config?.data;
+  if (!data) return null;
+  if (typeof data === 'object' && 'portal' in data) {
+    return String(data.portal);
+  }
+  if (typeof data !== 'string') return null;
+
+  try {
+    const parsed = JSON.parse(data) as { portal?: unknown };
+    return typeof parsed.portal === 'string' ? parsed.portal : null;
+  } catch {
+    return null;
+  }
+}
+
+function getUserMessage(error: AxiosError<ApiError>, fallback: ApiError): string {
+  const status = error.response?.status;
+  const code = fallback.code;
+  const url = error.config?.url ?? '';
+
+  if (url.includes('/auth/login')) {
+    return getLoginPortal(error) === 'company'
+      ? '사업자등록번호 또는 이메일을 확인해주세요.'
+      : '아이디 또는 비밀번호를 확인해주세요.';
+  }
+  if (!error.response || status === undefined || status >= 500) {
+    return '요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.';
+  }
+  if (code === 'RESUME_003') {
+    return '등록 가능한 파일 형식 및 확장자 : PDF,PNG,JPG,JPEG,GIF';
+  }
+  if (status === 401) return '로그인이 필요합니다.';
+  if (status === 403) return '접근 권한이 없습니다.';
+  if (status === 404) return '요청한 정보를 찾을 수 없습니다.';
+  if (status === 409 && fallback.message) return fallback.message;
+  if (status === 413 || code === 'RESUME_002') {
+    return '파일은 최대 10MB까지 업로드할 수 있습니다.';
+  }
+  if (status === 422) return '입력한 내용을 다시 확인해주세요.';
+  return fallback.message || '요청을 처리하지 못했습니다.';
+}
+
 apiClient.interceptors.response.use(
   (res) => res,
   async (error: AxiosError<ApiError>) => {
@@ -30,8 +73,9 @@ apiClient.interceptors.response.use(
     const is401 = error.response?.status === 401;
     const isRefreshEndpoint = cfg?.url?.includes('/auth/refresh');
     const isLoginEndpoint = cfg?.url?.includes('/auth/login');
+    const isMeEndpoint = cfg?.url?.includes('/auth/me');
 
-    if (is401 && cfg && !cfg._retry && !isRefreshEndpoint && !isLoginEndpoint) {
+    if (is401 && cfg && !cfg._retry && !isRefreshEndpoint && !isLoginEndpoint && !isMeEndpoint) {
       if (isRefreshing) {
         // 이미 갱신 중이면 대기열에 추가
         return new Promise((resolve, reject) => {
@@ -62,22 +106,12 @@ apiClient.interceptors.response.use(
 
     const apiErr: ApiError = error.response?.data ?? {
       code: 'NETWORK_ERROR',
-      message: '서버에 연결할 수 없습니다.',
+      message: '요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.',
     };
-
-    // 시스템 오류(서버 5xx · 네트워크 끊김)는 전역 팝업으로 알린다.
-    // 필드 검증(422)·인증(401)은 각 화면에서 인라인 처리하므로 제외한다.
-    const status = error.response?.status;
-    const isSystemError = !error.response || (status !== undefined && status >= 500);
-    if (isSystemError && typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('app:toast', {
-          detail: { type: 'error', message: apiErr.message },
-        }),
-      );
-    }
-
-    return Promise.reject(apiErr);
+    return Promise.reject({
+      ...apiErr,
+      message: getUserMessage(error, apiErr),
+    });
   },
 );
 

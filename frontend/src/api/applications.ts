@@ -14,4 +14,8 @@ export const applicationsApi = {
     const res = await apiClient.get<MyApplication[]>('/applications/me');
     return res.data;
   },
+
+  cancel: async (applicationId: number): Promise<void> => {
+    await apiClient.delete(`/applications/${applicationId}`);
+  },
 };

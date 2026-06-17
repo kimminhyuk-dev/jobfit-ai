@@ -1,6 +1,7 @@
 'use client';
 
 import { useReducer, useEffect, type ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { authApi } from '../api/auth';
 import type { User } from '../api/types';
 import { AuthContext, type AuthState } from './authContext';
@@ -27,6 +28,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [state, dispatch] = useReducer(authReducer, {
     user: null,
     loading: true,
@@ -35,6 +37,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 앱 시작 시 쿠키 기반으로 세션 복원
   useEffect(() => {
     const init = async () => {
+      const isPublicAuthPage =
+        pathname === '/login' ||
+        pathname === '/company/login' ||
+        pathname === '/signup';
+      if (isPublicAuthPage) {
+        dispatch({ type: 'LOGOUT' });
+        return;
+      }
       try {
         const user = await authApi.me();
         dispatch({ type: 'SET_USER', user });
@@ -49,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
     init();
-  }, []);
+  }, [pathname]);
 
   const setUser = (user: User) => {
     dispatch({ type: 'UPDATE_USER', user });

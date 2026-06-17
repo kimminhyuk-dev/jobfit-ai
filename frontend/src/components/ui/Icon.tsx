@@ -8,6 +8,7 @@ interface IconProps {
 
 const iconPaths = {
   upload: <><path d="M12 4v12" /><path d="m6 10 6-6 6 6" /><path d="M4 20h16" /></>,
+  download: <><path d="M12 4v12" /><path d="m6 10 6 6 6-6" /><path d="M4 20h16" /></>,
   file: <><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6" /></>,
   sparkle: <><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" /></>,
   home: <><path d="m3 12 9-9 9 9" /><path d="M5 10v10h14V10" /></>,

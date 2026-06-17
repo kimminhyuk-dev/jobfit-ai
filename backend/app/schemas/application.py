@@ -39,3 +39,4 @@ class MyApplicationItem(BaseModel):
     resume_title: str
     status: str
     applied_at: datetime
+    viewed_at: datetime | None = None

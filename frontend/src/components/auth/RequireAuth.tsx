@@ -4,12 +4,19 @@ import { useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useAuth } from '../../stores/authContext';
 
+type KnownRole = 'USER' | 'COMPANY' | 'ADMIN';
+
 function FullPageSpinner() {
   return (
     <div className="flex h-screen items-center justify-center bg-m-bg">
       <div className="w-8 h-8 rounded-full border-2 border-m-primary border-t-transparent animate-spin" />
     </div>
   );
+}
+
+function normalizedRole(role: string | undefined): KnownRole | null {
+  const value = role?.trim().toUpperCase();
+  return value === 'USER' || value === 'COMPANY' || value === 'ADMIN' ? value : null;
 }
 
 export function RequireAuth({
@@ -19,14 +26,15 @@ export function RequireAuth({
 }: {
   children: ReactNode;
   adminOnly?: boolean;
-  allowedRoles?: Array<'USER' | 'COMPANY' | 'ADMIN'>;
+  allowedRoles?: KnownRole[];
 }) {
   const router = useRouter();
   const { user, loading } = useAuth();
+  const role = normalizedRole(user?.role);
   const isRoleBlocked =
     !!user &&
-    ((adminOnly && user.role !== 'ADMIN') ||
-      (allowedRoles !== undefined && !allowedRoles.includes(user.role)));
+    ((adminOnly && role !== 'ADMIN') ||
+      (allowedRoles !== undefined && (role === null || !allowedRoles.includes(role))));
   const redirectTo = !user ? '/login' : isRoleBlocked ? '/user/dashboard' : null;
 
   useEffect(() => {
@@ -44,12 +52,13 @@ export function RootRedirect() {
 
   useEffect(() => {
     if (loading) return;
+    const role = normalizedRole(user?.role);
     router.replace(
       !user
         ? '/login'
-        : user.role === 'ADMIN'
+        : role === 'ADMIN'
           ? '/admin/dashboard'
-          : user.role === 'COMPANY'
+          : role === 'COMPANY'
             ? '/company/dashboard'
             : '/user/dashboard',
     );

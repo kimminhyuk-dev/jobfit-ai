@@ -2,6 +2,8 @@
 인증 관련 요청/응답 스키마
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.user import UserResponse
@@ -12,6 +14,7 @@ class LoginRequest(BaseModel):
 
     email: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=1, max_length=128)
+    portal: Literal["user", "company"] | None = None
 
     @field_validator("email")
     @classmethod

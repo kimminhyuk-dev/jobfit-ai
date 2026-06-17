@@ -35,11 +35,13 @@ class ResumeUnsupportedFileTypeError(Exception):
 
 ALLOWED_CONTENT_TYPES = {
     "application/pdf": ".pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
-    "text/plain": ".txt",
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
 }
 
-ALLOWED_SUFFIXES = {".pdf", ".docx", ".txt"}
+ALLOWED_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".gif"}
+PARSEABLE_SUFFIXES = {".pdf"}
 
 logger = logging.getLogger(__name__)
 
@@ -138,12 +140,13 @@ class ResumeService:
         parsed_data: dict[str, Any] | None = None
         parse_status = "COMPLETED"
         parse_error: str | None = None
-        try:
-            raw_text = extract_resume_text(file_path, content_type)
-            parsed_data = _parse_with_best_available(raw_text)
-        except ResumeParseError as exc:
-            parse_status = "FAILED"
-            parse_error = str(exc)
+        if suffix in PARSEABLE_SUFFIXES:
+            try:
+                raw_text = extract_resume_text(file_path, content_type)
+                parsed_data = _parse_with_best_available(raw_text)
+            except ResumeParseError:
+                parse_status = "FAILED"
+                parse_error = "파일 내용을 분석하지 못했습니다. 다른 PDF 파일로 다시 등록해 주세요."
 
         try:
             resume_title = (title or Path(original_filename).stem).strip() or "내 이력서"

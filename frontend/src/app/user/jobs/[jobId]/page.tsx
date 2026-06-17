@@ -5,7 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import Icon from '../../../../components/ui/Icon';
 import ApplyModal from '../../../../components/jobs/ApplyModal';
+import { showToast } from '../../../../components/ui/Toast';
 import { jobsApi } from '../../../../api/jobs';
+import { applicationsApi } from '../../../../api/applications';
 
 const LOGO_COLORS = ['#1d4ed8', '#0f766e', '#7c3aed', '#ea580c', '#0284c7', '#15803d', '#b45309'];
 
@@ -58,6 +60,12 @@ export default function JobDetailRoutePage() {
     queryFn: () => jobsApi.getJob(jobId),
     enabled: Number.isFinite(jobId),
   });
+
+  const { data: myApplications = [] } = useQuery({
+    queryKey: ['applications', 'me'],
+    queryFn: applicationsApi.getMyApplications,
+  });
+  const alreadyApplied = myApplications.some((a) => a.job_id === jobId);
 
   if (isLoading) {
     return <div className="p-10 text-center text-[13px] text-m-subtle">공고를 불러오는 중...</div>;
@@ -117,12 +125,21 @@ export default function JobDetailRoutePage() {
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
             <span className="text-[15px] font-bold text-m-danger">{dday(job.deadline)}</span>
-            <button
-              onClick={() => setShowApply(true)}
-              className="h-10 px-5 rounded-lg bg-m-primary text-white text-[13px] font-semibold hover:bg-m-primary-hover transition-colors flex items-center gap-1.5"
-            >
-              <Icon name="upload" size={14} /> 이력서 보내기
-            </button>
+            {alreadyApplied ? (
+              <button
+                onClick={() => showToast('이미 지원한 공고입니다.', 'info')}
+                className="h-10 px-5 rounded-lg border border-m-border text-m-subtle text-[13px] font-semibold hover:bg-m-surface-alt transition-colors flex items-center gap-1.5"
+              >
+                <Icon name="check" size={14} /> 지원 완료
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowApply(true)}
+                className="h-10 px-5 rounded-lg bg-m-primary text-white text-[13px] font-semibold hover:bg-m-primary-hover transition-colors flex items-center gap-1.5"
+              >
+                <Icon name="upload" size={14} /> 이력서 보내기
+              </button>
+            )}
             {job.source_url && (
               <a
                 href={job.source_url}

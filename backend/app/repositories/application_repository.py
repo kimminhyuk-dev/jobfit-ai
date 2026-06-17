@@ -2,6 +2,7 @@
 Application 테이블 DB 접근 계층
 """
 
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import Row, func, select
@@ -28,6 +29,51 @@ class ApplicationRepository:
             .where(Application.is_deleted.is_(False))
         )
         return self.db.execute(stmt).scalar_one_or_none()
+
+    def get_active_by_id_for_user(
+        self, application_id: int, user_id: int
+    ) -> Application | None:
+        """지원 취소를 위해 본인 소유의 (삭제되지 않은) 지원을 조회한다."""
+        stmt = (
+            select(Application)
+            .where(Application.application_id == application_id)
+            .where(Application.user_id == user_id)
+            .where(Application.is_deleted.is_(False))
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def get_active_by_id_for_company(
+        self, application_id: int, company_id: int
+    ) -> Application | None:
+        """기업 열람을 위해 해당 기업에 전달된 (삭제되지 않은) 지원을 조회한다."""
+        stmt = (
+            select(Application)
+            .where(Application.application_id == application_id)
+            .where(Application.company_id == company_id)
+            .where(Application.is_deleted.is_(False))
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def cancel(
+        self, application: Application, *, actor_id: int, request_ip: str | None
+    ) -> None:
+        """지원을 소프트 삭제(지원 취소)한다. 같은 공고에 재지원이 가능해진다."""
+        application.is_deleted = True
+        application.updated_by = actor_id
+        application.updated_ip = request_ip
+        self.db.flush()
+
+    def mark_viewed(
+        self, application: Application, *, actor_id: int, request_ip: str | None
+    ) -> Application:
+        """기업이 이력서를 처음 열람하면 상태를 VIEWED로 바꾸고 열람 시각을 기록한다."""
+        if application.status == "SUBMITTED":
+            application.status = "VIEWED"
+            application.viewed_at = datetime.now(timezone.utc)
+            application.updated_by = actor_id
+            application.updated_ip = request_ip
+            self.db.flush()
+        return application
 
     def create(
         self,
@@ -113,3 +159,13 @@ class ApplicationRepository:
             self.db.execute(base.where(Application.status == "SUBMITTED")).scalar_one()
         )
         return total, pending
+
+    def count_active_by_company_jobs(self, company_id: int) -> dict[int, int]:
+        """기업의 공고별 (삭제되지 않은) 지원 수를 {job_id: count}로 반환한다."""
+        stmt = (
+            select(Application.job_id, func.count())
+            .where(Application.company_id == company_id)
+            .where(Application.is_deleted.is_(False))
+            .group_by(Application.job_id)
+        )
+        return {job_id: int(count) for job_id, count in self.db.execute(stmt).all()}

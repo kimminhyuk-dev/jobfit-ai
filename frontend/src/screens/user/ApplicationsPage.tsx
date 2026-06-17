@@ -2,16 +2,20 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { applicationsApi } from '../../api/applications';
-import type { ApplicationStatus, MyApplication } from '../../api/types';
+import { showToast } from '../../components/ui/Toast';
+import type { ApiError, ApplicationStatus, MyApplication } from '../../api/types';
 
 const STATUS_META: Record<ApplicationStatus, { label: string; cls: string }> = {
   SUBMITTED: { label: '지원 완료', cls: 'bg-m-primary-soft text-m-primary' },
-  VIEWED: { label: '열람됨', cls: 'bg-m-warn-soft text-m-warn' },
+  VIEWED: { label: '이력서 열람', cls: 'bg-m-warn-soft text-m-warn' },
   ACCEPTED: { label: '합격', cls: 'bg-m-success-soft text-m-success' },
   REJECTED: { label: '불합격', cls: 'bg-m-danger-soft text-m-danger' },
 };
+
+// 합격/불합격 확정 전까지만 지원 취소를 허용한다.
+const CANCELABLE: ApplicationStatus[] = ['SUBMITTED', 'VIEWED'];
 
 const STATUS_ORDER: ApplicationStatus[] = ['SUBMITTED', 'VIEWED', 'ACCEPTED', 'REJECTED'];
 
@@ -22,10 +26,26 @@ function dateStr(value: string): string {
 
 export default function ApplicationsPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: applications = [], isLoading, isError } = useQuery({
     queryKey: ['applications', 'me'],
     queryFn: applicationsApi.getMyApplications,
   });
+
+  const cancelMutation = useMutation({
+    mutationFn: (applicationId: number) => applicationsApi.cancel(applicationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applications', 'me'] });
+      showToast('지원을 취소했습니다.', 'success');
+    },
+    onError: (e: ApiError) => showToast(e.message || '지원 취소에 실패했습니다.', 'error'),
+  });
+
+  function handleCancel(app: MyApplication) {
+    if (cancelMutation.isPending) return;
+    if (!window.confirm(`'${app.job_title}' 지원을 취소할까요?`)) return;
+    cancelMutation.mutate(app.application_id);
+  }
 
   const counts = STATUS_ORDER.map((status) => ({
     status,
@@ -77,7 +97,7 @@ export default function ApplicationsPage() {
                 <th className="px-4 py-3 text-left font-semibold">사용 이력서</th>
                 <th className="px-4 py-3 text-left font-semibold">상태</th>
                 <th className="px-4 py-3 text-left font-semibold">지원일</th>
-                <th className="px-4 py-3 text-right font-semibold">보기</th>
+                <th className="px-4 py-3 text-right font-semibold">관리</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-m-border">
@@ -117,6 +137,15 @@ export default function ApplicationsPage() {
                           >
                             원문
                           </a>
+                        )}
+                        {CANCELABLE.includes(app.status) && (
+                          <button
+                            onClick={() => handleCancel(app)}
+                            disabled={cancelMutation.isPending}
+                            className="text-[12px] font-medium text-m-danger hover:underline disabled:opacity-50"
+                          >
+                            지원취소
+                          </button>
                         )}
                       </div>
                     </td>

@@ -79,6 +79,11 @@ class Application(Base, AuditMixin, SoftDeleteMixin):
         index=True,
         comment="지원 시각",
     )
+    viewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="기업이 이력서를 처음 열람한 시각 (미열람이면 null)",
+    )
 
     def __repr__(self) -> str:
         return f"<Application(application_id={self.application_id}, user_id={self.user_id}, job_id={self.job_id})>"

@@ -30,6 +30,10 @@ def get_user_service(db: Session = Depends(get_db)) -> UserService:
     return UserService(db)
 
 
+def _normalized_role(user: User) -> str:
+    return (user.role or "").strip().upper()
+
+
 @router.post(
     "/signup",
     response_model=AuthResponse,
@@ -78,6 +82,17 @@ def login(
             status_code=status.HTTP_403_FORBIDDEN,
             code=ErrorCode.INACTIVE_USER,
             message="활성화되지 않은 계정입니다.",
+        )
+
+    role = _normalized_role(user)
+    if (login_request.portal == "user" and role != "USER") or (
+        login_request.portal == "company"
+        and role not in {"COMPANY", "ADMIN"}
+    ):
+        raise AppException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            code=ErrorCode.INVALID_CREDENTIALS,
+            message="로그인 유형에 맞는 계정을 사용해 주세요.",
         )
 
     ip = get_client_ip(request)

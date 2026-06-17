@@ -83,6 +83,12 @@ class JobPostingRepository:
         """저장된 채용공고를 조건별로 조회한다."""
         conditions = [JobPosting.is_deleted.is_(False)]
 
+        status_value = _clean(filters.get("status"))
+        if status_value:
+            conditions.append(JobPosting.status == status_value)
+        else:
+            conditions.append(JobPosting.status != "HIDDEN")
+
         source = _clean(filters.get("source"))
         if source:
             conditions.append(JobPosting.source == source)
@@ -103,7 +109,6 @@ class JobPostingRepository:
             "employment_type_code",
             "education_code",
             "career_level_code",
-            "status",
             "data_source",
         ):
             value = _clean(filters.get(field_name))
@@ -182,11 +187,7 @@ class JobPostingRepository:
         company_name: str | None,
     ) -> int:
         """기업의 사업자번호/회사명과 일치하는 등록 공고 수를 센다."""
-        identifiers = []
-        if business_number:
-            identifiers.append(JobPosting.business_number == business_number)
-        if company_name:
-            identifiers.append(JobPosting.company_name == company_name)
+        identifiers = self._company_identifiers(business_number, company_name)
         if not identifiers:
             return 0
         stmt = (
@@ -196,6 +197,107 @@ class JobPostingRepository:
             .where(or_(*identifiers))
         )
         return int(self.db.execute(stmt).scalar_one())
+
+    def list_by_company(
+        self,
+        business_number: str | None,
+        company_name: str | None,
+    ) -> list[JobPosting]:
+        """기업의 사업자번호/회사명과 일치하는 공고를 최신순으로 조회한다."""
+        identifiers = self._company_identifiers(business_number, company_name)
+        if not identifiers:
+            return []
+        stmt = (
+            select(JobPosting)
+            .where(JobPosting.is_deleted.is_(False))
+            .where(or_(*identifiers))
+            .order_by(JobPosting.created_at.desc(), JobPosting.job_id.desc())
+        )
+        return list(self.db.execute(stmt).scalars().all())
+
+    def get_company_owned(
+        self,
+        job_id: int,
+        business_number: str | None,
+        company_name: str | None,
+    ) -> JobPosting | None:
+        """기업에 속한(사업자번호/회사명 일치) 단일 공고를 조회한다."""
+        identifiers = self._company_identifiers(business_number, company_name)
+        if not identifiers:
+            return None
+        stmt = (
+            select(JobPosting)
+            .where(JobPosting.job_id == job_id)
+            .where(JobPosting.is_deleted.is_(False))
+            .where(or_(*identifiers))
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def create_company_job(
+        self,
+        *,
+        company_name: str | None,
+        business_number: str | None,
+        fields: dict[str, Any],
+        actor_id: int,
+        request_ip: str | None,
+    ) -> JobPosting:
+        """기업이 직접 등록하는 MANUAL 공고를 생성한다."""
+        posting = JobPosting(
+            source="MANUAL",
+            source_job_id=None,
+            data_source="MANUAL",
+            company_name=company_name,
+            business_number=business_number,
+            posted_at=datetime.now(timezone.utc),
+            collected_at=datetime.now(timezone.utc),
+            created_by=actor_id,
+            created_ip=request_ip,
+            updated_by=actor_id,
+            updated_ip=request_ip,
+            **fields,
+        )
+        self.db.add(posting)
+        self.db.flush()
+        return posting
+
+    def update_fields(
+        self,
+        posting: JobPosting,
+        fields: dict[str, Any],
+        actor_id: int,
+        request_ip: str | None,
+    ) -> JobPosting:
+        for key, value in fields.items():
+            setattr(posting, key, value)
+        posting.updated_by = actor_id
+        posting.updated_ip = request_ip
+        self.db.flush()
+        return posting
+
+    def soft_delete(
+        self,
+        posting: JobPosting,
+        actor_id: int,
+        request_ip: str | None,
+    ) -> None:
+        posting.is_deleted = True
+        posting.status = "CLOSED"
+        posting.updated_by = actor_id
+        posting.updated_ip = request_ip
+        self.db.flush()
+
+    @staticmethod
+    def _company_identifiers(
+        business_number: str | None,
+        company_name: str | None,
+    ) -> list[Any]:
+        identifiers: list[Any] = []
+        if business_number:
+            identifiers.append(JobPosting.business_number == business_number)
+        if company_name:
+            identifiers.append(JobPosting.company_name == company_name)
+        return identifiers
 
 
 def _clean(value: Any) -> str | None:

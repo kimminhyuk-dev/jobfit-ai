@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Icon from '../../components/ui/Icon';
-import { resumesApi, type UploadResumeParams } from '../../api/resumes';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Icon from "../../components/ui/Icon";
+import { resumesApi, type UploadResumeParams } from "../../api/resumes";
 import type {
   ApiError,
   InterviewAnswerResponse,
@@ -13,12 +13,18 @@ import type {
   InterviewSessionStatus,
   InterviewSessionResponse,
   Resume,
-} from '../../api/types';
+} from "../../api/types";
 
 const MAX_RESUME_UPLOAD_BYTES = 10 * 1024 * 1024;
-const ALLOWED_RESUME_EXTENSIONS = ['.pdf', '.docx', '.txt'];
+const ALLOWED_RESUME_EXTENSIONS = [".pdf", ".png", ".jpg", ".jpeg", ".gif"];
 
-type UploadFlowStatus = 'idle' | 'uploading' | 'analyzing' | 'matching' | 'complete' | 'error';
+type UploadFlowStatus =
+  | "idle"
+  | "uploading"
+  | "analyzing"
+  | "matching"
+  | "complete"
+  | "error";
 
 interface UploadFlow {
   status: UploadFlowStatus;
@@ -32,44 +38,117 @@ function formatFileSize(size: number): string {
   return `${(size / 1024 / 1024).toFixed(1)}MB`;
 }
 
-function statusLabel(status: Resume['parse_status']): string {
-  if (status === 'COMPLETED') return '준비 완료';
-  if (status === 'FAILED') return '확인 필요';
-  return '처리 중';
+function statusLabel(status: Resume["parse_status"]): string {
+  if (status === "COMPLETED") return "준비 완료";
+  if (status === "FAILED") return "확인 필요";
+  return "처리 중";
 }
 
-function statusClass(status: Resume['parse_status']): string {
-  if (status === 'COMPLETED') return 'bg-m-success-soft text-m-success';
-  if (status === 'FAILED') return 'bg-m-danger-soft text-m-danger';
-  return 'bg-m-warn-soft text-m-warn';
+function statusClass(status: Resume["parse_status"]): string {
+  if (status === "COMPLETED") return "bg-m-success-soft text-m-success";
+  if (status === "FAILED") return "bg-m-danger-soft text-m-danger";
+  return "bg-m-warn-soft text-m-warn";
+}
+
+function isOriginalFilePreviewable(resume: Resume): boolean {
+  const contentType = resume.content_type.toLowerCase();
+  const fileName = resume.original_filename.toLowerCase();
+  return (
+    contentType === "application/pdf" ||
+    contentType.startsWith("image/") ||
+    contentType.startsWith("text/") ||
+    fileName.endsWith(".pdf") ||
+    fileName.endsWith(".png") ||
+    fileName.endsWith(".jpg") ||
+    fileName.endsWith(".jpeg") ||
+    fileName.endsWith(".gif") ||
+    fileName.endsWith(".txt")
+  );
+}
+
+function isImageResumeFile(resume: Resume): boolean {
+  const contentType = resume.content_type.toLowerCase();
+  const fileName = resume.original_filename.toLowerCase();
+  return (
+    contentType.startsWith("image/") ||
+    fileName.endsWith(".png") ||
+    fileName.endsWith(".jpg") ||
+    fileName.endsWith(".jpeg") ||
+    fileName.endsWith(".gif")
+  );
+}
+
+function buildParsedResumePreview(resume: Resume): string | null {
+  const rawText = resume.raw_text?.trim();
+  if (rawText) return rawText;
+
+  const parsed = resume.parsed_data;
+  if (!parsed) return null;
+
+  const sections: string[] = [];
+  const profileLines = [
+    parsed.profile?.name,
+    parsed.profile?.email,
+    parsed.profile?.phone,
+    parsed.profile?.address,
+  ].filter(Boolean);
+  if (profileLines.length > 0) {
+    sections.push(["기본 정보", ...profileLines].join("\n"));
+  }
+  if (parsed.skills?.length)
+    sections.push(["기술 스택", parsed.skills.join(", ")].join("\n"));
+  if (parsed.experiences?.length) {
+    sections.push(["경력", ...parsed.experiences].join("\n"));
+  }
+  if (parsed.projects?.length) {
+    const projects = parsed.projects.map((project) =>
+      typeof project === "string"
+        ? project
+        : [
+            project.name,
+            project.period,
+            project.role,
+            project.description,
+            project.review,
+          ]
+            .filter(Boolean)
+            .join(" / "),
+    );
+    sections.push(["프로젝트", ...projects].join("\n"));
+  }
+  if (parsed.cover_letter)
+    sections.push(["자기소개서", parsed.cover_letter].join("\n"));
+
+  return sections.length > 0 ? sections.join("\n\n") : null;
 }
 
 export default function ResumesPage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [drag, setDrag] = useState(false);
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState("");
   const [isDefault, setIsDefault] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Resume | null>(null);
-  const [interviewSession, setInterviewSession] = useState<InterviewSessionResponse | null>(null);
+  const [interviewSession, setInterviewSession] =
+    useState<InterviewSessionResponse | null>(null);
   const [answerDrafts, setAnswerDrafts] = useState<Record<number, string>>({});
   const [uploadFlow, setUploadFlow] = useState<UploadFlow>({
-    status: 'idle',
+    status: "idle",
     progress: 0,
-    fileName: '',
+    fileName: "",
     fileSize: 0,
   });
 
   const { data: resumes = [], isLoading } = useQuery({
-    queryKey: ['resumes'],
+    queryKey: ["resumes"],
     queryFn: resumesApi.getResumes,
   });
 
   const selectedId = selected?.resume_id ?? resumes[0]?.resume_id ?? null;
 
   const { data: selectedDetail } = useQuery({
-    queryKey: ['resume', selectedId],
+    queryKey: ["resume", selectedId],
     queryFn: () => resumesApi.getResume(selectedId as number),
     enabled: selectedId !== null,
   });
@@ -77,24 +156,24 @@ export default function ResumesPage() {
   const uploadMutation = useMutation<Resume, ApiError, UploadResumeParams>({
     mutationFn: resumesApi.uploadResume,
     onSuccess: (resume) => {
-      setTitle('');
+      setTitle("");
       setError(null);
       setSelected(resume);
       setInterviewSession(null);
       setAnswerDrafts({});
       setUploadFlow((prev) => ({
         ...prev,
-        status: 'complete',
+        status: "complete",
         progress: 100,
       }));
-      queryClient.setQueryData(['resume', resume.resume_id], resume);
-      queryClient.invalidateQueries({ queryKey: ['resumes'] });
+      queryClient.setQueryData(["resume", resume.resume_id], resume);
+      queryClient.invalidateQueries({ queryKey: ["resumes"] });
     },
     onError: (err: ApiError) => {
-      setError(err.message || '이력서 업로드에 실패했습니다.');
+      setError(err.message || "이력서 업로드에 실패했습니다.");
       setUploadFlow((prev) => ({
         ...prev,
-        status: 'error',
+        status: "error",
         progress: Math.max(prev.progress, 16),
       }));
     },
@@ -106,15 +185,19 @@ export default function ResumesPage() {
       setSelected(null);
       setInterviewSession(null);
       setAnswerDrafts({});
-      queryClient.removeQueries({ queryKey: ['resume', deletedResumeId] });
-      queryClient.invalidateQueries({ queryKey: ['resumes'] });
+      queryClient.removeQueries({ queryKey: ["resume", deletedResumeId] });
+      queryClient.invalidateQueries({ queryKey: ["resumes"] });
     },
     onError: (err: ApiError) => {
-      setError(err.message || '이력서 삭제에 실패했습니다.');
+      setError(err.message || "이력서 삭제에 실패했습니다.");
     },
   });
 
-  const createInterviewSessionMutation = useMutation<InterviewSessionResponse, ApiError, number>({
+  const createInterviewSessionMutation = useMutation<
+    InterviewSessionResponse,
+    ApiError,
+    number
+  >({
     mutationFn: resumesApi.createInterviewSession,
     onSuccess: (session) => {
       setError(null);
@@ -122,7 +205,7 @@ export default function ResumesPage() {
       setAnswerDrafts({});
     },
     onError: (err: ApiError) => {
-      setError(err.message || '면접 연습을 시작하지 못했습니다.');
+      setError(err.message || "면접 연습을 시작하지 못했습니다.");
     },
   });
 
@@ -137,7 +220,9 @@ export default function ResumesPage() {
       setInterviewSession((session) => {
         if (!session) return session;
         const questions = session.questions.map((question) =>
-          question.question_id === answer.question_id ? { ...question, answer } : question,
+          question.question_id === answer.question_id
+            ? { ...question, answer }
+            : question,
         );
         const answeredScore = questions.reduce(
           (total, question) => total + (question.answer?.score ?? 0),
@@ -148,28 +233,37 @@ export default function ResumesPage() {
           ...session,
           questions,
           total_score: answeredScore,
-          status: allAnswered ? 'COMPLETED' : 'IN_PROGRESS',
+          status: allAnswered ? "COMPLETED" : "IN_PROGRESS",
         };
       });
     },
     onError: (err: ApiError) => {
-      setError(err.message || '답변 평가에 실패했습니다.');
+      setError(err.message || "답변 평가에 실패했습니다.");
     },
   });
 
   const activeResume = selectedDetail ?? selected ?? resumes[0] ?? null;
   const previewResumeId = activeResume?.resume_id ?? null;
+  const canPreviewOriginalFile = activeResume
+    ? isOriginalFilePreviewable(activeResume)
+    : false;
+  const isPreviewImage = activeResume ? isImageResumeFile(activeResume) : false;
+  const parsedPreviewText = activeResume
+    ? buildParsedResumePreview(activeResume)
+    : null;
   const visibleInterviewSession =
-    activeResume && interviewSession?.resume_id === activeResume.resume_id ? interviewSession : null;
+    activeResume && interviewSession?.resume_id === activeResume.resume_id
+      ? interviewSession
+      : null;
 
   const {
     data: previewBlob,
     isFetching: isPreviewLoading,
     isError: isPreviewError,
   } = useQuery({
-    queryKey: ['resume-file', previewResumeId],
+    queryKey: ["resume-file", previewResumeId],
     queryFn: () => resumesApi.getResumeFileBlob(previewResumeId as number),
-    enabled: previewResumeId !== null,
+    enabled: previewResumeId !== null && canPreviewOriginalFile,
   });
 
   const previewUrl = useMemo(() => {
@@ -185,23 +279,27 @@ export default function ResumesPage() {
     };
   }, [previewUrl]);
 
-  const isUploadFlowVisible = uploadFlow.status !== 'idle';
+  const isUploadFlowVisible = uploadFlow.status !== "idle";
 
   useEffect(() => {
     if (!uploadMutation.isPending) return;
 
     const timer = window.setInterval(() => {
       setUploadFlow((prev) => {
-        if (!uploadMutation.isPending || prev.status === 'complete' || prev.status === 'error') {
+        if (
+          !uploadMutation.isPending ||
+          prev.status === "complete" ||
+          prev.status === "error"
+        ) {
           return prev;
         }
 
         const nextProgress = Math.min(prev.progress + 4, 92);
-        let nextStatus: UploadFlowStatus = 'uploading';
+        let nextStatus: UploadFlowStatus = "uploading";
         if (nextProgress >= 76) {
-          nextStatus = 'matching';
+          nextStatus = "matching";
         } else if (nextProgress >= 38) {
-          nextStatus = 'analyzing';
+          nextStatus = "analyzing";
         }
 
         return {
@@ -218,11 +316,13 @@ export default function ResumesPage() {
   function upload(file: File | undefined) {
     if (!file) return;
     const lowerName = file.name.toLowerCase();
-    const isAllowed = ALLOWED_RESUME_EXTENSIONS.some((extension) => lowerName.endsWith(extension));
+    const isAllowed = ALLOWED_RESUME_EXTENSIONS.some((extension) =>
+      lowerName.endsWith(extension),
+    );
     if (!isAllowed) {
-      setError('PDF, DOCX, TXT 파일만 지원합니다.');
+      setError("등록 가능한 파일 형식 및 확장자 : PDF,PNG,JPG,JPEG,GIF");
       setUploadFlow({
-        status: 'error',
+        status: "error",
         progress: 0,
         fileName: file.name,
         fileSize: file.size,
@@ -230,9 +330,9 @@ export default function ResumesPage() {
       return;
     }
     if (file.size > MAX_RESUME_UPLOAD_BYTES) {
-      setError('이력서 파일은 최대 10MB까지 업로드할 수 있습니다.');
+      setError("이력서 파일은 최대 10MB까지 업로드할 수 있습니다.");
       setUploadFlow({
-        status: 'error',
+        status: "error",
         progress: 0,
         fileName: file.name,
         fileSize: file.size,
@@ -241,7 +341,7 @@ export default function ResumesPage() {
     }
     setError(null);
     setUploadFlow({
-      status: 'uploading',
+      status: "uploading",
       progress: 8,
       fileName: file.name,
       fileSize: file.size,
@@ -257,9 +357,11 @@ export default function ResumesPage() {
     <div className="p-6 max-w-[1060px] mx-auto">
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-[20px] font-bold text-m-text tracking-tight mb-1">이력서</h1>
+          <h1 className="text-[20px] font-bold text-m-text tracking-tight mb-1">
+            이력서
+          </h1>
           <p className="text-[13px] text-m-muted">
-            PDF, DOCX, TXT 이력서를 업로드하고 저장된 원본 파일을 확인하세요.
+            등록 가능한 파일 형식 및 확장자 : PDF,PNG,JPG,JPEG,GIF
           </p>
         </div>
         <button
@@ -283,15 +385,17 @@ export default function ResumesPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+              accept=".pdf,.png,.jpg,.jpeg,.gif,application/pdf,image/png,image/jpeg,image/gif"
               className="hidden"
               onChange={(e) => {
                 upload(e.target.files?.[0]);
-                e.currentTarget.value = '';
+                e.currentTarget.value = "";
               }}
             />
             <div className="mb-3">
-              <label className="block text-[12px] font-semibold text-m-text mb-1.5">제목</label>
+              <label className="block text-[12px] font-semibold text-m-text mb-1.5">
+                제목
+              </label>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -324,20 +428,24 @@ export default function ResumesPage() {
               }}
               onClick={() => fileInputRef.current?.click()}
               className={`rounded-xl border-2 border-dashed py-12 text-center cursor-pointer transition-all ${
-                isUploadFlowVisible ? 'hidden' : ''
+                isUploadFlowVisible ? "hidden" : ""
               } ${
                 drag
-                  ? 'border-m-primary bg-m-primary-soft'
-                  : 'border-m-border-strong bg-m-surface-alt hover:border-m-primary hover:bg-m-primary-soft'
+                  ? "border-m-primary bg-m-primary-soft"
+                  : "border-m-border-strong bg-m-surface-alt hover:border-m-primary hover:bg-m-primary-soft"
               }`}
             >
               <div className="w-14 h-14 rounded-2xl bg-m-primary-soft text-m-primary flex items-center justify-center mx-auto mb-4">
                 <Icon name="upload" size={26} />
               </div>
               <p className="text-[15px] font-semibold text-m-text mb-1">
-                {uploadMutation.isPending ? '업로드 및 파싱 중...' : '파일을 끌어오거나 클릭하세요'}
+                {uploadMutation.isPending
+                  ? "업로드 중..."
+                  : "파일을 끌어오거나 클릭하세요"}
               </p>
-              <p className="text-[13px] text-m-muted">PDF, DOCX, TXT, 최대 10MB</p>
+              <p className="text-[13px] text-m-muted">
+                PDF, PNG, JPG, JPEG, GIF, 최대 10MB
+              </p>
             </div>
 
             {isUploadFlowVisible && (
@@ -346,9 +454,9 @@ export default function ResumesPage() {
                 onChooseFile={() => fileInputRef.current?.click()}
                 onReset={() => {
                   setUploadFlow({
-                    status: 'idle',
+                    status: "idle",
                     progress: 0,
-                    fileName: '',
+                    fileName: "",
                     fileSize: 0,
                   });
                   setError(null);
@@ -358,7 +466,9 @@ export default function ResumesPage() {
           </div>
 
           <div>
-            <h2 className="text-[14px] font-semibold text-m-text mb-3">등록된 이력서</h2>
+            <h2 className="text-[14px] font-semibold text-m-text mb-3">
+              등록된 이력서
+            </h2>
             <div className="flex flex-col gap-2.5">
               {isLoading ? (
                 <div className="bg-m-surface border border-m-border rounded-xl p-4 text-[13px] text-m-subtle">
@@ -379,8 +489,8 @@ export default function ResumesPage() {
                     }}
                     className={`bg-m-surface border rounded-xl p-4 flex items-center gap-4 text-left transition-colors ${
                       activeResume?.resume_id === resume.resume_id
-                        ? 'border-m-primary bg-m-primary-soft'
-                        : 'border-m-border hover:bg-m-surface-alt'
+                        ? "border-m-primary bg-m-primary-soft"
+                        : "border-m-border hover:bg-m-surface-alt"
                     }`}
                   >
                     <div className="w-10 h-10 rounded-lg bg-m-primary-soft text-m-primary flex items-center justify-center flex-shrink-0">
@@ -396,10 +506,13 @@ export default function ResumesPage() {
                         )}
                       </p>
                       <p className="text-[12px] text-m-muted mt-0.5 truncate">
-                        {resume.original_filename} - {formatFileSize(resume.file_size)}
+                        {resume.original_filename} -{" "}
+                        {formatFileSize(resume.file_size)}
                       </p>
                     </div>
-                    <span className={`text-[11px] font-semibold px-2 py-1 rounded-full ${statusClass(resume.parse_status)}`}>
+                    <span
+                      className={`text-[11px] font-semibold px-2 py-1 rounded-full ${statusClass(resume.parse_status)}`}
+                    >
                       {statusLabel(resume.parse_status)}
                     </span>
                   </button>
@@ -414,10 +527,14 @@ export default function ResumesPage() {
             <div className="p-5">
               <div className="flex items-start justify-between gap-4 mb-5">
                 <div>
-                  <h2 className="text-[18px] font-bold text-m-text">{activeResume.title}</h2>
+                  <h2 className="text-[18px] font-bold text-m-text">
+                    {activeResume.title}
+                  </h2>
                   <p className="text-[13px] text-m-muted mt-1">
-                    {activeResume.original_filename} - 등록일{' '}
-                    {new Date(activeResume.created_at).toLocaleDateString('ko-KR')}
+                    {activeResume.original_filename} - 등록일{" "}
+                    {new Date(activeResume.created_at).toLocaleDateString(
+                      "ko-KR",
+                    )}
                   </p>
                 </div>
                 <button
@@ -430,17 +547,26 @@ export default function ResumesPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-                <SummaryTile label="상태" value={statusLabel(activeResume.parse_status)} />
-                <SummaryTile label="파일 크기" value={formatFileSize(activeResume.file_size)} />
+                <SummaryTile
+                  label="상태"
+                  value={statusLabel(activeResume.parse_status)}
+                />
+                <SummaryTile
+                  label="파일 크기"
+                  value={formatFileSize(activeResume.file_size)}
+                />
                 <SummaryTile
                   label="파일 형식"
-                  value={activeResume.content_type.split('/')[1]?.toUpperCase() || '문서'}
+                  value={
+                    activeResume.content_type.split("/")[1]?.toUpperCase() ||
+                    "문서"
+                  }
                 />
               </div>
 
               {activeResume.parse_error && (
                 <div className="mb-5 rounded-xl border border-m-warn bg-m-warn-soft p-3 text-[13px] text-m-warn">
-                  {activeResume.parse_error}
+                  파일 내용을 분석하지 못했습니다. 다른 PDF 파일로 다시 등록해 주세요.
                 </div>
               )}
 
@@ -449,14 +575,18 @@ export default function ResumesPage() {
                 session={visibleInterviewSession}
                 answerDrafts={answerDrafts}
                 isCreating={createInterviewSessionMutation.isPending}
-                submittingQuestionId={submitAnswerMutation.variables?.questionId ?? null}
+                submittingQuestionId={
+                  submitAnswerMutation.variables?.questionId ?? null
+                }
                 isSubmitting={submitAnswerMutation.isPending}
-                onStart={() => createInterviewSessionMutation.mutate(activeResume.resume_id)}
+                onStart={() =>
+                  createInterviewSessionMutation.mutate(activeResume.resume_id)
+                }
                 onDraftChange={(questionId, value) =>
                   setAnswerDrafts((prev) => ({ ...prev, [questionId]: value }))
                 }
                 onSubmit={(questionId) => {
-                  const answer = (answerDrafts[questionId] || '').trim();
+                  const answer = (answerDrafts[questionId] || "").trim();
                   if (!answer) return;
                   submitAnswerMutation.mutate({
                     resumeId: activeResume.resume_id,
@@ -467,23 +597,52 @@ export default function ResumesPage() {
               />
 
               <div className="mb-4">
-                <h3 className="text-[14px] font-semibold text-m-text">파일 미리보기</h3>
+                <h3 className="text-[14px] font-semibold text-m-text">
+                  파일 미리보기
+                </h3>
               </div>
 
               <div className="rounded-2xl border border-m-border bg-m-surface-alt overflow-hidden aspect-[1/1.4] relative">
-                {isPreviewLoading ? (
+                {isPreviewLoading && canPreviewOriginalFile ? (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="flex flex-col items-center gap-3">
-                      <Icon name="sparkle" size={32} className="animate-spin text-m-primary" />
-                      <p className="text-[13px] text-m-muted font-medium">문서를 불러오는 중...</p>
+                      <Icon
+                        name="sparkle"
+                        size={32}
+                        className="animate-spin text-m-primary"
+                      />
+                      <p className="text-[13px] text-m-muted font-medium">
+                        문서를 불러오는 중...
+                      </p>
                     </div>
                   </div>
-                ) : previewUrl && !isPreviewError ? (
+                ) : previewUrl &&
+                  canPreviewOriginalFile &&
+                  isPreviewImage &&
+                  !isPreviewError ? (
+                  <div className="flex h-full items-center justify-center bg-white p-4">
+                    <img
+                      src={previewUrl}
+                      alt={activeResume.original_filename}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+                ) : previewUrl && canPreviewOriginalFile && !isPreviewError ? (
                   <iframe
                     src={previewUrl}
                     className="w-full h-full border-none"
                     title="이력서 미리보기"
                   />
+                ) : parsedPreviewText ? (
+                  <div className="h-full overflow-auto p-5 text-left">
+                    <div className="mb-3 flex items-center gap-2 text-[12px] font-semibold text-m-muted">
+                      <Icon name="file" size={14} />
+                      기존 문서 내용 미리보기
+                    </div>
+                    <pre className="whitespace-pre-wrap break-words font-sans text-[13px] leading-6 text-m-text">
+                      {parsedPreviewText}
+                    </pre>
+                  </div>
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center p-8 text-center">
                     <div className="max-w-[240px]">
@@ -494,7 +653,8 @@ export default function ResumesPage() {
                         미리보기를 불러올 수 없습니다
                       </p>
                       <p className="text-[12px] text-m-muted">
-                        파일이 없거나 아직 로딩 중일 수 있습니다. 잠시 후 다시 시도해 주세요.
+                        파일이 없거나 아직 로딩 중일 수 있습니다. 잠시 후 다시
+                        시도해 주세요.
                       </p>
                     </div>
                   </div>
@@ -542,7 +702,9 @@ function InterviewPracticePanel({
   onDraftChange: (questionId: number, value: string) => void;
   onSubmit: (questionId: number) => void;
 }) {
-  const canStart = resume.parse_status === 'COMPLETED';
+  const canStart =
+    resume.parse_status === "COMPLETED" &&
+    Boolean(resume.parsed_data?.text_length && resume.parsed_data.text_length > 0);
 
   return (
     <div className="mb-5 rounded-2xl border border-m-border bg-m-surface-alt p-4">
@@ -550,7 +712,8 @@ function InterviewPracticePanel({
         <div>
           <h3 className="text-[14px] font-semibold text-m-text">면접 연습</h3>
           <p className="text-[12px] text-m-muted mt-1">
-            질문은 한 번만 생성되어 저장됩니다. 이 화면을 다시 열어도 OpenAI를 다시 호출하지 않습니다.
+            질문은 한 번만 생성되어 저장됩니다. 이 화면을 다시 열어도 OpenAI를
+            다시 호출하지 않습니다.
           </p>
         </div>
         <button
@@ -559,23 +722,34 @@ function InterviewPracticePanel({
           disabled={isCreating || !canStart}
           className="h-9 px-3 rounded-lg bg-m-primary text-white text-[12px] font-semibold hover:bg-m-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-2"
         >
-          <Icon name="sparkle" size={14} className={isCreating ? 'animate-spin' : undefined} />
-          {isCreating ? '시작 중...' : session ? '다시 시작' : '면접 연습 시작'}
+          <Icon
+            name="sparkle"
+            size={14}
+            className={isCreating ? "animate-spin" : undefined}
+          />
+          {isCreating ? "시작 중..." : session ? "다시 시작" : "면접 연습 시작"}
         </button>
       </div>
 
       {!canStart && (
         <div className="rounded-xl border border-dashed border-m-border bg-m-surface p-4 text-[13px] text-m-muted">
-          이력서 파싱이 완료되어야 면접 연습을 시작할 수 있습니다.
+          텍스트 분석이 완료된 PDF 이력서에서 면접 연습을 시작할 수 있습니다.
         </div>
       )}
 
       {canStart && isCreating && (
         <div className="rounded-xl border border-m-border bg-m-surface p-6 flex flex-col items-center justify-center gap-3 text-center">
-          <Icon name="sparkle" size={24} className="animate-spin text-m-primary" />
-          <p className="text-[13px] font-semibold text-m-text">면접 질문을 생성하고 있어요</p>
+          <Icon
+            name="sparkle"
+            size={24}
+            className="animate-spin text-m-primary"
+          />
+          <p className="text-[13px] font-semibold text-m-text">
+            면접 질문을 생성하고 있어요
+          </p>
           <p className="text-[12px] text-m-muted">
-            이력서를 분석해 질문 5개를 만드는 중입니다. 최대 1분 정도 걸릴 수 있어요.
+            이력서를 분석해 질문 5개를 만드는 중입니다. 최대 1분 정도 걸릴 수
+            있어요.
           </p>
         </div>
       )}
@@ -601,9 +775,17 @@ function InterviewPracticePanel({
             <InterviewQuestionCard
               key={question.question_id}
               question={question}
-              draft={answerDrafts[question.question_id] ?? question.answer?.user_answer ?? ''}
-              isSubmitting={isSubmitting && submittingQuestionId === question.question_id}
-              onDraftChange={(value) => onDraftChange(question.question_id, value)}
+              draft={
+                answerDrafts[question.question_id] ??
+                question.answer?.user_answer ??
+                ""
+              }
+              isSubmitting={
+                isSubmitting && submittingQuestionId === question.question_id
+              }
+              onDraftChange={(value) =>
+                onDraftChange(question.question_id, value)
+              }
               onSubmit={() => onSubmit(question.question_id)}
             />
           ))}
@@ -637,9 +819,15 @@ function InterviewQuestionCard({
             <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-m-surface-alt text-m-muted">
               {sourceLabel(question.source)}
             </span>
-            <span className="text-[11px] text-m-subtle">{questionTypeLabel(question.question_type)}</span>
-            <span className="text-[11px] text-m-subtle">{difficultyLabel(question.difficulty)}</span>
-            <span className="text-[11px] text-m-subtle">{question.max_score}점</span>
+            <span className="text-[11px] text-m-subtle">
+              {questionTypeLabel(question.question_type)}
+            </span>
+            <span className="text-[11px] text-m-subtle">
+              {difficultyLabel(question.difficulty)}
+            </span>
+            <span className="text-[11px] text-m-subtle">
+              {question.max_score}점
+            </span>
           </div>
           <p className="text-[13px] font-semibold text-m-text leading-relaxed">
             {question.question}
@@ -692,18 +880,28 @@ function InterviewQuestionCard({
               className="h-8 px-3 rounded-lg bg-m-primary text-white text-[12px] font-semibold hover:bg-m-primary-hover disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >
               <Icon name="check" size={13} />
-              {isSubmitting ? '평가 중...' : question.answer ? '다시 평가' : '답변 제출'}
+              {isSubmitting
+                ? "평가 중..."
+                : question.answer
+                  ? "다시 평가"
+                  : "답변 제출"}
             </button>
           </div>
 
-          {question.answer && <InterviewAnswerResult answer={question.answer} />}
+          {question.answer && (
+            <InterviewAnswerResult answer={question.answer} />
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function InterviewAnswerResult({ answer }: { answer: InterviewAnswerResponse }) {
+function InterviewAnswerResult({
+  answer,
+}: {
+  answer: InterviewAnswerResponse;
+}) {
   return (
     <div className="mt-3 rounded-lg border border-m-border bg-m-surface-alt p-3">
       <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -714,17 +912,29 @@ function InterviewAnswerResult({ answer }: { answer: InterviewAnswerResponse }) 
       <ResultList title="잘한 점" items={answer.strengths.slice(0, 2)} />
       <ResultList title="아쉬운 점" items={answer.missing_points.slice(0, 2)} />
       <div className="mt-2">
-        <p className="text-[11px] font-semibold text-m-subtle mb-1">보완 답변</p>
-        <p className="text-[12px] text-m-muted leading-relaxed">{answer.reference_based_answer}</p>
+        <p className="text-[11px] font-semibold text-m-subtle mb-1">
+          보완 답변
+        </p>
+        <p className="text-[12px] text-m-muted leading-relaxed">
+          {answer.reference_based_answer}
+        </p>
       </div>
       <div className="mt-2">
-        <p className="text-[11px] font-semibold text-m-subtle mb-1">맞은 부분 / 다른 부분</p>
+        <p className="text-[11px] font-semibold text-m-subtle mb-1">
+          맞은 부분 / 다른 부분
+        </p>
         <ul className="space-y-1">
           <li className="text-[12px] text-m-muted leading-relaxed">
-            - 맞은 부분: {answer.correct_points[0] || answer.strengths[0] || '명확히 확인된 내용이 없습니다.'}
+            - 맞은 부분:{" "}
+            {answer.correct_points[0] ||
+              answer.strengths[0] ||
+              "명확히 확인된 내용이 없습니다."}
           </li>
           <li className="text-[12px] text-m-muted leading-relaxed">
-            - 다른 부분: {answer.different_points[0] || answer.incorrect_points[0] || '명확한 오류는 확인되지 않았습니다.'}
+            - 다른 부분:{" "}
+            {answer.different_points[0] ||
+              answer.incorrect_points[0] ||
+              "명확한 오류는 확인되지 않았습니다."}
           </li>
         </ul>
       </div>
@@ -757,31 +967,36 @@ function ResumeAnalysisProgress({
   onChooseFile: () => void;
   onReset: () => void;
 }) {
-  const currentStep = flow.status === 'uploading' ? 1 : flow.status === 'analyzing' ? 2 : 3;
-  const isComplete = flow.status === 'complete';
-  const isError = flow.status === 'error';
+  const currentStep =
+    flow.status === "uploading" ? 1 : flow.status === "analyzing" ? 2 : 3;
+  const isComplete = flow.status === "complete";
+  const isError = flow.status === "error";
   const heading = getUploadFlowHeading(flow.status);
   const subtext = getUploadFlowSubtext(flow.status);
   const progress = isComplete ? 100 : Math.max(0, Math.min(100, flow.progress));
   const checklist = [
-    { label: '텍스트 추출 완료', done: progress >= 38 || isComplete },
-    { label: '이력서 파싱 완료', done: progress >= 76 || isComplete },
-    { label: '화면 준비 완료', done: isComplete },
-    { label: '미리보기 준비 완료', done: isComplete },
+    { label: "파일 저장 완료", done: progress >= 38 || isComplete },
+    { label: "내용 처리 완료", done: progress >= 76 || isComplete },
+    { label: "화면 준비 완료", done: isComplete },
+    { label: "미리보기 준비 완료", done: isComplete },
   ];
 
   return (
     <div className="rounded-xl border border-m-border bg-white p-4">
-      <AnalysisStepper currentStep={currentStep} isComplete={isComplete} isError={isError} />
+      <AnalysisStepper
+        currentStep={currentStep}
+        isComplete={isComplete}
+        isError={isError}
+      />
 
       <div className="mt-5 flex items-start gap-4">
         <div
           className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
             isComplete
-              ? 'bg-m-success-soft text-m-success'
+              ? "bg-m-success-soft text-m-success"
               : isError
-                ? 'bg-m-danger-soft text-m-danger'
-                : 'bg-m-primary-soft text-m-primary'
+                ? "bg-m-danger-soft text-m-danger"
+                : "bg-m-primary-soft text-m-primary"
           }`}
         >
           {isComplete ? (
@@ -789,7 +1004,12 @@ function ResumeAnalysisProgress({
           ) : isError ? (
             <Icon name="x" size={24} strokeWidth={2.5} />
           ) : (
-            <Icon name="sparkle" size={25} strokeWidth={2} className="animate-spin" />
+            <Icon
+              name="sparkle"
+              size={25}
+              strokeWidth={2}
+              className="animate-spin"
+            />
           )}
         </div>
 
@@ -798,16 +1018,23 @@ function ResumeAnalysisProgress({
             <div className="min-w-0">
               <p className="text-[15px] font-bold text-m-text">{heading}</p>
               <p className="text-[12px] text-m-muted mt-0.5 truncate">
-                {flow.fileName || '이력서 파일'} - {flow.fileSize ? formatFileSize(flow.fileSize) : '대기 중'}
+                {flow.fileName || "이력서 파일"} -{" "}
+                {flow.fileSize ? formatFileSize(flow.fileSize) : "대기 중"}
               </p>
             </div>
-            <p className="text-[15px] font-bold text-m-primary tabular-nums">{progress}%</p>
+            <p className="text-[15px] font-bold text-m-primary tabular-nums">
+              {progress}%
+            </p>
           </div>
 
           <div className="mt-4 h-2 rounded-full bg-m-surface-alt overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
-                isError ? 'bg-m-danger' : isComplete ? 'bg-m-success' : 'bg-m-primary'
+                isError
+                  ? "bg-m-danger"
+                  : isComplete
+                    ? "bg-m-success"
+                    : "bg-m-primary"
               }`}
               style={{ width: `${progress}%` }}
             />
@@ -818,10 +1045,15 @@ function ResumeAnalysisProgress({
           {!isError && (
             <div className="mt-4 grid grid-cols-1 gap-2">
               {checklist.map((item) => (
-                <div key={item.label} className="flex items-center gap-2 text-[12px] text-m-muted">
+                <div
+                  key={item.label}
+                  className="flex items-center gap-2 text-[12px] text-m-muted"
+                >
                   <span
                     className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                      item.done ? 'bg-m-success text-white' : 'bg-m-surface-alt text-m-subtle'
+                      item.done
+                        ? "bg-m-success text-white"
+                        : "bg-m-surface-alt text-m-subtle"
                     }`}
                   >
                     {item.done ? (
@@ -869,7 +1101,7 @@ function AnalysisStepper({
   isComplete: boolean;
   isError: boolean;
 }) {
-  const steps = ['업로드', '파싱', '완료'];
+  const steps = ["업로드", "처리", "완료"];
 
   return (
     <div className="flex items-center justify-center gap-2 text-[12px] font-semibold">
@@ -884,19 +1116,27 @@ function AnalysisStepper({
               <span
                 className={`w-7 h-7 rounded-full flex items-center justify-center ${
                   done
-                    ? 'bg-m-success text-white'
+                    ? "bg-m-success text-white"
                     : active
-                      ? 'bg-m-primary text-white'
+                      ? "bg-m-primary text-white"
                       : isError && step === currentStep
-                        ? 'bg-m-danger text-white'
-                        : 'bg-m-surface-alt text-m-subtle'
+                        ? "bg-m-danger text-white"
+                        : "bg-m-surface-alt text-m-subtle"
                 }`}
               >
-                {done ? <Icon name="check" size={15} strokeWidth={2.4} /> : step}
+                {done ? (
+                  <Icon name="check" size={15} strokeWidth={2.4} />
+                ) : (
+                  step
+                )}
               </span>
-              <span className={done || active ? 'text-m-text' : 'text-m-muted'}>{label}</span>
+              <span className={done || active ? "text-m-text" : "text-m-muted"}>
+                {label}
+              </span>
             </div>
-            {index < steps.length - 1 && <span className="w-8 h-px bg-m-border" />}
+            {index < steps.length - 1 && (
+              <span className="w-8 h-px bg-m-border" />
+            )}
           </div>
         );
       })}
@@ -905,46 +1145,51 @@ function AnalysisStepper({
 }
 
 function getUploadFlowHeading(status: UploadFlowStatus): string {
-  if (status === 'uploading') return '이력서 업로드 중';
-  if (status === 'analyzing') return '이력서 파싱 중';
-  if (status === 'matching') return '이력서 데이터 준비 중';
-  if (status === 'complete') return '업로드 완료';
-  if (status === 'error') return '업로드 실패';
-  return '이력서 준비 중';
+  if (status === "uploading") return "이력서 업로드 중";
+  if (status === "analyzing") return "파일 처리 중";
+  if (status === "matching") return "이력서 데이터 준비 중";
+  if (status === "complete") return "업로드 완료";
+  if (status === "error") return "업로드 실패";
+  return "이력서 준비 중";
 }
 
 function getUploadFlowSubtext(status: UploadFlowStatus): string {
-  if (status === 'uploading') return '파일을 저장하고 텍스트 추출을 시작합니다.';
-  if (status === 'analyzing') return '이력서 내용을 구조화된 데이터로 파싱하고 있습니다.';
-  if (status === 'matching') return '사용자 화면에 표시할 이력서 데이터를 준비하고 있습니다.';
-  if (status === 'complete') return '이력서가 저장되었습니다. 원본 파일을 미리볼 수 있습니다.';
-  if (status === 'error') return '파일 형식, 용량, 업로드 상태를 확인한 뒤 다시 시도해 주세요.';
-  return '잠시만 기다려 주세요.';
+  if (status === "uploading")
+    return "파일을 저장하고 미리보기를 준비합니다.";
+  if (status === "analyzing")
+    return "파일 내용을 확인하고 화면에 표시할 정보를 준비하고 있습니다.";
+  if (status === "matching")
+    return "사용자 화면에 표시할 이력서 데이터를 준비하고 있습니다.";
+  if (status === "complete")
+    return "이력서가 저장되었습니다. 원본 파일을 미리볼 수 있습니다.";
+  if (status === "error")
+    return "파일 형식, 용량, 업로드 상태를 확인한 뒤 다시 시도해 주세요.";
+  return "잠시만 기다려 주세요.";
 }
 
 function sourceLabel(source: InterviewQuestionSource): string {
-  if (source === 'project') return '프로젝트';
-  if (source === 'tech_stack') return '기술';
-  if (source === 'experience') return '경험';
-  if (source === 'cover_letter') return '자기소개서';
-  return '이력서';
+  if (source === "project") return "프로젝트";
+  if (source === "tech_stack") return "기술";
+  if (source === "experience") return "경험";
+  if (source === "cover_letter") return "자기소개서";
+  return "이력서";
 }
 
 function questionTypeLabel(type: InterviewQuestionType): string {
-  if (type === 'PROJECT') return '프로젝트';
-  if (type === 'TECH_STACK') return '기술';
-  if (type === 'EXPERIENCE') return '경험';
-  if (type === 'COVER_LETTER') return '자기소개서';
-  return '직무 적합성';
+  if (type === "PROJECT") return "프로젝트";
+  if (type === "TECH_STACK") return "기술";
+  if (type === "EXPERIENCE") return "경험";
+  if (type === "COVER_LETTER") return "자기소개서";
+  return "직무 적합성";
 }
 
 function difficultyLabel(difficulty: string): string {
-  if (difficulty === 'INTERMEDIATE') return '중급';
-  if (difficulty === 'BASIC') return '기초';
+  if (difficulty === "INTERMEDIATE") return "중급";
+  if (difficulty === "BASIC") return "기초";
   return difficulty;
 }
 
 function sessionStatusLabel(status: InterviewSessionStatus): string {
-  if (status === 'COMPLETED') return '완료';
-  return '진행 중';
+  if (status === "COMPLETED") return "완료";
+  return "진행 중";
 }

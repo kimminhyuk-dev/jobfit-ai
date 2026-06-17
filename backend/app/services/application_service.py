@@ -33,6 +33,10 @@ class ApplicationAlreadyExistsError(Exception):
     """이미 같은 공고에 지원함."""
 
 
+class ApplicationNotFoundError(Exception):
+    """취소/조회할 지원 내역을 찾을 수 없음."""
+
+
 class ApplicationService:
     """지원 관련 비즈니스 로직."""
 
@@ -99,6 +103,28 @@ class ApplicationService:
                 resume_title=row.resume_title,
                 status=row.Application.status,
                 applied_at=row.Application.applied_at,
+                viewed_at=row.Application.viewed_at,
             )
             for row in rows
         ]
+
+    def cancel_application(
+        self,
+        *,
+        application_id: int,
+        user_id: int,
+        request_ip: str | None,
+    ) -> None:
+        """본인 지원을 취소(소프트 삭제)한다. 이후 같은 공고에 재지원할 수 있다."""
+        application = self.application_repository.get_active_by_id_for_user(
+            application_id, user_id
+        )
+        if application is None:
+            raise ApplicationNotFoundError
+
+        self.application_repository.cancel(
+            application,
+            actor_id=user_id,
+            request_ip=request_ip,
+        )
+        self.db.commit()

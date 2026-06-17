@@ -60,8 +60,8 @@ export default function Gauge({
             fontSize: size * 0.28,
             fontWeight: 700,
             color: textColor,
-            letterSpacing: '-.02em',
-            fontFamily: 'Inter, sans-serif',
+            letterSpacing: 0,
+            fontFamily: 'inherit',
             lineHeight: 1,
           }}
         >

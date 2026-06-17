@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import Icon from '../../components/ui/Icon';
 import ApplyModal from '../../components/jobs/ApplyModal';
+import { showToast } from '../../components/ui/Toast';
 import { jobsApi } from '../../api/jobs';
+import { applicationsApi } from '../../api/applications';
 import type { JobPostingItem } from '../../api/types';
 
 const PAGE_SIZE = 20;
@@ -105,6 +107,12 @@ export default function JobsPage() {
         size: PAGE_SIZE,
       }),
   });
+
+  const { data: myApplications = [] } = useQuery({
+    queryKey: ['applications', 'me'],
+    queryFn: applicationsApi.getMyApplications,
+  });
+  const appliedJobIds = new Set(myApplications.map((a) => a.job_id));
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -232,15 +240,27 @@ export default function JobsPage() {
                   <p className="text-[12px] font-semibold text-m-primary mb-1.5">
                     {deadlineLabel(job.deadline)}
                   </p>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setApplyJob(job);
-                    }}
-                    className="h-7 px-3 rounded-lg bg-m-primary text-white text-[12px] font-semibold hover:bg-m-primary-hover transition-colors"
-                  >
-                    입사지원
-                  </button>
+                  {appliedJobIds.has(job.job_id) ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        showToast('이미 지원한 공고입니다.', 'info');
+                      }}
+                      className="h-7 px-3 rounded-lg border border-m-border text-m-subtle text-[12px] font-semibold hover:bg-m-surface-alt transition-colors"
+                    >
+                      지원완료
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setApplyJob(job);
+                      }}
+                      className="h-7 px-3 rounded-lg bg-m-primary text-white text-[12px] font-semibold hover:bg-m-primary-hover transition-colors"
+                    >
+                      입사지원
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

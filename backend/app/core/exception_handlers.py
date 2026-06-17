@@ -4,6 +4,8 @@ FastAPI exception handlers for consistent API error responses.
 
 from typing import Any
 
+import logging
+
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
@@ -12,6 +14,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
+
+logger = logging.getLogger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -80,6 +84,22 @@ def register_exception_handlers(app: FastAPI) -> None:
             code=code,
             message=message,
             headers=getattr(exc, "headers", None),
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(
+        request: Request,
+        exc: Exception,
+    ) -> JSONResponse:
+        logger.exception(
+            "Unhandled API error: %s %s",
+            request.method,
+            request.url.path,
+        )
+        return _error_response(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            code=ErrorCode.INTERNAL_SERVER_ERROR,
+            message="요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.",
         )
 
 

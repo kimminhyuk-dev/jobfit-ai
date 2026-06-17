@@ -103,7 +103,7 @@ async def create_resume(
         raise AppException(
             status_code=status.HTTP_400_BAD_REQUEST,
             code=ErrorCode.RESUME_UNSUPPORTED_FILE_TYPE,
-            message="Only PDF, DOCX, and TXT files are supported.",
+            message="등록 가능한 파일 형식 및 확장자 : PDF,PNG,JPG,JPEG,GIF",
         )
 
     return ResumeDetail.model_validate(resume)
@@ -283,6 +283,7 @@ def get_resume_file(
         path=resume.file_path,
         media_type=resume.content_type,
         filename=resume.original_filename,
+        content_disposition_type="inline",
     )
 
 

@@ -13,7 +13,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { authApi } from '../api/auth';
 import { useAuth } from '../stores/authContext';
-import type { ApiError } from '../api/client';
+import { writeAutoLogin, writeSavedId } from '../lib/loginPrefs';
 import type { User } from '../api/types';
 
 const loginSchema = z.object({
@@ -29,17 +29,36 @@ interface LoginPageProps {
   portal?: LoginPortal;
 }
 
+function normalizedRole(user: User): string {
+  return user.role.trim().toUpperCase();
+}
+
 function routeForUser(user: User): string {
-  if (user.role === 'ADMIN') return '/admin/dashboard';
-  if (user.role === 'COMPANY') return '/company/dashboard';
+  const role = normalizedRole(user);
+  if (role === 'ADMIN') return '/admin/dashboard';
+  if (role === 'COMPANY') return '/company/dashboard';
   return '/user/dashboard';
+}
+
+function loginFailureMessage(portal: LoginPortal): string {
+  return portal === 'company'
+    ? '사업자등록번호 또는 이메일을 확인해주세요.'
+    : '아이디 또는 비밀번호를 확인해주세요.';
+}
+
+function isAllowedForPortal(user: User, portal: LoginPortal): boolean {
+  const role = normalizedRole(user);
+  if (portal === 'company') return role === 'COMPANY' || role === 'ADMIN';
+  return role === 'USER';
 }
 
 export default function LoginPage({ portal = 'user' }: LoginPageProps) {
   const router = useRouter();
-  const { login, logout } = useAuth();
+  const { login } = useAuth();
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveId, setSaveId] = useState(false);
+  const [autoLogin, setAutoLogin] = useState(false);
   const isCompanyPortal = portal === 'company';
 
   const {
@@ -57,24 +76,19 @@ export default function LoginPage({ portal = 'user' }: LoginPageProps) {
   const onSubmit = async (values: LoginFormValues) => {
     setError(null);
     try {
-      const res = await authApi.login(values);
-      const isAllowed = isCompanyPortal
-        ? res.user.role === 'COMPANY' || res.user.role === 'ADMIN'
-        : res.user.role === 'USER';
-      if (!isAllowed) {
-        await logout();
-        setError(
-          isCompanyPortal
-            ? '기업회원 또는 관리자 계정으로 로그인하세요.'
-            : '일반회원 계정으로 로그인하세요.',
-        );
+      const res = await authApi.login({ ...values, portal });
+      if (!isAllowedForPortal(res.user, portal)) {
+        await authApi.logout().catch(() => undefined);
+        setError(loginFailureMessage(portal));
         return;
       }
+      // 로그인 성공 시 환경설정 저장.
+      writeSavedId(portal, saveId ? values.email : null);
+      writeAutoLogin(autoLogin);
       login(res.user);
       router.push(routeForUser(res.user));
-    } catch (err) {
-      const apiErr = err as ApiError;
-      setError(apiErr.message ?? '로그인에 실패했습니다.');
+    } catch {
+      setError(loginFailureMessage(portal));
     }
   };
 
@@ -100,11 +114,15 @@ export default function LoginPage({ portal = 'user' }: LoginPageProps) {
 
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <div>
-              <label className="block text-[12px] font-medium text-m-muted mb-1.5">
-                {isCompanyPortal ? '이메일 또는 사업자번호' : '이메일'}
-              </label>
               <div className="relative">
+                <label
+                  htmlFor="login-id"
+                  className="absolute -top-2 left-3 z-10 bg-m-surface px-1.5 text-[11px] font-medium text-m-muted"
+                >
+                  아이디
+                </label>
                 <Input
+                  id="login-id"
                   type="text"
                   placeholder={isCompanyPortal ? 'you@example.com 또는 123-45-67890' : 'you@example.com'}
                   autoComplete="username"
@@ -112,21 +130,22 @@ export default function LoginPage({ portal = 'user' }: LoginPageProps) {
                   {...register('email')}
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-m-subtle">
-                  <Icon name="mail" size={16} />
+                  <Icon name="user" size={16} />
                 </div>
               </div>
               {errors.email && <p className="mt-1 text-[12px] text-m-danger">{errors.email.message}</p>}
             </div>
 
             <div>
-              <div className="flex justify-between mb-1.5">
-                <label className="text-[12px] font-medium text-m-muted">비밀번호</label>
-                <button type="button" className="text-[12px] text-m-primary hover:underline">
-                  잊으셨나요?
-                </button>
-              </div>
               <div className="relative">
+                <label
+                  htmlFor="login-pw"
+                  className="absolute -top-2 left-3 z-10 bg-m-surface px-1.5 text-[11px] font-medium text-m-muted"
+                >
+                  비밀번호
+                </label>
                 <Input
+                  id="login-pw"
                   type={showPw ? 'text' : 'password'}
                   placeholder="비밀번호 입력"
                   autoComplete="current-password"
@@ -144,7 +163,37 @@ export default function LoginPage({ portal = 'user' }: LoginPageProps) {
                   <Icon name={showPw ? 'eye-off' : 'eye'} size={16} />
                 </button>
               </div>
-              {errors.password && <p className="mt-1 text-[12px] text-m-danger">{errors.password.message}</p>}
+              <div className="mt-1.5 flex items-center justify-between">
+                {errors.password ? (
+                  <p className="text-[12px] text-m-danger">{errors.password.message}</p>
+                ) : (
+                  <span />
+                )}
+                <button type="button" className="text-[12px] text-m-primary hover:underline">
+                  잊으셨나요?
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-5">
+              <label className="flex cursor-pointer select-none items-center gap-2 text-[13px] text-m-muted">
+                <input
+                  type="checkbox"
+                  checked={saveId}
+                  onChange={(e) => setSaveId(e.target.checked)}
+                  className="h-4 w-4 rounded border-m-border accent-m-primary"
+                />
+                아이디 저장
+              </label>
+              <label className="flex cursor-pointer select-none items-center gap-2 text-[13px] text-m-muted">
+                <input
+                  type="checkbox"
+                  checked={autoLogin}
+                  onChange={(e) => setAutoLogin(e.target.checked)}
+                  className="h-4 w-4 rounded border-m-border accent-m-primary"
+                />
+                자동 로그인
+              </label>
             </div>
 
             {error && <Alert variant="danger">{error}</Alert>}

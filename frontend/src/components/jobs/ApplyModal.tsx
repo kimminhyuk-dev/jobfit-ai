@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Icon from '../ui/Icon';
+import { showToast } from '../ui/Toast';
 import { applicationsApi } from '../../api/applications';
 import { resumesApi } from '../../api/resumes';
 import type { ApiError, Resume } from '../../api/types';
@@ -36,11 +37,14 @@ export default function ApplyModal({
       queryClient.invalidateQueries({ queryKey: ['applications', 'me'] });
     },
     onError: (e: ApiError) => {
-      setError(
-        e.code === 'APPLICATION_001'
-          ? '이미 지원한 공고입니다.'
-          : e.message || '지원에 실패했습니다.',
-      );
+      if (e.code === 'APPLICATION_001') {
+        showToast('이미 지원한 공고입니다.', 'info');
+        setError('이미 지원한 공고입니다.');
+        // 이미 지원한 상태이므로 내 지원현황을 최신화한다.
+        queryClient.invalidateQueries({ queryKey: ['applications', 'me'] });
+        return;
+      }
+      setError(e.message || '지원에 실패했습니다.');
     },
   });
 

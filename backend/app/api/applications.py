@@ -1,6 +1,6 @@
 """Application(지원/이력서 보내기) API routes."""
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_client_ip, get_current_user
@@ -16,6 +16,7 @@ from app.schemas.application import (
 from app.services.application_service import (
     ApplicationAlreadyExistsError,
     ApplicationJobNotFoundError,
+    ApplicationNotFoundError,
     ApplicationResumeNotFoundError,
     ApplicationService,
 )
@@ -70,3 +71,26 @@ def list_my_applications(
 ) -> list[MyApplicationItem]:
     """내 지원현황을 최신순으로 조회한다."""
     return application_service.list_my_applications(current_user.user_id)
+
+
+@router.delete("/{application_id}", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_application(
+    application_id: int,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    application_service: ApplicationService = Depends(get_application_service),
+) -> Response:
+    """내 지원을 취소한다(취소 후 같은 공고에 재지원 가능)."""
+    try:
+        application_service.cancel_application(
+            application_id=application_id,
+            user_id=current_user.user_id,
+            request_ip=get_client_ip(request),
+        )
+    except ApplicationNotFoundError as exc:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.APPLICATION_NOT_FOUND,
+            message="취소할 지원 내역을 찾을 수 없습니다.",
+        ) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

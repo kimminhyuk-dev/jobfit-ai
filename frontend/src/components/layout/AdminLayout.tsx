@@ -26,7 +26,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: '#f1f5f9', fontFamily: 'Pretendard, -apple-system, sans-serif' }}>
+    <div className="flex h-screen overflow-hidden" style={{ background: '#f1f5f9' }}>
       {/* Admin Sidebar — 진한 네이비 배경으로 사용자 영역과 명확히 구분 */}
       <aside className="w-56 flex flex-col shrink-0 border-r" style={{ background: '#0f172a', borderColor: '#1e293b' }}>
         {/* Logo + Admin badge */}
