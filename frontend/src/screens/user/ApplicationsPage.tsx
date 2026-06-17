@@ -12,12 +12,13 @@ const STATUS_META: Record<ApplicationStatus, { label: string; cls: string }> = {
   VIEWED: { label: '이력서 열람', cls: 'bg-m-warn-soft text-m-warn' },
   ACCEPTED: { label: '합격', cls: 'bg-m-success-soft text-m-success' },
   REJECTED: { label: '불합격', cls: 'bg-m-danger-soft text-m-danger' },
+  CANCELED: { label: '지원취소', cls: 'bg-m-surface-alt text-m-subtle' },
 };
 
 // 합격/불합격 확정 전까지만 지원 취소를 허용한다.
 const CANCELABLE: ApplicationStatus[] = ['SUBMITTED', 'VIEWED'];
 
-const STATUS_ORDER: ApplicationStatus[] = ['SUBMITTED', 'VIEWED', 'ACCEPTED', 'REJECTED'];
+const STATUS_ORDER: ApplicationStatus[] = ['SUBMITTED', 'VIEWED', 'ACCEPTED', 'REJECTED', 'CANCELED'];
 
 function dateStr(value: string): string {
   const d = new Date(value);
@@ -62,7 +63,7 @@ export default function ApplicationsPage() {
       </div>
 
       {/* 상태 요약 */}
-      <div className="grid grid-cols-4 gap-3 mb-5 max-md:grid-cols-2">
+      <div className="grid grid-cols-5 gap-3 mb-5 max-lg:grid-cols-3 max-md:grid-cols-2">
         {counts.map(({ status, count }) => (
           <div key={status} className="bg-m-surface border border-m-border rounded-xl p-4">
             <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_META[status].cls}`}>

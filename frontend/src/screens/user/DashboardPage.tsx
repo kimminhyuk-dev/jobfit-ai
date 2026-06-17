@@ -14,6 +14,7 @@ const APPLICATION_STATUS: Record<ApplicationStatus, { label: string; color: stri
   VIEWED: { label: '열람됨', color: '#f59e0b' },
   ACCEPTED: { label: '합격', color: '#10b981' },
   REJECTED: { label: '불합격', color: '#ef4444' },
+  CANCELED: { label: '지원취소', color: '#94a3b8' },
 };
 
 const LOGO_COLORS = ['#1d4ed8', '#0f766e', '#7c3aed', '#ea580c', '#0284c7', '#15803d', '#b45309'];

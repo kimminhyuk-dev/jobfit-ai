@@ -16,6 +16,7 @@ const STATUS_META: Record<ApplicationStatus, { label: string; cls: string }> = {
   VIEWED: { label: '열람', cls: 'bg-m-warn-soft text-m-warn' },
   ACCEPTED: { label: '합격', cls: 'bg-m-success-soft text-m-success' },
   REJECTED: { label: '불합격', cls: 'bg-m-danger-soft text-m-danger' },
+  CANCELED: { label: '지원취소', cls: 'bg-m-surface-alt text-m-subtle' },
 };
 
 function formatDateTime(value: string): string {
@@ -59,7 +60,7 @@ function CompanyDashboardInner() {
       acc[item.status] += 1;
       return acc;
     },
-    { SUBMITTED: 0, VIEWED: 0, ACCEPTED: 0, REJECTED: 0 },
+    { SUBMITTED: 0, VIEWED: 0, ACCEPTED: 0, REJECTED: 0, CANCELED: 0 },
   );
   const reviewedCount = statusCounts.VIEWED + statusCounts.ACCEPTED + statusCounts.REJECTED;
   const reviewRate =

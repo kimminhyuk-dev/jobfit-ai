@@ -112,7 +112,9 @@ export default function JobsPage() {
     queryKey: ['applications', 'me'],
     queryFn: applicationsApi.getMyApplications,
   });
-  const appliedJobIds = new Set(myApplications.map((a) => a.job_id));
+  const appliedJobIds = new Set(
+    myApplications.filter((a) => a.status !== 'CANCELED').map((a) => a.job_id),
+  );
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;

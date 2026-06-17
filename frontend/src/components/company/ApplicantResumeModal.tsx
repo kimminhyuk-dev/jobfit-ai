@@ -12,6 +12,7 @@ const STATUS_META: Record<ApplicationStatus, { label: string; cls: string }> = {
   VIEWED: { label: '이력서 열람', cls: 'bg-m-warn-soft text-m-warn' },
   ACCEPTED: { label: '합격', cls: 'bg-m-success-soft text-m-success' },
   REJECTED: { label: '불합격', cls: 'bg-m-danger-soft text-m-danger' },
+  CANCELED: { label: '지원취소', cls: 'bg-m-surface-alt text-m-subtle' },
 };
 
 function dateStr(value: string | null): string {

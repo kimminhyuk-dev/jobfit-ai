@@ -24,6 +24,7 @@ The app is now a 3-role demo platform:
 ### Authentication And Profile
 
 - JWT access token and refresh token cookie flow.
+- Signup page now uses production-style required markers (`*`) for required account fields, adds password confirmation, shows toast/error-bubble feedback on validation failures, and scrolls/focuses the first invalid field (for example, a 7-character password focuses the password field with the 8-character rule visible).
 - Login portal split:
   - `/login`: USER only.
   - `/company/login`: COMPANY and ADMIN.
@@ -65,8 +66,8 @@ The app is now a 3-role demo platform:
 - The `l4m5n6o7p8q9` migration adding `applications.viewed_at` has been applied locally; missing this column caused `/applications` to fail during resume submission and appear as a browser CORS error.
 - User application page exists at `/user/applications`.
 - Application status flow is `SUBMITTED`(지원 완료) → `VIEWED`(이력서 열람); a company opening an applicant's resume flips the status to VIEWED and stamps `applications.viewed_at` once. The applicant sees the viewed state and viewed time.
-- `DELETE /applications/{id}` soft-cancels a user's own application; the partial unique index lets the user re-apply to the same job afterward.
-- User-side UI is wired: the job list (`/user/jobs`) and job detail show "지원완료" with an "이미 지원한 공고입니다" toast when the job is already in `GET /applications/me`; `ApplyModal` also toasts on the `APPLICATION_001` conflict. `/user/applications` shows a "지원취소" button (SUBMITTED/VIEWED only) that calls `DELETE /applications/{id}` and refetches.
+- `DELETE /applications/{id}` changes the user's own application to `CANCELED` and marks it inactive for duplicate checks; the canceled row still appears in `GET /applications/me`, while the partial unique index lets the user re-apply to the same job afterward.
+- User-side UI is wired: the job list (`/user/jobs`) and job detail show "지원완료" with an "이미 지원한 공고입니다" toast when the job already has a non-canceled item in `GET /applications/me`; canceled items show as "지원취소" in `/user/applications` and do not block re-application. `ApplyModal` also toasts on the `APPLICATION_001` conflict. `/user/applications` shows a "지원취소" button (SUBMITTED/VIEWED only) that calls `DELETE /applications/{id}` and refetches.
 - Active endpoints:
   - `POST /applications`
   - `GET /applications/me`
@@ -203,6 +204,14 @@ Latest resume preview fix verified:
 - `cd frontend; npm run lint`
 - `cd frontend; npm run build`
 
+Latest signup validation/style fix verified:
+
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
+- `git diff --check`
+- In-app Browser verification was attempted but the Browser node runtime failed in this Windows sandbox (`spawn setup refresh`). The Next dev server is running at `http://localhost:3000/signup` after a sandbox-approved `npm run dev -- --hostname 127.0.0.1 --port 3000`.
+
 Latest file-format/error/font handling verified:
 
 - `cd backend; .\.venv\Scripts\python.exe -m compileall app`
@@ -223,6 +232,12 @@ Latest applications/CORS masking fix verified:
 - `curl.exe -i -X OPTIONS http://localhost:8004/applications -H "Origin: http://localhost:3000" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: content-type"`
 
 Latest company resume preview/download and posting hide-management verified:
+
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
+
+Latest application cancellation status fix verified:
 
 - `cd backend; .\.venv\Scripts\python.exe -m compileall app`
 - `cd frontend; npm run lint`

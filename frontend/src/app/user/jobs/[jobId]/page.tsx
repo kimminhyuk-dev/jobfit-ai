@@ -65,7 +65,9 @@ export default function JobDetailRoutePage() {
     queryKey: ['applications', 'me'],
     queryFn: applicationsApi.getMyApplications,
   });
-  const alreadyApplied = myApplications.some((a) => a.job_id === jobId);
+  const alreadyApplied = myApplications.some(
+    (a) => a.job_id === jobId && a.status !== 'CANCELED',
+  );
 
   if (isLoading) {
     return <div className="p-10 text-center text-[13px] text-m-subtle">공고를 불러오는 중...</div>;

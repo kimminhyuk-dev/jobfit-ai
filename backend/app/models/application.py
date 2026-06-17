@@ -70,7 +70,7 @@ class Application(Base, AuditMixin, SoftDeleteMixin):
         default="SUBMITTED",
         server_default="SUBMITTED",
         index=True,
-        comment="지원 상태: SUBMITTED / VIEWED / ACCEPTED / REJECTED",
+        comment="지원 상태: SUBMITTED / VIEWED / ACCEPTED / REJECTED / CANCELED",
     )
     applied_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

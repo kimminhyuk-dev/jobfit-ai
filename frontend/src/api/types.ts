@@ -328,7 +328,7 @@ export interface Application {
 }
 
 // 지원(이력서 보내기) — 백엔드 응답
-export type ApplicationStatus = 'SUBMITTED' | 'VIEWED' | 'ACCEPTED' | 'REJECTED';
+export type ApplicationStatus = 'SUBMITTED' | 'VIEWED' | 'ACCEPTED' | 'REJECTED' | 'CANCELED';
 
 export interface JobApplicationResponse {
   application_id: number;

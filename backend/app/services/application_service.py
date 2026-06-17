@@ -115,7 +115,7 @@ class ApplicationService:
         user_id: int,
         request_ip: str | None,
     ) -> None:
-        """본인 지원을 취소(소프트 삭제)한다. 이후 같은 공고에 재지원할 수 있다."""
+        """본인 지원을 CANCELED 상태로 남기고, 이후 같은 공고에 재지원할 수 있게 한다."""
         application = self.application_repository.get_active_by_id_for_user(
             application_id, user_id
         )

@@ -57,7 +57,8 @@ class ApplicationRepository:
     def cancel(
         self, application: Application, *, actor_id: int, request_ip: str | None
     ) -> None:
-        """지원을 소프트 삭제(지원 취소)한다. 같은 공고에 재지원이 가능해진다."""
+        """지원 취소 상태를 남기고, 같은 공고 재지원은 가능하게 비활성 처리한다."""
+        application.status = "CANCELED"
         application.is_deleted = True
         application.updated_by = actor_id
         application.updated_ip = request_ip
@@ -113,7 +114,10 @@ class ApplicationRepository:
             .join(JobPosting, JobPosting.job_id == Application.job_id)
             .join(Resume, Resume.resume_id == Application.resume_id)
             .where(Application.user_id == user_id)
-            .where(Application.is_deleted.is_(False))
+            .where(
+                (Application.is_deleted.is_(False))
+                | (Application.status == "CANCELED")
+            )
             .order_by(Application.applied_at.desc())
         )
         return list(self.db.execute(stmt).all())
