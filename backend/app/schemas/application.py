@@ -6,6 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.match_score import ApplicationMatchScoreResponse
+
 
 class ApplicationCreateRequest(BaseModel):
     """공고에 이력서를 보내는 지원 요청."""
@@ -25,6 +27,7 @@ class ApplicationResponse(BaseModel):
     company_id: int | None
     status: str
     applied_at: datetime
+    match_score: ApplicationMatchScoreResponse | None = None
 
 
 class MyApplicationItem(BaseModel):
@@ -40,3 +43,4 @@ class MyApplicationItem(BaseModel):
     status: str
     applied_at: datetime
     viewed_at: datetime | None = None
+    match_score: ApplicationMatchScoreResponse | None = None

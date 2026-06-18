@@ -84,8 +84,9 @@ The app is now a 3-role demo platform:
 - Company dashboard self-heals missing `companies` rows for active `COMPANY` users by creating a minimal company profile, so a valid company login opens an empty dashboard instead of failing with `COMPANY_NOT_FOUND`.
 - Company dashboard UI now includes unread-application alerting, status summary, recent applicant overview, operational status, refresh action, and a richer empty state instead of only showing the applicant table.
 - The applicant table has an "이력서 보기" action that opens `ApplicantResumeModal`; opening it calls `GET /company/applications/{id}/resume`, which marks the application VIEWED and returns resume metadata plus parsed summary data. The modal then loads `GET /company/applications/{id}/resume/file` and shows the original PDF/image in a document-style preview, with a download button for the same original file. After viewing, the dashboard query is invalidated so the unread alert (`pending_count` = unviewed/SUBMITTED count) decreases.
-- Company dashboard can mark an application `REJECTED` through `PATCH /company/applications/{id}/status`; the service reuses the existing "application belongs to this company posting" validation. `INTERVIEW` is intentionally not accepted by this manual endpoint and will be set only after a successful interview-email send in the next phase.
-- The resume modal has a "면접 이메일 보내기" button that is still a frontend placeholder ("준비 중" toast). The backend endpoint now exists (`POST /company/applications/{id}/interview-email`), so wiring the button to it is the remaining frontend work.
+- Company dashboard applicant rows and the applicant resume modal include stored matching score data from `application_match_scores`. New applications calculate a deterministic `local-match-v1` score immediately; existing company applications are backfilled lazily when the dashboard or modal is opened. API responses expose score/grade, summary, strengths, gaps, and skill lists; internal calculation evidence stays in the DB and is not returned to the frontend. Scoring tunables live in `match_score_constants.py`; sensitive demographic tokens are excluded from text-similarity scoring.
+- Company dashboard can mark an application `REJECTED` through `PATCH /company/applications/{id}/status`; the service reuses the existing "application belongs to this company posting" validation. `INTERVIEW` is intentionally not accepted by this manual endpoint and is set only after a successful interview-email send.
+- The resume modal has a wired "면접 이메일 보내기" flow. It opens an in-modal form for interview date/time, address, and optional message; the address defaults to `companies.address` from `GET /company/dashboard` but remains editable. The frontend blocks past date/time selections before calling `POST /company/applications/{id}/interview-email`, and successful sends invalidate dashboard/resume queries so the `INTERVIEW` badge appears.
 - Company posting management lives at `/company/jobs` (linked from the dashboard header). Companies can create/edit/delete their own `source="MANUAL"` postings, hide/unhide them with status `HIDDEN`, and view all postings matched by `business_number`/`company_name`. Externally collected postings are read-only (`editable=false`). Public `GET /jobs` excludes `HIDDEN` postings unless explicitly filtered by status.
 - Demo company accounts use synthetic emails under `company.jobfit.local` and the demo password convention `admin1234`. This is portfolio/demo-only and not production safe.
 - Company endpoints:
@@ -121,7 +122,7 @@ The app is now a 3-role demo platform:
 
 ### Account Recovery And Interview Email (ported from JobFolio)
 
-Ported from `kimminhyuk-dev/JobFolio` (`/api/join/...` flows) into the jobfit-ai structure. Personal and company account recovery are wired into the login UI. Interview-email frontend wiring is still pending.
+Ported from `kimminhyuk-dev/JobFolio` (`/api/join/...` flows) into the jobfit-ai structure. Personal and company account recovery are wired into the login UI, and interview-email sending is wired from the company resume modal.
 
 - New table `email_verifications` (`m5n6o7p8q9r0`): stores password-reset codes as SHA-256 hashes (NOT plaintext — a deliberate security improvement over JobFolio's plaintext `tb_email_verification`), with `purpose`, `expires_at`, `is_used`/`used_at`, plus rate-limit columns `attempt_count` and `last_attempt_at` (`o7p8q9r0s1t2`). Codes are 6-digit, 5-minute TTL.
 - `companies.address` column added (`n6o7p8q9r0s1`) as the default interview location for interview emails.
@@ -132,7 +133,7 @@ Ported from `kimminhyuk-dev/JobFolio` (`/api/join/...` flows) into the jobfit-ai
   - `POST /auth/company/password/reset-request`: company password reset request by `users.name` + business number + email. All three must match before a reset code is issued, but the response keeps account existence undisclosed.
   - `POST /auth/password/reset-confirm`: verify code → generate a temporary password → email it → only then change the password and revoke all refresh tokens. If the email send fails the password is left unchanged (avoids lockout).
 - New company application endpoint:
-  - `POST /company/applications/{application_id}/interview-email`: COMPANY-only. Sends an interview invitation to the applicant. Interview location comes from the request body or `companies.address`. A Google Maps Static API map is fetched server-side and attached inline (CID, `multipart/related`) so the API key is never exposed in the email; a `https://www.google.com/maps/search/?api=1&query=...` link is included as well. Missing/failed map degrades gracefully (email still sends with the link).
+  - `POST /company/applications/{application_id}/interview-email`: COMPANY-only. Sends an interview invitation to the applicant. `interview_at` must be in the future. Interview location comes from the request body or `companies.address`. A Google Maps Static API map is fetched server-side and attached inline (CID, `multipart/related`) so the API key is never exposed in the email; a `https://www.google.com/maps/search/?api=1&query=...` link is included as well. Missing/failed map degrades gracefully (email still sends with the link). After the email service returns successfully, the application status is changed to `INTERVIEW`; send failures do not change the status.
 - Phone matching for find-email normalizes both sides to digits (`regexp_replace`), since `users.phone` may be stored with hyphens.
 - Account recovery rate limiting is implemented without account locking: find-email and password reset sends are limited to one request per 60 seconds. Password reset confirmation has no 60-second attempt throttle; 5 consecutive failed code attempts expire the active code.
 - There is currently no automatic cleanup job for expired `email_verifications` rows; add a maintenance cleanup for rows whose `expires_at` is older than a retention window before exposing this flow at scale.
@@ -150,7 +151,8 @@ Current important migrations:
 - `l4m5n6o7p8q9_add_application_viewed_at.py`
 - `m5n6o7p8q9r0_add_email_verifications_table.py`
 - `n6o7p8q9r0s1_add_company_address.py`
-- `o7p8q9r0s1t2_add_email_verification_rate_limits.py` (head)
+- `o7p8q9r0s1t2_add_email_verification_rate_limits.py`
+- `p8q9r0s1t2u3_add_application_match_scores.py` (head)
 
 Important tables:
 
@@ -160,12 +162,14 @@ Important tables:
 - Resume: `resumes`, `resume_projects`, `resume_cover_letter_sections`
 - Interview: `resume_interview_sessions`, `resume_interview_questions`, `resume_interview_answers`
 - Company/applications: `companies`, `applications`
+- Matching: `application_match_scores`
 - Email/recovery: `email_verifications`
 
 ## Main Files Changed In Current Work
 
 Backend:
 
+- `backend/alembic/versions/p8q9r0s1t2u3_add_application_match_scores.py`
 - `backend/app/api/applications.py`
 - `backend/app/api/company.py`
 - `backend/app/api/resumes.py`
@@ -176,18 +180,23 @@ Backend:
 - `backend/app/api/deps.py`
 - `backend/app/models/company.py`
 - `backend/app/models/application.py`
+- `backend/app/models/application_match_score.py`
 - `backend/app/models/user.py`
 - `backend/app/repositories/application_repository.py`
+- `backend/app/repositories/application_match_score_repository.py`
 - `backend/app/repositories/company_repository.py`
 - `backend/app/repositories/job_posting_repository.py`
 - `backend/app/repositories/user_repository.py`
 - `backend/app/schemas/application.py`
+- `backend/app/schemas/match_score.py`
 - `backend/app/schemas/auth.py`
 - `backend/app/schemas/company.py`
 - `backend/app/schemas/admin_user.py`
 - `backend/app/schemas/user.py`
 - `backend/app/services/account_recovery_service.py`
 - `backend/app/services/application_service.py`
+- `backend/app/services/match_score_constants.py`
+- `backend/app/services/match_score_service.py`
 - `backend/app/services/company_provisioning_service.py`
 - `backend/app/services/company_service.py`
 - `backend/app/services/email_service.py`
@@ -316,6 +325,7 @@ Latest account-recovery route/template/button/masking work verified:
 - `cd frontend; npm run lint`
 - `cd frontend; npm run build`
 - `git diff --check` (line-ending warnings only)
+- In-app Browser opened `http://127.0.0.1:3000/company/dashboard` against the running Next dev server and found no console errors, but without an authenticated company session it stayed on the auth/loading state, so the score UI was not visually verified in-browser.
 - Started the Next dev server at `http://127.0.0.1:3000`. Chrome headless screenshots verified `/login`, `/find-account`, `/find-account?audience=company`, `/reset-password`, and `/reset-password?audience=company`.
 - Chrome DevTools Protocol verified the `/login` "아이디 찾기" link navigates to `/find-account`; the login button hover changed background color and active state changed brightness; account-recovery text links show pointer cursor, underline, and brightness hover feedback.
 - Temporary backend servers verified `POST /auth/find-email`: no-match returns `200` without `masked_email`; matching personal USER returns `200` with a masked email. SMTP sending was attempted in the sandbox and failed with `PermissionError`; an escalation to send through Gmail SMTP was rejected as private-data export to an unverified external destination, so inbox rendering was not verified in this run.
@@ -342,13 +352,33 @@ Latest company account-recovery API/UI work verified:
 - FastAPI `TestClient` verified `POST /auth/password/reset-request` still returns `200` then `429` for immediate repeat sends. Two immediate wrong `POST /auth/password/reset-confirm` requests returned `400`/`400` (not `429`), and five wrong attempts expired the code (`attempt_count=5`, `is_used=true`).
 - `Invoke-WebRequest` against the running Next dev server at `http://127.0.0.1:3000` confirmed `/find-account?audience=company`, `/reset-password?audience=company`, and `/find-account` render the expected recovery form text. In-app Browser failed with the Windows sandbox `spawn setup refresh` issue; Chrome headless also exited before producing a screenshot in this environment.
 
+Latest interview-email UI/status flow verified:
+
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
+- `git diff --check` (line-ending warnings only)
+- FastAPI `TestClient` with temporary company/applicant/job/resume/application rows monkeypatched the interview email sender to avoid real SMTP. It verified successful `POST /company/applications/{application_id}/interview-email` returns `200` and changes DB status to `INTERVIEW`; a past `interview_at` returns `422` without changing status; a different company receives `404` for the same application. Temporary rows were cleaned afterward.
+
+Latest application matching score work verified:
+
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `cd backend; .\.venv\Scripts\alembic.exe heads` confirmed `p8q9r0s1t2u3` is the head.
+- `cd backend; .\.venv\Scripts\alembic.exe upgrade head`
+- `cd backend; .\.venv\Scripts\python.exe -c "from app.core.database import engine; from sqlalchemy import inspect; print([c['name'] for c in inspect(engine).get_columns('application_match_scores')])"` confirmed the score table columns.
+- Service-level temporary data test created a USER, resume, manual job, application, and stored match score; the response included score/grade/matched skills, and temporary rows were cleaned afterward.
+- Hardening check confirmed `local-match-v1` is deterministic keyword/text scoring without embeddings, LangChain, or LLM calls; empty resume/job inputs avoid division by zero; scores stay clamped to 0-100; `ApplicationMatchScoreResponse` does not expose internal evidence JSON; sensitive demographic-only text similarity returns 0; and local `.env` files are ignored rather than tracked.
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
+- `git diff --check` (line-ending warnings only)
+
 ## Known Remaining Work
 
-- Account recovery UI now lives on `/find-account` and `/reset-password`, with personal and company find-email/password-reset wired. Interview-email frontend wiring is still not built. A real send still requires valid Gmail app-password credentials in `.env` (and `GOOGLE_MAPS_API_KEY` for the interview map; without it the email sends with the Maps link but no inline map image). Inbox rendering for the new recovery templates still needs a user-approved real recipient/send test outside sandbox restrictions.
+- Account recovery UI now lives on `/find-account` and `/reset-password`, with personal and company find-email/password-reset wired. Interview-email sending is wired from the company resume modal. A real send still requires valid Gmail app-password credentials in `.env` (and `GOOGLE_MAPS_API_KEY` for the interview map; without it the email sends with the Maps link but no inline map image). Inbox rendering for the recovery/interview templates still needs a user-approved real recipient/send test outside sandbox restrictions.
 - Add cleanup/retention for expired `email_verifications` rows, especially dummy rows from non-existing account recovery requests.
 - Signup email-verification (JobFolio `/api/join/send-email-verification` + `/verify-email-token`) is still not implemented; it can reuse the `email_verifications` table with `purpose='SIGNUP'`.
 - Company self-signup and broader company layout beyond the current dashboard/jobs screens are not implemented.
 - Full admin A/B/C account-management actions are not implemented.
-- `frontend/src/screens/user/MatchesPage.tsx` still uses old mock matching stats.
-- Actual vector embedding/matching with sentence-transformers + pgvector is planned but not implemented.
+- `frontend/src/screens/user/MatchesPage.tsx` still uses old mock matching stats; application-level company-side stored match scores are implemented separately.
+- Vector embedding/semantic matching with sentence-transformers + pgvector is still planned but not implemented; current application match scoring is deterministic `local-match-v1` and does not add new dependencies.
 - Work24 public API integration remains constrained by API approval; mock and ALIO flows are available for demo/development.

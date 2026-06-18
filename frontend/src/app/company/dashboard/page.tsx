@@ -27,6 +27,33 @@ function formatDateTime(value: string): string {
   return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function getMatchScoreClass(grade?: string): string {
+  if (grade === 'A') return 'bg-m-success-soft text-m-success';
+  if (grade === 'B') return 'bg-m-primary-soft text-m-primary';
+  if (grade === 'C') return 'bg-m-warn-soft text-m-warn';
+  return 'bg-m-surface-alt text-m-subtle';
+}
+
+function MatchScoreBadge({ applicant }: { applicant: CompanyApplicant }) {
+  const match = applicant.match_score;
+  if (!match) {
+    return (
+      <span className="inline-flex rounded-full bg-m-surface-alt px-2 py-0.5 text-[11px] font-semibold text-m-subtle">
+        대기
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${getMatchScoreClass(match.grade)}`}
+      title={match.summary}
+    >
+      {match.grade}
+      <span className="font-mono">{match.score}</span>
+    </span>
+  );
+}
+
 function getErrorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error) {
     const message = (error as { message?: unknown }).message;
@@ -271,9 +298,12 @@ function CompanyDashboardInner() {
                         </p>
                         <p className="truncate text-[12px] text-m-subtle">{a.job_title}</p>
                       </div>
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${meta.cls}`}>
-                        {meta.label}
-                      </span>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <MatchScoreBadge applicant={a} />
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${meta.cls}`}>
+                          {meta.label}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
@@ -311,6 +341,7 @@ function CompanyDashboardInner() {
                   <th className="px-4 py-2.5 text-left font-semibold">지원 공고</th>
                   <th className="px-4 py-2.5 text-left font-semibold">이력서</th>
                   <th className="px-4 py-2.5 text-left font-semibold">상태</th>
+                  <th className="px-4 py-2.5 text-left font-semibold">매칭</th>
                   <th className="px-4 py-2.5 text-left font-semibold">지원일</th>
                   <th className="px-4 py-2.5 text-left font-semibold">열람일</th>
                   <th className="px-4 py-2.5 text-left font-semibold">처리</th>
@@ -332,6 +363,9 @@ function CompanyDashboardInner() {
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${meta.cls}`}>
                           {meta.label}
                         </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <MatchScoreBadge applicant={a} />
                       </td>
                       <td className="px-4 py-3 text-m-subtle">{formatDateTime(a.applied_at)}</td>
                       <td className="px-4 py-3 text-m-subtle">
@@ -368,8 +402,10 @@ function CompanyDashboardInner() {
       {viewingApplicationId !== null && (
         <ApplicantResumeModal
           applicationId={viewingApplicationId}
+          companyAddress={data?.address ?? null}
           onClose={() => setViewingApplicationId(null)}
           onViewed={handleResumeViewed}
+          onInterviewSent={handleResumeViewed}
         />
       )}
     </div>

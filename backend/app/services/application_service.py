@@ -18,7 +18,9 @@ from app.repositories.application_repository import ApplicationRepository
 from app.repositories.job_posting_repository import JobPostingRepository
 from app.repositories.resume_repository import ResumeRepository
 from app.schemas.application import ApplicationResponse, MyApplicationItem
+from app.schemas.match_score import ApplicationMatchScoreResponse
 from app.services.company_provisioning_service import CompanyProvisioningService
+from app.services.match_score_service import MatchScoreService
 
 
 class ApplicationResumeNotFoundError(Exception):
@@ -46,6 +48,7 @@ class ApplicationService:
         self.job_posting_repository = JobPostingRepository(db)
         self.resume_repository = ResumeRepository(db)
         self.company_provisioning_service = CompanyProvisioningService(db)
+        self.match_score_service = MatchScoreService(db)
 
     def apply(
         self,
@@ -81,6 +84,13 @@ class ApplicationService:
                 actor_id=user_id,
                 request_ip=request_ip,
             )
+            match_score = self.match_score_service.ensure_score_for_application(
+                application,
+                resume,
+                job,
+                actor_id=user_id,
+                request_ip=request_ip,
+            )
             self.db.commit()
         except IntegrityError as exc:
             # 부분 unique (user_id, job_id) 위반: 동시 중복 지원
@@ -88,10 +98,21 @@ class ApplicationService:
             raise ApplicationAlreadyExistsError from exc
 
         self.db.refresh(application)
-        return ApplicationResponse.model_validate(application)
+        return ApplicationResponse(
+            application_id=application.application_id,
+            job_id=application.job_id,
+            resume_id=application.resume_id,
+            company_id=application.company_id,
+            status=application.status,
+            applied_at=application.applied_at,
+            match_score=ApplicationMatchScoreResponse.model_validate(match_score),
+        )
 
     def list_my_applications(self, user_id: int) -> list[MyApplicationItem]:
         rows = self.application_repository.list_by_user(user_id)
+        score_map = self.match_score_service.repository.list_by_application_ids(
+            [row.Application.application_id for row in rows]
+        )
         return [
             MyApplicationItem(
                 application_id=row.Application.application_id,
@@ -104,6 +125,11 @@ class ApplicationService:
                 status=row.Application.status,
                 applied_at=row.Application.applied_at,
                 viewed_at=row.Application.viewed_at,
+                match_score=(
+                    ApplicationMatchScoreResponse.model_validate(score_map[row.Application.application_id])
+                    if row.Application.application_id in score_map
+                    else None
+                ),
             )
             for row in rows
         ]

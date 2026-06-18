@@ -6,6 +6,8 @@ import type {
   CompanyDashboard,
   CompanyJob,
   CompanyJobPayload,
+  InterviewEmailPayload,
+  InterviewEmailResponse,
 } from './types';
 
 export const companyApi = {
@@ -43,6 +45,17 @@ export const companyApi = {
     const res = await apiClient.patch<CompanyApplicationStatusResponse>(
       `/company/applications/${applicationId}/status`,
       { status },
+    );
+    return res.data;
+  },
+
+  sendInterviewEmail: async (
+    applicationId: number,
+    payload: InterviewEmailPayload,
+  ): Promise<InterviewEmailResponse> => {
+    const res = await apiClient.post<InterviewEmailResponse>(
+      `/company/applications/${applicationId}/interview-email`,
+      payload,
     );
     return res.data;
   },

@@ -7,7 +7,10 @@ from __future__ import annotations
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.application import COMPANY_MANUAL_APPLICATION_STATUSES
+from app.models.application import (
+    APPLICATION_STATUS_INTERVIEW,
+    COMPANY_MANUAL_APPLICATION_STATUSES,
+)
 from app.models.company import Company
 from app.models.job_posting import JobPosting
 from app.repositories.application_repository import ApplicationRepository
@@ -26,6 +29,7 @@ from app.schemas.company import (
     InterviewEmailRequest,
     InterviewEmailResponse,
 )
+from app.schemas.match_score import ApplicationMatchScoreResponse
 from app.schemas.resume import (
     ResumeCoverLetterSectionResponse,
     ResumeParsedData,
@@ -33,6 +37,7 @@ from app.schemas.resume import (
 )
 from app.services.email_service import EmailConfigError, EmailSendError
 from app.services.interview_email_service import InterviewEmailService
+from app.services.match_score_service import MatchScoreService
 
 # 기업이 직접 등록한 공고만 수정/삭제 가능 (외부 수집 공고는 읽기 전용).
 EDITABLE_JOB_SOURCE = "MANUAL"
@@ -77,6 +82,7 @@ class CompanyService:
         self.job_posting_repository = JobPostingRepository(db)
         self.resume_repository = ResumeRepository(db)
         self.user_repository = UserRepository(db)
+        self.match_score_service = MatchScoreService(db)
 
     def _get_or_create_company_for_user(self, user_id: int) -> Company:
         company = self.company_repository.get_by_user_id(user_id)
@@ -120,6 +126,7 @@ class CompanyService:
             company.business_number,
             company.company_name,
         )
+        match_scores = self._ensure_match_scores_for_rows(rows, actor_id=user_id)
 
         applicants = [
             CompanyApplicantItem(
@@ -133,6 +140,7 @@ class CompanyService:
                 status=row.Application.status,
                 applied_at=row.Application.applied_at,
                 viewed_at=row.Application.viewed_at,
+                match_score=match_scores.get(row.Application.application_id),
             )
             for row in rows
         ]
@@ -141,6 +149,7 @@ class CompanyService:
             company_id=company.company_id,
             company_name=company.company_name,
             business_number=company.business_number,
+            address=company.address,
             received_count=received_count,
             pending_count=pending_count,
             posting_count=posting_count,
@@ -173,11 +182,21 @@ class CompanyService:
             actor_id=user_id,
             request_ip=request_ip,
         )
-        self.db.commit()
-        self.db.refresh(application)
 
         applicant = self.user_repository.get_by_id(application.user_id)
         job = self.job_posting_repository.get_by_id(application.job_id)
+        if job is None:
+            raise CompanyApplicationNotFoundError
+        match_score = self.match_score_service.ensure_score_for_application(
+            application,
+            resume,
+            job,
+            actor_id=user_id,
+            request_ip=request_ip,
+        )
+        match_score_response = ApplicationMatchScoreResponse.model_validate(match_score)
+        self.db.commit()
+        self.db.refresh(application)
         projects = self.resume_repository.get_projects(resume.resume_id)
         sections = self.resume_repository.get_cover_letter_sections(resume.resume_id)
 
@@ -188,7 +207,7 @@ class CompanyService:
             viewed_at=application.viewed_at,
             applicant_name=applicant.name if applicant else None,
             applicant_email=applicant.email if applicant else "",
-            job_title=job.title if job else "",
+            job_title=job.title,
             resume_id=resume.resume_id,
             resume_title=resume.title,
             original_filename=resume.original_filename,
@@ -206,6 +225,7 @@ class CompanyService:
             structured_cover_letter_sections=[
                 ResumeCoverLetterSectionResponse.model_validate(s) for s in sections
             ],
+            match_score=match_score_response,
         )
 
     def get_applicant_resume_file(self, user_id: int, application_id: int):
@@ -228,6 +248,7 @@ class CompanyService:
         user_id: int,
         application_id: int,
         payload: InterviewEmailRequest,
+        request_ip: str | None,
     ) -> InterviewEmailResponse:
         """지원자에게 면접 안내 메일(면접 장소 지도 포함)을 발송한다."""
         company = self._get_or_create_company_for_user(user_id)
@@ -265,10 +286,19 @@ class CompanyService:
         except (EmailConfigError, EmailSendError) as exc:
             raise InterviewEmailSendError from exc
 
+        self.application_repository.update_status(
+            application,
+            status=APPLICATION_STATUS_INTERVIEW,
+            actor_id=user_id,
+            request_ip=request_ip,
+        )
+        self.db.commit()
+        self.db.refresh(application)
         return InterviewEmailResponse(
             application_id=application.application_id,
             to_email=applicant.email,
             map_attached=map_attached,
+            status=application.status,
             message="면접 안내 메일을 발송했습니다.",
         )
 
@@ -402,6 +432,57 @@ class CompanyService:
         if posting.source != EDITABLE_JOB_SOURCE:
             raise CompanyJobNotEditableError
         return posting
+
+    def _ensure_match_scores_for_rows(
+        self,
+        rows,
+        *,
+        actor_id: int | None,
+    ) -> dict[int, ApplicationMatchScoreResponse]:
+        scores: dict[int, ApplicationMatchScoreResponse] = {}
+        if not rows:
+            return scores
+
+        changed = False
+        for row in rows:
+            application = row.Application
+            resume = self.resume_repository.get_by_id_no_user(application.resume_id)
+            job = self.job_posting_repository.get_by_id(application.job_id)
+            if resume is None or job is None:
+                continue
+            existing_score = (
+                self.match_score_service.repository.get_by_application_id(
+                    application.application_id
+                )
+            )
+            existing_state = (
+                (
+                    existing_score.input_signature,
+                    existing_score.model,
+                    existing_score.algorithm_version,
+                )
+                if existing_score is not None
+                else None
+            )
+            match_score = self.match_score_service.ensure_score_for_application(
+                application,
+                resume,
+                job,
+                actor_id=actor_id,
+                request_ip=None,
+            )
+            if existing_state != (
+                match_score.input_signature,
+                match_score.model,
+                match_score.algorithm_version,
+            ):
+                changed = True
+            scores[application.application_id] = (
+                ApplicationMatchScoreResponse.model_validate(match_score)
+            )
+        if changed:
+            self.db.commit()
+        return scores
 
     @staticmethod
     def _normalize_status(status: str | None) -> str:

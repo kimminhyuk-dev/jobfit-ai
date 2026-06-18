@@ -1,11 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Icon from '../ui/Icon';
 import { showToast } from '../ui/Toast';
+import { Alert } from '../ui/alert';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import { companyApi } from '../../api/company';
-import type { ApplicationStatus, CompanyApplicantResume } from '../../api/types';
+import type { ApiError } from '../../api/client';
+import type {
+  ApplicationStatus,
+  CompanyApplicantResume,
+  InterviewEmailPayload,
+} from '../../api/types';
 
 const STATUS_META: Record<ApplicationStatus, { label: string; cls: string }> = {
   SUBMITTED: { label: '접수', cls: 'bg-m-primary-soft text-m-primary' },
@@ -45,16 +53,56 @@ function formatFileSize(size: number): string {
   return `${(size / 1024 / 1024).toFixed(1)}MB`;
 }
 
+function getMatchScoreClass(grade?: string): string {
+  if (grade === 'A') return 'bg-m-success-soft text-m-success';
+  if (grade === 'B') return 'bg-m-primary-soft text-m-primary';
+  if (grade === 'C') return 'bg-m-warn-soft text-m-warn';
+  return 'bg-m-surface-alt text-m-subtle';
+}
+
+function toDateTimeLocalValue(value: Date): string {
+  const pad = (num: number) => String(num).padStart(2, '0');
+  return [
+    value.getFullYear(),
+    pad(value.getMonth() + 1),
+    pad(value.getDate()),
+  ].join('-') + `T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+}
+
+function getMinInterviewAt(): string {
+  const date = new Date(Date.now() + 60 * 1000);
+  date.setSeconds(0, 0);
+  return toDateTimeLocalValue(date);
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as ApiError).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  return '면접 안내 메일 발송에 실패했습니다.';
+}
+
 export default function ApplicantResumeModal({
   applicationId,
+  companyAddress,
   onClose,
   onViewed,
+  onInterviewSent,
 }: {
   applicationId: number;
+  companyAddress?: string | null;
   onClose: () => void;
   onViewed: () => void;
+  onInterviewSent?: () => void;
 }) {
+  const queryClient = useQueryClient();
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isInterviewFormOpen, setIsInterviewFormOpen] = useState(false);
+  const [interviewAt, setInterviewAt] = useState('');
+  const [locationAddress, setLocationAddress] = useState(companyAddress?.trim() ?? '');
+  const [message, setMessage] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const { data, isLoading, isError, isSuccess } = useQuery({
     queryKey: ['company', 'applicant-resume', applicationId],
@@ -107,10 +155,64 @@ export default function ApplicantResumeModal({
     }
   }
 
+  const interviewMutation = useMutation({
+    mutationFn: (payload: InterviewEmailPayload) =>
+      companyApi.sendInterviewEmail(applicationId, payload),
+    onSuccess: (response) => {
+      setIsInterviewFormOpen(false);
+      setFormError(null);
+      queryClient.invalidateQueries({ queryKey: ['company', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['company', 'applicant-resume', applicationId] });
+      onInterviewSent?.();
+      showToast(response.message || '면접 안내 메일을 발송했습니다.', 'success');
+    },
+    onError: (error) => {
+      showToast(getErrorMessage(error), 'error');
+    },
+  });
+
   function handleInterviewEmail() {
-    showToast('면접 이메일 발송 기능은 준비 중입니다.', 'info');
+    if (!data) return;
+    setFormError(null);
+    if (!locationAddress.trim() && companyAddress?.trim()) {
+      setLocationAddress(companyAddress.trim());
+    }
+    setIsInterviewFormOpen(true);
   }
 
+  function handleInterviewSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+
+    if (!interviewAt) {
+      setFormError('면접 날짜와 시간을 입력해 주세요.');
+      return;
+    }
+
+    const selectedAt = new Date(interviewAt);
+    if (Number.isNaN(selectedAt.getTime())) {
+      setFormError('면접 날짜와 시간을 다시 확인해 주세요.');
+      return;
+    }
+    if (selectedAt.getTime() <= Date.now()) {
+      setFormError('현재 시각 이후의 면접 일정을 선택해 주세요.');
+      return;
+    }
+
+    const normalizedAddress = locationAddress.trim();
+    if (!normalizedAddress) {
+      setFormError('면접 장소 주소를 입력해 주세요.');
+      return;
+    }
+
+    interviewMutation.mutate({
+      interview_at: selectedAt.toISOString(),
+      location_address: normalizedAddress,
+      message: message.trim() || null,
+    });
+  }
+
+  const minInterviewAt = getMinInterviewAt();
   const canPreview = data && previewUrl && (isPdf(data, previewBlob) || isImage(data, previewBlob));
 
   return (
@@ -202,30 +304,184 @@ export default function ApplicantResumeModal({
                     <p>열람일 {data.viewed_at ? dateStr(data.viewed_at) : '방금'}</p>
                   </div>
                 </div>
+                <MatchScorePanel data={data} />
                 <ParsedResumeSummary data={data} />
               </aside>
             </div>
           )}
         </div>
 
+        {data && isInterviewFormOpen && (
+          <form
+            onSubmit={handleInterviewSubmit}
+            className="border-t border-m-border bg-m-surface px-5 py-4"
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[14px] font-bold text-m-text">면접 안내 메일</h3>
+                <p className="mt-0.5 text-[12px] text-m-muted">
+                  입력한 일정과 장소가 지원자에게 메일로 발송됩니다.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setIsInterviewFormOpen(false);
+                  setFormError(null);
+                }}
+                disabled={interviewMutation.isPending}
+              >
+                접기
+              </Button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)]">
+              <label className="block">
+                <span className="mb-1 block text-[12px] font-semibold text-m-muted">면접 날짜/시간</span>
+                <Input
+                  type="datetime-local"
+                  value={interviewAt}
+                  min={minInterviewAt}
+                  onChange={(event) => setInterviewAt(event.target.value)}
+                  disabled={interviewMutation.isPending}
+                  required
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[12px] font-semibold text-m-muted">장소 주소</span>
+                <Input
+                  value={locationAddress}
+                  onChange={(event) => setLocationAddress(event.target.value)}
+                  placeholder="회사 등록 주소 또는 면접 장소 주소"
+                  disabled={interviewMutation.isPending}
+                  required
+                />
+              </label>
+              <label className="block md:col-span-2">
+                <span className="mb-1 block text-[12px] font-semibold text-m-muted">선택 메시지</span>
+                <textarea
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  maxLength={2000}
+                  rows={3}
+                  disabled={interviewMutation.isPending}
+                  placeholder="준비물, 도착 안내 등 추가로 전달할 내용을 입력하세요."
+                  className="w-full resize-none rounded-lg border border-m-border bg-m-surface px-3 py-2 text-[14px] text-m-text transition-colors placeholder:text-m-subtle focus:outline-none focus:ring-1 focus:ring-m-primary disabled:cursor-not-allowed disabled:opacity-60"
+                />
+              </label>
+            </div>
+            {formError && <Alert variant="danger" className="mt-3">{formError}</Alert>}
+            <div className="mt-3 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsInterviewFormOpen(false);
+                  setFormError(null);
+                }}
+                disabled={interviewMutation.isPending}
+              >
+                취소
+              </Button>
+              <Button type="submit" size="sm" disabled={interviewMutation.isPending}>
+                <Icon name="mail" size={15} />
+                {interviewMutation.isPending ? '발송 중' : '보내기'}
+              </Button>
+            </div>
+          </form>
+        )}
+
         <div className="flex items-center justify-between gap-3 border-t border-m-border p-4">
           <p className="truncate text-[11px] text-m-subtle">받는사람: {data?.applicant_email ?? '-'}</p>
           <div className="flex shrink-0 gap-2">
-            <button
+            <Button
               onClick={onClose}
-              className="h-9 rounded-lg border border-m-border px-4 text-[13px] font-medium text-m-muted hover:bg-m-surface-alt transition-colors"
+              variant="outline"
+              size="sm"
             >
               닫기
-            </button>
-            <button
-              onClick={handleInterviewEmail}
-              className="flex h-9 items-center gap-1.5 rounded-lg bg-m-primary px-4 text-[13px] font-semibold text-white hover:bg-m-primary-hover transition-colors"
-            >
-              <Icon name="mail" size={15} />
-              면접 이메일 보내기
-            </button>
+            </Button>
+            {!isInterviewFormOpen && (
+              <Button
+                onClick={handleInterviewEmail}
+                size="sm"
+                disabled={!data || interviewMutation.isPending}
+              >
+                <Icon name="mail" size={15} />
+                면접 이메일 보내기
+              </Button>
+            )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MatchScorePanel({ data }: { data: CompanyApplicantResume }) {
+  const match = data.match_score;
+  if (!match) {
+    return (
+      <div className="rounded-xl border border-m-border bg-m-surface p-4 text-[12px] text-m-subtle">
+        매칭 점수 산출을 기다리고 있습니다.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-m-border bg-m-surface p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[13px] font-semibold text-m-text">매칭 점수</h3>
+          <p className="mt-1 text-[12px] leading-5 text-m-muted">{match.summary}</p>
+        </div>
+        <span
+          className={`shrink-0 rounded-lg px-2.5 py-1 text-[12px] font-bold ${getMatchScoreClass(match.grade)}`}
+          title={`${match.model} ${match.algorithm_version}`}
+        >
+          {match.grade} · {match.score}
+        </span>
+      </div>
+
+      {match.matched_skills.length > 0 && (
+        <div className="mb-3">
+          <p className="mb-1.5 text-[11px] font-semibold text-m-subtle">일치 기술</p>
+          <div className="flex flex-wrap gap-1.5">
+            {match.matched_skills.slice(0, 8).map((skill) => (
+              <span key={skill} className="rounded-md bg-m-success-soft px-2 py-0.5 text-[11px] font-medium text-m-success">
+                {skill}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {match.missing_skills.length > 0 && (
+        <div className="mb-3">
+          <p className="mb-1.5 text-[11px] font-semibold text-m-subtle">보완 키워드</p>
+          <div className="flex flex-wrap gap-1.5">
+            {match.missing_skills.slice(0, 8).map((skill) => (
+              <span key={skill} className="rounded-md bg-m-warn-soft px-2 py-0.5 text-[11px] font-medium text-m-warn">
+                {skill}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {match.strengths.slice(0, 2).map((item) => (
+          <p key={item} className="rounded-lg bg-m-surface-alt p-2 text-[11px] leading-5 text-m-muted">
+            {item}
+          </p>
+        ))}
+        {match.gaps.slice(0, 2).map((item) => (
+          <p key={item} className="rounded-lg bg-m-surface-alt p-2 text-[11px] leading-5 text-m-muted">
+            {item}
+          </p>
+        ))}
       </div>
     </div>
   );

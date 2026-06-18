@@ -145,6 +145,7 @@ def get_applicant_resume_file(
 def send_interview_email(
     application_id: int,
     payload: InterviewEmailRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     company_service: CompanyService = Depends(get_company_service),
 ) -> InterviewEmailResponse:
@@ -155,6 +156,7 @@ def send_interview_email(
             user_id=current_user.user_id,
             application_id=application_id,
             payload=payload,
+            request_ip=get_client_ip(request),
         )
     except CompanyAccountNotFoundError as exc:
         raise _company_not_found() from exc

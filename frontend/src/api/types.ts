@@ -330,6 +330,18 @@ export interface Application {
 // 지원(이력서 보내기) — 백엔드 응답
 export type ApplicationStatus = 'SUBMITTED' | 'VIEWED' | 'REJECTED' | 'INTERVIEW' | 'CANCELED';
 
+export interface ApplicationMatchScore {
+  score: number;
+  grade: string;
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  matched_skills: string[];
+  missing_skills: string[];
+  model: string;
+  algorithm_version: string;
+}
+
 export interface JobApplicationResponse {
   application_id: number;
   job_id: number;
@@ -337,6 +349,7 @@ export interface JobApplicationResponse {
   company_id: number | null;
   status: ApplicationStatus;
   applied_at: string;
+  match_score?: ApplicationMatchScore | null;
 }
 
 export interface MyApplication {
@@ -350,6 +363,7 @@ export interface MyApplication {
   status: ApplicationStatus;
   applied_at: string;
   viewed_at?: string | null;
+  match_score?: ApplicationMatchScore | null;
 }
 
 // 기업회원 대시보드
@@ -364,12 +378,14 @@ export interface CompanyApplicant {
   status: ApplicationStatus;
   applied_at: string;
   viewed_at?: string | null;
+  match_score?: ApplicationMatchScore | null;
 }
 
 export interface CompanyDashboard {
   company_id: number;
   company_name: string | null;
   business_number: string | null;
+  address?: string | null;
   received_count: number;
   pending_count: number;
   posting_count: number;
@@ -378,6 +394,20 @@ export interface CompanyDashboard {
 
 export interface CompanyApplicationStatusResponse {
   application_id: number;
+  status: ApplicationStatus;
+  message: string;
+}
+
+export interface InterviewEmailPayload {
+  interview_at: string;
+  location_address?: string | null;
+  message?: string | null;
+}
+
+export interface InterviewEmailResponse {
+  application_id: number;
+  to_email: string;
+  map_attached: boolean;
   status: ApplicationStatus;
   message: string;
 }
@@ -400,6 +430,7 @@ export interface CompanyApplicantResume {
   parsed_data: ResumeParsedData | null;
   structured_projects: ResumeProjectResponse[];
   structured_cover_letter_sections: ResumeCoverLetterSectionResponse[];
+  match_score?: ApplicationMatchScore | null;
 }
 
 // 기업 공고 관리

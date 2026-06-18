@@ -2,12 +2,13 @@
 기업회원 대시보드 응답 스키마
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.application import APPLICATION_STATUS_REJECTED
 
+from app.schemas.match_score import ApplicationMatchScoreResponse
 from app.schemas.resume import (
     ResumeCoverLetterSectionResponse,
     ResumeParsedData,
@@ -28,6 +29,7 @@ class CompanyApplicantItem(BaseModel):
     status: str
     applied_at: datetime
     viewed_at: datetime | None = None
+    match_score: ApplicationMatchScoreResponse | None = None
 
 
 class CompanyDashboardResponse(BaseModel):
@@ -36,6 +38,7 @@ class CompanyDashboardResponse(BaseModel):
     company_id: int
     company_name: str | None
     business_number: str | None
+    address: str | None = None
     received_count: int
     pending_count: int
     posting_count: int
@@ -63,6 +66,7 @@ class CompanyApplicantResumeResponse(BaseModel):
     structured_cover_letter_sections: list[ResumeCoverLetterSectionResponse] = Field(
         default_factory=list
     )
+    match_score: ApplicationMatchScoreResponse | None = None
 
 
 class CompanyApplicationStatusUpdateRequest(BaseModel):
@@ -98,6 +102,20 @@ class InterviewEmailRequest(BaseModel):
     )
     message: str | None = Field(default=None, max_length=2000)
 
+    @field_validator("interview_at")
+    @classmethod
+    def validate_interview_at(cls, value: datetime) -> datetime:
+        """과거 시점의 면접 일정은 허용하지 않는다."""
+        if value.tzinfo is None:
+            now = datetime.now()
+            compare_value = value
+        else:
+            now = datetime.now(timezone.utc)
+            compare_value = value.astimezone(timezone.utc)
+        if compare_value <= now:
+            raise ValueError("면접 일시는 현재 시각 이후여야 합니다.")
+        return value
+
 
 class InterviewEmailResponse(BaseModel):
     """면접 안내 메일 발송 결과."""
@@ -105,6 +123,7 @@ class InterviewEmailResponse(BaseModel):
     application_id: int
     to_email: str
     map_attached: bool
+    status: str
     message: str
 
 
