@@ -29,6 +29,16 @@ def get_application_service(db: Session = Depends(get_db)) -> ApplicationService
     return ApplicationService(db)
 
 
+def _require_user(current_user: User) -> None:
+    """지원 생성은 개인회원(USER)만 허용한다."""
+    if (current_user.role or "").strip().upper() != "USER":
+        raise AppException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code=ErrorCode.FORBIDDEN,
+            message="개인회원만 지원할 수 있습니다.",
+        )
+
+
 @router.post("", response_model=ApplicationResponse, status_code=status.HTTP_201_CREATED)
 def create_application(
     payload: ApplicationCreateRequest,
@@ -37,6 +47,7 @@ def create_application(
     application_service: ApplicationService = Depends(get_application_service),
 ) -> ApplicationResponse:
     """선택한 이력서로 공고에 지원한다(이력서 보내기)."""
+    _require_user(current_user)
     try:
         return application_service.apply(
             user_id=current_user.user_id,

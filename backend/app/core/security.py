@@ -3,6 +3,8 @@
 """
 
 import hashlib
+import secrets
+import string
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -59,6 +61,27 @@ def decode_token(token: str, expected_type: str) -> dict[str, Any]:
 def hash_token(token: str) -> str:
     """토큰을 SHA-256으로 해시한다. DB에는 평문 대신 해시만 저장한다."""
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+def generate_numeric_code(length: int = 6) -> str:
+    """이메일 인증용 숫자 코드를 생성한다 (기본 6자리). 보안 난수 사용."""
+    return "".join(secrets.choice(string.digits) for _ in range(length))
+
+
+def generate_temporary_password(length: int = 12) -> str:
+    """
+    임시 비밀번호를 생성한다.
+    대문자·소문자·숫자·특수문자를 각 1개 이상 포함하고 나머지는 무작위로 채운 뒤 섞는다.
+    """
+    if length < 4:
+        length = 4
+    specials = "@#$%"
+    pools = [string.ascii_uppercase, string.ascii_lowercase, string.digits, specials]
+    chars = [secrets.choice(pool) for pool in pools]
+    all_chars = "".join(pools)
+    chars += [secrets.choice(all_chars) for _ in range(length - len(chars))]
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
 
 
 def _create_token(subject: str, token_type: str, expires_delta: timedelta) -> str:

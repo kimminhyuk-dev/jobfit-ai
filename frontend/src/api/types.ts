@@ -328,7 +328,7 @@ export interface Application {
 }
 
 // 지원(이력서 보내기) — 백엔드 응답
-export type ApplicationStatus = 'SUBMITTED' | 'VIEWED' | 'ACCEPTED' | 'REJECTED' | 'CANCELED';
+export type ApplicationStatus = 'SUBMITTED' | 'VIEWED' | 'REJECTED' | 'INTERVIEW' | 'CANCELED';
 
 export interface JobApplicationResponse {
   application_id: number;
@@ -374,6 +374,12 @@ export interface CompanyDashboard {
   pending_count: number;
   posting_count: number;
   applicants: CompanyApplicant[];
+}
+
+export interface CompanyApplicationStatusResponse {
+  application_id: number;
+  status: ApplicationStatus;
+  message: string;
 }
 
 // 기업이 열람하는 지원자 이력서 상세 (열람 시 상태가 VIEWED로 전환됨)

@@ -7,6 +7,7 @@ from __future__ import annotations
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.models.application import COMPANY_MANUAL_APPLICATION_STATUSES
 from app.models.company import Company
 from app.models.job_posting import JobPosting
 from app.repositories.application_repository import ApplicationRepository
@@ -15,18 +16,23 @@ from app.repositories.job_posting_repository import JobPostingRepository
 from app.repositories.resume_repository import ResumeRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.company import (
+    CompanyApplicationStatusResponse,
     CompanyApplicantItem,
     CompanyApplicantResumeResponse,
     CompanyDashboardResponse,
     CompanyJobCreateRequest,
     CompanyJobItem,
     CompanyJobUpdateRequest,
+    InterviewEmailRequest,
+    InterviewEmailResponse,
 )
 from app.schemas.resume import (
     ResumeCoverLetterSectionResponse,
     ResumeParsedData,
     ResumeProjectResponse,
 )
+from app.services.email_service import EmailConfigError, EmailSendError
+from app.services.interview_email_service import InterviewEmailService
 
 # 기업이 직접 등록한 공고만 수정/삭제 가능 (외부 수집 공고는 읽기 전용).
 EDITABLE_JOB_SOURCE = "MANUAL"
@@ -41,12 +47,24 @@ class CompanyApplicationNotFoundError(Exception):
     """기업에 전달된 해당 지원/이력서를 찾을 수 없음."""
 
 
+class CompanyApplicationInvalidStatusError(Exception):
+    """기업이 직접 변경할 수 없는 지원 상태."""
+
+
 class CompanyJobNotFoundError(Exception):
     """기업에 속한 해당 공고를 찾을 수 없음."""
 
 
 class CompanyJobNotEditableError(Exception):
     """외부 수집 공고 등 수정할 수 없는 공고."""
+
+
+class InterviewLocationMissingError(Exception):
+    """면접 장소 주소가 없음(기업 주소 미등록 + 요청에도 주소 없음)."""
+
+
+class InterviewEmailSendError(Exception):
+    """면접 안내 메일 발송 실패."""
 
 
 class CompanyService:
@@ -203,6 +221,91 @@ class CompanyService:
         if resume is None:
             raise CompanyApplicationNotFoundError
         return resume
+
+    def send_interview_email(
+        self,
+        *,
+        user_id: int,
+        application_id: int,
+        payload: InterviewEmailRequest,
+    ) -> InterviewEmailResponse:
+        """지원자에게 면접 안내 메일(면접 장소 지도 포함)을 발송한다."""
+        company = self._get_or_create_company_for_user(user_id)
+
+        application = self.application_repository.get_active_by_id_for_company(
+            application_id, company.company_id
+        )
+        if application is None:
+            raise CompanyApplicationNotFoundError
+
+        applicant = self.user_repository.get_by_id(application.user_id)
+        if applicant is None or not applicant.email:
+            raise CompanyApplicationNotFoundError
+
+        # 면접 장소: 요청에 명시한 주소 우선, 없으면 기업 등록 주소 사용.
+        location_address = (
+            payload.location_address or company.address or ""
+        ).strip()
+        if not location_address:
+            raise InterviewLocationMissingError
+
+        job = self.job_posting_repository.get_by_id(application.job_id)
+
+        interview_email_service = InterviewEmailService()
+        try:
+            map_attached = interview_email_service.send_interview_invitation(
+                to=applicant.email,
+                applicant_name=applicant.name,
+                company_name=company.company_name,
+                job_title=job.title if job else None,
+                location_address=location_address,
+                interview_at=payload.interview_at,
+                message=payload.message,
+            )
+        except (EmailConfigError, EmailSendError) as exc:
+            raise InterviewEmailSendError from exc
+
+        return InterviewEmailResponse(
+            application_id=application.application_id,
+            to_email=applicant.email,
+            map_attached=map_attached,
+            message="면접 안내 메일을 발송했습니다.",
+        )
+
+    def update_application_status(
+        self,
+        *,
+        user_id: int,
+        application_id: int,
+        status: str,
+        request_ip: str | None,
+    ) -> CompanyApplicationStatusResponse:
+        """기업이 받은 지원 상태를 수동 변경한다."""
+        normalized = (status or "").strip().upper()
+        if normalized not in COMPANY_MANUAL_APPLICATION_STATUSES:
+            raise CompanyApplicationInvalidStatusError
+
+        company = self._get_or_create_company_for_user(user_id)
+        application = self.application_repository.get_active_by_id_for_company(
+            application_id,
+            company.company_id,
+        )
+        if application is None:
+            raise CompanyApplicationNotFoundError
+
+        self.application_repository.update_status(
+            application,
+            status=normalized,
+            actor_id=user_id,
+            request_ip=request_ip,
+        )
+        self.db.commit()
+        self.db.refresh(application)
+        return CompanyApplicationStatusResponse(
+            application_id=application.application_id,
+            status=application.status,
+            message="지원 상태를 변경했습니다.",
+        )
 
     # ------------------------------------------------------------------ #
     # 기업 공고 관리 (확인/등록/수정/삭제)

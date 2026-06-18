@@ -10,8 +10,8 @@ import type { ApplicationStatus, CompanyApplicantResume } from '../../api/types'
 const STATUS_META: Record<ApplicationStatus, { label: string; cls: string }> = {
   SUBMITTED: { label: '접수', cls: 'bg-m-primary-soft text-m-primary' },
   VIEWED: { label: '이력서 열람', cls: 'bg-m-warn-soft text-m-warn' },
-  ACCEPTED: { label: '합격', cls: 'bg-m-success-soft text-m-success' },
   REJECTED: { label: '불합격', cls: 'bg-m-danger-soft text-m-danger' },
+  INTERVIEW: { label: '면접', cls: 'bg-m-success-soft text-m-success' },
   CANCELED: { label: '지원취소', cls: 'bg-m-surface-alt text-m-subtle' },
 };
 

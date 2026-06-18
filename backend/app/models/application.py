@@ -15,6 +15,24 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 from app.models.base import AuditMixin, SoftDeleteMixin
 
+APPLICATION_STATUS_SUBMITTED = "SUBMITTED"
+APPLICATION_STATUS_VIEWED = "VIEWED"
+APPLICATION_STATUS_REJECTED = "REJECTED"
+APPLICATION_STATUS_INTERVIEW = "INTERVIEW"
+APPLICATION_STATUS_CANCELED = "CANCELED"
+
+APPLICATION_STATUS_VALUES = {
+    APPLICATION_STATUS_SUBMITTED,
+    APPLICATION_STATUS_VIEWED,
+    APPLICATION_STATUS_REJECTED,
+    APPLICATION_STATUS_INTERVIEW,
+    APPLICATION_STATUS_CANCELED,
+}
+
+COMPANY_MANUAL_APPLICATION_STATUSES = {
+    APPLICATION_STATUS_REJECTED,
+}
+
 
 class Application(Base, AuditMixin, SoftDeleteMixin):
     """지원(이력서 보내기) 테이블."""
@@ -70,7 +88,7 @@ class Application(Base, AuditMixin, SoftDeleteMixin):
         default="SUBMITTED",
         server_default="SUBMITTED",
         index=True,
-        comment="지원 상태: SUBMITTED / VIEWED / ACCEPTED / REJECTED / CANCELED",
+        comment="지원 상태: SUBMITTED / VIEWED / REJECTED / INTERVIEW / CANCELED",
     )
     applied_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

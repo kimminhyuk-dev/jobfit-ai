@@ -4,7 +4,9 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.models.application import APPLICATION_STATUS_REJECTED
 
 from app.schemas.resume import (
     ResumeCoverLetterSectionResponse,
@@ -61,6 +63,49 @@ class CompanyApplicantResumeResponse(BaseModel):
     structured_cover_letter_sections: list[ResumeCoverLetterSectionResponse] = Field(
         default_factory=list
     )
+
+
+class CompanyApplicationStatusUpdateRequest(BaseModel):
+    """기업이 지원 상태를 수동 변경하는 요청."""
+
+    status: str = Field(min_length=1, max_length=20)
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if normalized != APPLICATION_STATUS_REJECTED:
+            raise ValueError("이번 단계에서는 탈락(REJECTED) 처리만 변경할 수 있습니다.")
+        return normalized
+
+
+class CompanyApplicationStatusResponse(BaseModel):
+    """기업 지원 상태 변경 결과."""
+
+    application_id: int
+    status: str
+    message: str
+
+
+class InterviewEmailRequest(BaseModel):
+    """면접 안내 메일 발송 요청."""
+
+    interview_at: datetime
+    location_address: str | None = Field(
+        default=None,
+        max_length=500,
+        description="면접 장소 주소. 미지정 시 기업 등록 주소(companies.address)를 사용",
+    )
+    message: str | None = Field(default=None, max_length=2000)
+
+
+class InterviewEmailResponse(BaseModel):
+    """면접 안내 메일 발송 결과."""
+
+    application_id: int
+    to_email: str
+    map_attached: bool
+    message: str
 
 
 # --- 기업 공고 관리 (확인/등록/수정/삭제) ---

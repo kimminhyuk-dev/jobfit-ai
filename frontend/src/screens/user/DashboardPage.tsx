@@ -12,8 +12,8 @@ import type { ApplicationStatus, JobPostingItem } from '../../api/types';
 const APPLICATION_STATUS: Record<ApplicationStatus, { label: string; color: string }> = {
   SUBMITTED: { label: '지원 완료', color: '#6366f1' },
   VIEWED: { label: '열람됨', color: '#f59e0b' },
-  ACCEPTED: { label: '합격', color: '#10b981' },
   REJECTED: { label: '불합격', color: '#ef4444' },
+  INTERVIEW: { label: '면접 예정', color: '#10b981' },
   CANCELED: { label: '지원취소', color: '#94a3b8' },
 };
 

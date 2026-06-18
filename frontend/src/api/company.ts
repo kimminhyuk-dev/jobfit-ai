@@ -1,5 +1,7 @@
 import { apiClient } from './client';
 import type {
+  ApplicationStatus,
+  CompanyApplicationStatusResponse,
   CompanyApplicantResume,
   CompanyDashboard,
   CompanyJob,
@@ -30,6 +32,17 @@ export const companyApi = {
         params: download ? { download: true } : undefined,
         responseType: 'blob',
       },
+    );
+    return res.data;
+  },
+
+  updateApplicationStatus: async (
+    applicationId: number,
+    status: Extract<ApplicationStatus, 'REJECTED'>,
+  ): Promise<CompanyApplicationStatusResponse> => {
+    const res = await apiClient.patch<CompanyApplicationStatusResponse>(
+      `/company/applications/${applicationId}/status`,
+      { status },
     );
     return res.data;
   },

@@ -23,6 +23,14 @@ export interface SignupRequest extends ProfileFields {
   name: string;
 }
 
+export interface MessageResponse {
+  message: string;
+}
+
+export interface FindEmailResponse extends MessageResponse {
+  masked_email?: string | null;
+}
+
 export const authApi = {
   login: async (body: {
     email: string;
@@ -59,5 +67,37 @@ export const authApi = {
 
   deleteMe: async (): Promise<void> => {
     await apiClient.delete('/auth/me');
+  },
+
+  findEmail: async (body: { name: string; phone: string }): Promise<FindEmailResponse> => {
+    const res = await apiClient.post<FindEmailResponse>('/auth/find-email', body);
+    return res.data;
+  },
+
+  findCompanyEmail: async (body: {
+    name: string;
+    business_number: string;
+  }): Promise<FindEmailResponse> => {
+    const res = await apiClient.post<FindEmailResponse>('/auth/company/find-email', body);
+    return res.data;
+  },
+
+  requestPasswordReset: async (body: { email: string }): Promise<MessageResponse> => {
+    const res = await apiClient.post<MessageResponse>('/auth/password/reset-request', body);
+    return res.data;
+  },
+
+  requestCompanyPasswordReset: async (body: {
+    name: string;
+    business_number: string;
+    email: string;
+  }): Promise<MessageResponse> => {
+    const res = await apiClient.post<MessageResponse>('/auth/company/password/reset-request', body);
+    return res.data;
+  },
+
+  confirmPasswordReset: async (body: { email: string; code: string }): Promise<MessageResponse> => {
+    const res = await apiClient.post<MessageResponse>('/auth/password/reset-confirm', body);
+    return res.data;
   },
 };

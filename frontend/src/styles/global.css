@@ -52,6 +52,44 @@
     color: #0a0a0a;
     text-rendering: optimizeLegibility;
   }
+
+  button,
+  [role="button"],
+  a[href] {
+    cursor: pointer;
+    transition-property: background-color, border-color, color, opacity, box-shadow, filter;
+    transition-duration: 150ms;
+    transition-timing-function: ease-out;
+  }
+
+  button:disabled,
+  button[aria-disabled="true"],
+  [role="button"][aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  button:not(:disabled):not([aria-disabled="true"]):hover,
+  [role="button"]:not([aria-disabled="true"]):hover {
+    filter: brightness(0.98);
+  }
+
+  a[href]:hover {
+    filter: brightness(0.92);
+  }
+
+  button:not(:disabled):not([aria-disabled="true"]):active,
+  [role="button"]:not([aria-disabled="true"]):active,
+  a[href]:active {
+    filter: brightness(0.94);
+  }
+
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  a[href]:focus-visible {
+    outline: 2px solid #1d4ed8;
+    outline-offset: 2px;
+  }
 }
 
 @layer components {

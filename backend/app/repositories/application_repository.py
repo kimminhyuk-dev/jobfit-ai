@@ -8,7 +8,13 @@ from typing import Any
 from sqlalchemy import Row, func, select
 from sqlalchemy.orm import Session
 
-from app.models.application import Application
+from app.models.application import (
+    APPLICATION_STATUS_CANCELED,
+    APPLICATION_STATUS_SUBMITTED,
+    APPLICATION_STATUS_VALUES,
+    APPLICATION_STATUS_VIEWED,
+    Application,
+)
 from app.models.job_posting import JobPosting
 from app.models.resume import Resume
 from app.models.user import User
@@ -58,7 +64,7 @@ class ApplicationRepository:
         self, application: Application, *, actor_id: int, request_ip: str | None
     ) -> None:
         """지원 취소 상태를 남기고, 같은 공고 재지원은 가능하게 비활성 처리한다."""
-        application.status = "CANCELED"
+        application.status = APPLICATION_STATUS_CANCELED
         application.is_deleted = True
         application.updated_by = actor_id
         application.updated_ip = request_ip
@@ -68,12 +74,30 @@ class ApplicationRepository:
         self, application: Application, *, actor_id: int, request_ip: str | None
     ) -> Application:
         """기업이 이력서를 처음 열람하면 상태를 VIEWED로 바꾸고 열람 시각을 기록한다."""
-        if application.status == "SUBMITTED":
-            application.status = "VIEWED"
+        if application.status == APPLICATION_STATUS_SUBMITTED:
+            application.status = APPLICATION_STATUS_VIEWED
             application.viewed_at = datetime.now(timezone.utc)
             application.updated_by = actor_id
             application.updated_ip = request_ip
             self.db.flush()
+        return application
+
+    def update_status(
+        self,
+        application: Application,
+        *,
+        status: str,
+        actor_id: int,
+        request_ip: str | None,
+    ) -> Application:
+        """화이트리스트에 포함된 지원 상태로 변경한다."""
+        normalized = (status or "").strip().upper()
+        if normalized not in APPLICATION_STATUS_VALUES:
+            raise ValueError(f"지원 상태 값이 올바르지 않습니다: {normalized}")
+        application.status = normalized
+        application.updated_by = actor_id
+        application.updated_ip = request_ip
+        self.db.flush()
         return application
 
     def create(
@@ -91,7 +115,7 @@ class ApplicationRepository:
             job_id=job_id,
             resume_id=resume_id,
             company_id=company_id,
-            status="SUBMITTED",
+            status=APPLICATION_STATUS_SUBMITTED,
             created_by=actor_id,
             created_ip=request_ip,
             updated_by=actor_id,
@@ -116,7 +140,7 @@ class ApplicationRepository:
             .where(Application.user_id == user_id)
             .where(
                 (Application.is_deleted.is_(False))
-                | (Application.status == "CANCELED")
+                | (Application.status == APPLICATION_STATUS_CANCELED)
             )
             .order_by(Application.applied_at.desc())
         )
@@ -160,7 +184,9 @@ class ApplicationRepository:
         )
         total = int(self.db.execute(base).scalar_one())
         pending = int(
-            self.db.execute(base.where(Application.status == "SUBMITTED")).scalar_one()
+            self.db.execute(
+                base.where(Application.status == APPLICATION_STATUS_SUBMITTED)
+            ).scalar_one()
         )
         return total, pending
 

@@ -5,6 +5,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: jobfit_user
+      # Demo-only local database password. Keep real credentials in an ignored env file.
       POSTGRES_PASSWORD: jobfit_password_change_me
       POSTGRES_DB: jobfit_db
       TZ: Asia/Seoul

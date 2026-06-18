@@ -10,15 +10,15 @@ import type { ApiError, ApplicationStatus, MyApplication } from '../../api/types
 const STATUS_META: Record<ApplicationStatus, { label: string; cls: string }> = {
   SUBMITTED: { label: '지원 완료', cls: 'bg-m-primary-soft text-m-primary' },
   VIEWED: { label: '이력서 열람', cls: 'bg-m-warn-soft text-m-warn' },
-  ACCEPTED: { label: '합격', cls: 'bg-m-success-soft text-m-success' },
   REJECTED: { label: '불합격', cls: 'bg-m-danger-soft text-m-danger' },
+  INTERVIEW: { label: '면접 예정', cls: 'bg-m-success-soft text-m-success' },
   CANCELED: { label: '지원취소', cls: 'bg-m-surface-alt text-m-subtle' },
 };
 
 // 합격/불합격 확정 전까지만 지원 취소를 허용한다.
 const CANCELABLE: ApplicationStatus[] = ['SUBMITTED', 'VIEWED'];
 
-const STATUS_ORDER: ApplicationStatus[] = ['SUBMITTED', 'VIEWED', 'ACCEPTED', 'REJECTED', 'CANCELED'];
+const STATUS_ORDER: ApplicationStatus[] = ['SUBMITTED', 'VIEWED', 'INTERVIEW', 'REJECTED', 'CANCELED'];
 
 function dateStr(value: string): string {
   const d = new Date(value);

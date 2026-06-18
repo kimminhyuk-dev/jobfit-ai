@@ -12,18 +12,25 @@ from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
 from app.models.user import User
 from app.schemas.company import (
+    CompanyApplicationStatusResponse,
+    CompanyApplicationStatusUpdateRequest,
     CompanyApplicantResumeResponse,
     CompanyDashboardResponse,
     CompanyJobCreateRequest,
     CompanyJobItem,
     CompanyJobUpdateRequest,
+    InterviewEmailRequest,
+    InterviewEmailResponse,
 )
 from app.services.company_service import (
     CompanyAccountNotFoundError,
+    CompanyApplicationInvalidStatusError,
     CompanyApplicationNotFoundError,
     CompanyJobNotEditableError,
     CompanyJobNotFoundError,
     CompanyService,
+    InterviewEmailSendError,
+    InterviewLocationMissingError,
 )
 
 router = APIRouter(prefix="/company", tags=["company"])
@@ -129,6 +136,82 @@ def get_applicant_resume_file(
         filename=resume.original_filename,
         content_disposition_type="attachment" if download else "inline",
     )
+
+
+@router.post(
+    "/applications/{application_id}/interview-email",
+    response_model=InterviewEmailResponse,
+)
+def send_interview_email(
+    application_id: int,
+    payload: InterviewEmailRequest,
+    current_user: User = Depends(get_current_user),
+    company_service: CompanyService = Depends(get_company_service),
+) -> InterviewEmailResponse:
+    """지원자에게 면접 안내 메일(면접 장소 지도 포함)을 발송한다."""
+    _require_company(current_user)
+    try:
+        return company_service.send_interview_email(
+            user_id=current_user.user_id,
+            application_id=application_id,
+            payload=payload,
+        )
+    except CompanyAccountNotFoundError as exc:
+        raise _company_not_found() from exc
+    except CompanyApplicationNotFoundError as exc:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.APPLICATION_NOT_FOUND,
+            message="해당 지원 내역을 찾을 수 없습니다.",
+        ) from exc
+    except InterviewLocationMissingError as exc:
+        raise AppException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code=ErrorCode.INTERVIEW_EMAIL_FAILED,
+            message="면접 장소 주소가 없습니다. 기업 주소를 등록하거나 요청에 주소를 포함해 주세요.",
+        ) from exc
+    except InterviewEmailSendError as exc:
+        raise AppException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code=ErrorCode.INTERVIEW_EMAIL_FAILED,
+            message="면접 안내 메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+        ) from exc
+
+
+@router.patch(
+    "/applications/{application_id}/status",
+    response_model=CompanyApplicationStatusResponse,
+)
+def update_application_status(
+    application_id: int,
+    payload: CompanyApplicationStatusUpdateRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    company_service: CompanyService = Depends(get_company_service),
+) -> CompanyApplicationStatusResponse:
+    """기업이 받은 지원을 탈락 처리한다."""
+    _require_company(current_user)
+    try:
+        return company_service.update_application_status(
+            user_id=current_user.user_id,
+            application_id=application_id,
+            status=payload.status,
+            request_ip=get_client_ip(request),
+        )
+    except CompanyAccountNotFoundError as exc:
+        raise _company_not_found() from exc
+    except CompanyApplicationNotFoundError as exc:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.APPLICATION_NOT_FOUND,
+            message="해당 지원 내역을 찾을 수 없습니다.",
+        ) from exc
+    except CompanyApplicationInvalidStatusError as exc:
+        raise AppException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code=ErrorCode.APPLICATION_INVALID_STATUS,
+            message="변경할 수 없는 지원 상태입니다.",
+        ) from exc
 
 
 @router.get("/jobs", response_model=list[CompanyJobItem])

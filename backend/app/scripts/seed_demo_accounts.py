@@ -18,6 +18,7 @@ from app.core.security import hash_password
 from app.models.company import Company
 from app.models.user import User
 
+# Demo-only seed password for local/portfolio accounts.
 DEMO_PASSWORD = "admin1234"
 EMAIL_DOMAIN = "demo.jobfit.local"
 

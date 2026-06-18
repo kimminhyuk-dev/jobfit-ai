@@ -36,6 +36,85 @@ class UserRepository:
             stmt = stmt.where(User.is_deleted.is_(False))
         return self.db.execute(stmt).scalar_one_or_none()
 
+    def find_by_name_and_phone(self, name: str, phone_digits: str) -> User | None:
+        """아이디 찾기: 이름과 전화번호(숫자만)로 활성 회원을 조회한다.
+
+        users.phone 은 하이픈을 포함해 저장될 수 있으므로, 비교 시 숫자만 남겨 매칭한다.
+        """
+        normalized_phone = func.regexp_replace(User.phone, r"[^0-9]", "", "g")
+        stmt = (
+            select(User)
+            .where(User.is_deleted.is_(False))
+            .where(User.role == "USER")
+            .where(func.trim(User.name) == name)
+            .where(normalized_phone == phone_digits)
+            .order_by(User.created_at.asc())
+            .limit(1)
+        )
+        return self.db.execute(stmt).scalars().first()
+
+    def find_company_by_name_and_business_number(
+        self,
+        name: str,
+        business_number_digits: str,
+    ) -> User | None:
+        """기업 아이디 찾기: 담당자명과 사업자등록번호로 COMPANY 계정을 조회한다."""
+        normalized_business_number = func.regexp_replace(
+            Company.business_number,
+            r"[^0-9]",
+            "",
+            "g",
+        )
+        stmt = (
+            select(User)
+            .join(
+                Company,
+                (Company.user_id == User.user_id) & (Company.is_deleted.is_(False)),
+            )
+            .where(User.is_deleted.is_(False))
+            .where(User.role == "COMPANY")
+            .where(func.trim(User.name) == name)
+            .where(normalized_business_number == business_number_digits)
+            .order_by(User.created_at.asc())
+            .limit(1)
+        )
+        return self.db.execute(stmt).scalars().first()
+
+    def find_company_by_name_business_number_and_email(
+        self,
+        name: str,
+        business_number_digits: str,
+        email: str,
+    ) -> User | None:
+        """기업 비밀번호 찾기: 담당자명, 사업자번호, 이메일이 모두 맞는 계정을 조회한다."""
+        normalized_business_number = func.regexp_replace(
+            Company.business_number,
+            r"[^0-9]",
+            "",
+            "g",
+        )
+        stmt = (
+            select(User)
+            .join(
+                Company,
+                (Company.user_id == User.user_id) & (Company.is_deleted.is_(False)),
+            )
+            .where(User.is_deleted.is_(False))
+            .where(User.role == "COMPANY")
+            .where(func.trim(User.name) == name)
+            .where(normalized_business_number == business_number_digits)
+            .where(User.email == email)
+            .order_by(User.created_at.asc())
+            .limit(1)
+        )
+        return self.db.execute(stmt).scalars().first()
+
+    def update_password(self, user: User, hashed_password: str) -> User:
+        """비밀번호 해시를 갱신한다(비밀번호 재설정 등)."""
+        user.password = hashed_password
+        self.db.flush()
+        return user
+
     def count_total(self) -> int:
         stmt = select(func.count()).select_from(User).where(User.is_deleted.is_(False))
         return int(self.db.execute(stmt).scalar_one())

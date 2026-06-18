@@ -79,6 +79,26 @@ class Settings(BaseSettings):
     # 허용: "minimal" | "low" | "medium" | "high"
     openai_reasoning_effort: str = "low"
 
+    # SMTP / 메일 발송 (Spring JobFolio의 spring.mail.* 를 Python .env 스타일로 이식)
+    # 환경변수 매칭은 대소문자 무관 → .env의 SMTP_HOST 가 smtp_host 로 매핑된다.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_auth: bool = True
+    smtp_use_tls: bool = True
+    smtp_require_tls: bool = True
+    # Spring은 타임아웃을 밀리초로 받는다. email_service에서 초 단위로 환산해 사용한다.
+    smtp_connection_timeout_ms: int = 5000
+    smtp_timeout_ms: int = 5000
+    smtp_write_timeout_ms: int = 5000
+    smtp_ssl_trust: str | None = "smtp.gmail.com"
+
+    # Google Maps Static API (면접 메일에 첨부할 지도 이미지 생성용)
+    # 키는 메일 본문에 직접 노출하지 않고, 서버에서만 사용해 이미지 바이트를 받아온다.
+    google_maps_api_key: str | None = None
+    google_maps_static_base_url: str = "https://maps.googleapis.com/maps/api/staticmap"
+
 
 # 전역 싱글톤
 settings = Settings()

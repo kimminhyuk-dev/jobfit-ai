@@ -27,6 +27,7 @@ from app.repositories.company_repository import CompanyRepository
 
 logger = logging.getLogger(__name__)
 
+# Demo-only generated company password for local/portfolio accounts.
 COMPANY_DEMO_PASSWORD = "admin1234"
 COMPANY_EMAIL_DOMAIN = "company.jobfit.local"
 

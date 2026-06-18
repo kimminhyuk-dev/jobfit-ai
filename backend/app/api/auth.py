@@ -11,8 +11,23 @@ from app.core.database import get_db
 from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
 from app.models.user import User
-from app.schemas.auth import AuthResponse, LoginRequest, MessageResponse
+from app.schemas.auth import (
+    AuthResponse,
+    CompanyFindEmailRequest,
+    CompanyPasswordResetRequest,
+    FindEmailResponse,
+    FindEmailRequest,
+    LoginRequest,
+    MessageResponse,
+    PasswordResetConfirm,
+    PasswordResetRequest,
+)
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
+from app.services.account_recovery_service import (
+    AccountRecoveryService,
+    PasswordResetEmailError,
+    RecoveryRateLimitedError,
+)
 from app.services.user_service import (
     DuplicateEmailError,
     InactiveUserError,
@@ -30,8 +45,22 @@ def get_user_service(db: Session = Depends(get_db)) -> UserService:
     return UserService(db)
 
 
+def get_account_recovery_service(
+    db: Session = Depends(get_db),
+) -> AccountRecoveryService:
+    return AccountRecoveryService(db)
+
+
 def _normalized_role(user: User) -> str:
     return (user.role or "").strip().upper()
+
+
+def _raise_recovery_rate_limit() -> None:
+    raise AppException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        code=ErrorCode.EMAIL_RATE_LIMITED,
+        message="잠시 후 다시 시도해 주세요.",
+    )
 
 
 @router.post(
@@ -192,6 +221,121 @@ def delete_me(
     user_service.delete_me(current_user, request_ip=get_client_ip(request))
     _clear_token_cookies(response)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── 계정 복구 (비로그인): 아이디 찾기 / 비밀번호 재설정 ───────────────────────
+
+@router.post("/find-email", response_model=FindEmailResponse)
+def find_email(
+    payload: FindEmailRequest,
+    recovery_service: AccountRecoveryService = Depends(get_account_recovery_service),
+) -> FindEmailResponse:
+    """이름+전화로 가입 아이디를 찾아 본인 이메일로 발송한다.
+
+    개인 아이디 찾기는 성공 시 화면에 마스킹 이메일을 표시하고 메일도 발송한다.
+    """
+    try:
+        masked_email = recovery_service.find_email(
+            name=payload.name,
+            phone=payload.phone,
+        )
+    except RecoveryRateLimitedError:
+        _raise_recovery_rate_limit()
+    if masked_email:
+        return FindEmailResponse(
+            message="가입 이메일로 아이디 안내 메일을 보내드렸습니다.",
+            masked_email=masked_email,
+        )
+    return FindEmailResponse(
+        message="일치하는 정보를 찾을 수 없습니다. 입력한 정보를 다시 확인해 주세요."
+    )
+
+
+@router.post("/company/find-email", response_model=FindEmailResponse)
+def find_company_email(
+    payload: CompanyFindEmailRequest,
+    recovery_service: AccountRecoveryService = Depends(get_account_recovery_service),
+) -> FindEmailResponse:
+    """담당자명+사업자등록번호로 기업 아이디를 찾아 본인 이메일로 발송한다."""
+    try:
+        masked_email = recovery_service.find_company_email(
+            name=payload.name,
+            business_number=payload.business_number,
+        )
+    except RecoveryRateLimitedError:
+        _raise_recovery_rate_limit()
+    if masked_email:
+        return FindEmailResponse(
+            message="가입 이메일로 아이디 안내 메일을 보내드렸습니다.",
+            masked_email=masked_email,
+        )
+    return FindEmailResponse(
+        message="일치하는 정보를 찾을 수 없습니다. 입력한 정보를 다시 확인해 주세요."
+    )
+
+
+@router.post("/password/reset-request", response_model=MessageResponse)
+def request_password_reset(
+    payload: PasswordResetRequest,
+    recovery_service: AccountRecoveryService = Depends(get_account_recovery_service),
+) -> MessageResponse:
+    """비밀번호 재설정 인증 코드를 이메일로 발송한다(계정 존재 비노출)."""
+    try:
+        recovery_service.request_password_reset(email=payload.email)
+    except RecoveryRateLimitedError:
+        _raise_recovery_rate_limit()
+    return MessageResponse(
+        message="가입된 이메일이면 인증 코드를 보내드렸습니다. 메일을 확인해 주세요."
+    )
+
+
+@router.post("/company/password/reset-request", response_model=MessageResponse)
+def request_company_password_reset(
+    payload: CompanyPasswordResetRequest,
+    recovery_service: AccountRecoveryService = Depends(get_account_recovery_service),
+) -> MessageResponse:
+    """기업 비밀번호 찾기: 담당자명+사업자번호+이메일 일치 시 인증 코드를 발송한다."""
+    try:
+        recovery_service.request_company_password_reset(
+            name=payload.name,
+            business_number=payload.business_number,
+            email=payload.email,
+        )
+    except RecoveryRateLimitedError:
+        _raise_recovery_rate_limit()
+    return MessageResponse(
+        message="가입된 이메일이면 인증 코드를 보내드렸습니다. 메일을 확인해 주세요."
+    )
+
+
+@router.post("/password/reset-confirm", response_model=MessageResponse)
+def confirm_password_reset(
+    payload: PasswordResetConfirm,
+    recovery_service: AccountRecoveryService = Depends(get_account_recovery_service),
+) -> MessageResponse:
+    """인증 코드를 검증하고 임시 비밀번호를 이메일로 발송한다."""
+    try:
+        success = recovery_service.confirm_password_reset(
+            email=payload.email, code=payload.code
+        )
+    except RecoveryRateLimitedError:
+        _raise_recovery_rate_limit()
+    except PasswordResetEmailError as exc:
+        raise AppException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code=ErrorCode.EMAIL_SEND_FAILED,
+            message="임시 비밀번호 메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+        ) from exc
+
+    if not success:
+        raise AppException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code=ErrorCode.PASSWORD_RESET_INVALID_CODE,
+            message="인증 코드가 올바르지 않거나 만료되었습니다.",
+        )
+    return MessageResponse(
+        message="임시 비밀번호를 이메일로 보내드렸습니다. 로그인 후 비밀번호를 변경해 주세요."
+    )
 
 
 # ── 쿠키 헬퍼 ──────────────────────────────────────────────────────────────

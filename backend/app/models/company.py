@@ -58,6 +58,11 @@ class Company(Base, AuditMixin, SoftDeleteMixin):
         nullable=False,
         comment="회사 식별 키 (bn:{사업자번호} 우선, 없으면 nm:{회사명})",
     )
+    address: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="기업 주소 (면접 메일의 기본 면접 장소로 사용)",
+    )
 
     def __repr__(self) -> str:
         return f"<Company(company_id={self.company_id}, dedup_key={self.dedup_key})>"

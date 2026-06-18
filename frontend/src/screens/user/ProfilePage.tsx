@@ -10,6 +10,7 @@ import type { UserUpdateRequest } from '../../api/auth';
 import type { ApiError, Gender } from '../../api/types';
 import AddressFields from '../../components/profile/AddressFields';
 import TechStackInput from '../../components/profile/TechStackInput';
+import { formatPhoneNumber } from '../../lib/utils';
 
 type Section = 'info' | 'password' | 'danger';
 
@@ -27,7 +28,7 @@ export default function ProfilePage() {
   // 기본 정보 수정
   const [name, setName] = useState(user?.name ?? '');
   const [birthDate, setBirthDate] = useState(user?.birth_date ?? '');
-  const [phone, setPhone] = useState(user?.phone ?? '');
+  const [phone, setPhone] = useState(formatPhoneNumber(user?.phone ?? ''));
   const [gender, setGender] = useState<'' | Gender>(user?.gender ?? '');
   const [zipcode, setZipcode] = useState(user?.zipcode ?? '');
   const [address1, setAddress1] = useState(user?.address1 ?? '');
@@ -82,7 +83,7 @@ export default function ProfilePage() {
       onSuccess: (updated) => {
         setNameSuccess('저장되었습니다.');
         // 서버 정규화 결과로 동기화 (예: 전화번호 하이픈)
-        setPhone(updated.phone ?? '');
+        setPhone(formatPhoneNumber(updated.phone ?? ''));
         setZipcode(updated.zipcode ?? '');
         setAddress1(updated.address1 ?? '');
         setAddress2(updated.address2 ?? '');
@@ -230,7 +231,7 @@ export default function ProfilePage() {
               <label className="text-[12px] font-medium text-m-muted block mb-1.5">전화번호</label>
               <input
                 value={phone}
-                onChange={(e) => { setPhone(e.target.value); setNameError(''); setNameSuccess(''); }}
+                onChange={(e) => { setPhone(formatPhoneNumber(e.target.value)); setNameError(''); setNameSuccess(''); }}
                 inputMode="numeric"
                 maxLength={20}
                 placeholder="010-1234-5678"

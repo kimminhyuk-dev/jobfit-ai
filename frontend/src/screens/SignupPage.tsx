@@ -19,6 +19,7 @@ import type { ApiError } from '../api/client';
 import type { Gender } from '../api/types';
 import AddressFields from '../components/profile/AddressFields';
 import TechStackInput from '../components/profile/TechStackInput';
+import { formatPhoneNumber } from '../lib/utils';
 
 const signupSchema = z
   .object({
@@ -438,7 +439,7 @@ export default function SignupPage() {
                   placeholder="010-1234-5678"
                   value={phone}
                   onChange={(e) => {
-                    setPhone(e.target.value);
+                    setPhone(formatPhoneNumber(e.target.value));
                     clearServerFieldError('phone');
                   }}
                 />

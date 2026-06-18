@@ -3,19 +3,21 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RequireAuth } from '../../../components/auth/RequireAuth';
 import Icon from '../../../components/ui/Icon';
+import { showToast } from '../../../components/ui/Toast';
 import ApplicantResumeModal from '../../../components/company/ApplicantResumeModal';
 import { companyApi } from '../../../api/company';
+import type { ApiError } from '../../../api/client';
 import { useAuth } from '../../../stores/authContext';
 import type { ApplicationStatus, CompanyApplicant } from '../../../api/types';
 
 const STATUS_META: Record<ApplicationStatus, { label: string; cls: string }> = {
   SUBMITTED: { label: '접수', cls: 'bg-m-primary-soft text-m-primary' },
   VIEWED: { label: '열람', cls: 'bg-m-warn-soft text-m-warn' },
-  ACCEPTED: { label: '합격', cls: 'bg-m-success-soft text-m-success' },
   REJECTED: { label: '불합격', cls: 'bg-m-danger-soft text-m-danger' },
+  INTERVIEW: { label: '면접', cls: 'bg-m-success-soft text-m-success' },
   CANCELED: { label: '지원취소', cls: 'bg-m-surface-alt text-m-subtle' },
 };
 
@@ -49,6 +51,26 @@ function CompanyDashboardInner() {
     queryClient.invalidateQueries({ queryKey: ['company', 'dashboard'] });
   };
 
+  const statusMutation = useMutation({
+    mutationFn: (applicationId: number) =>
+      companyApi.updateApplicationStatus(applicationId, 'REJECTED'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company', 'dashboard'] });
+      showToast('탈락 처리했습니다.', 'success');
+    },
+    onError: (e: ApiError) => {
+      showToast(e.message || '상태 변경에 실패했습니다.', 'error');
+    },
+  });
+
+  const handleReject = (applicant: CompanyApplicant) => {
+    if (statusMutation.isPending || applicant.status === 'REJECTED') return;
+    if (!window.confirm(`${applicant.applicant_name ?? '지원자'} 님을 탈락 처리할까요?`)) {
+      return;
+    }
+    statusMutation.mutate(applicant.application_id);
+  };
+
   const handleLogout = async () => {
     await logout();
     router.replace('/login');
@@ -60,9 +82,9 @@ function CompanyDashboardInner() {
       acc[item.status] += 1;
       return acc;
     },
-    { SUBMITTED: 0, VIEWED: 0, ACCEPTED: 0, REJECTED: 0, CANCELED: 0 },
+    { SUBMITTED: 0, VIEWED: 0, INTERVIEW: 0, REJECTED: 0, CANCELED: 0 },
   );
-  const reviewedCount = statusCounts.VIEWED + statusCounts.ACCEPTED + statusCounts.REJECTED;
+  const reviewedCount = statusCounts.VIEWED + statusCounts.INTERVIEW + statusCounts.REJECTED;
   const reviewRate =
     data && data.received_count > 0 ? Math.round((reviewedCount / data.received_count) * 100) : 0;
   const recentApplicants = applicants.slice(0, 5);
@@ -78,7 +100,7 @@ function CompanyDashboardInner() {
   const statusSummary: Array<{ key: ApplicationStatus; label: string; description: string }> = [
     { key: 'SUBMITTED', label: '신규 접수', description: '아직 열람하지 않은 지원' },
     { key: 'VIEWED', label: '이력서 열람', description: '검토가 시작된 지원' },
-    { key: 'ACCEPTED', label: '합격 처리', description: '긍정 검토 완료' },
+    { key: 'INTERVIEW', label: '면접 예정', description: '면접 안내 대상' },
     { key: 'REJECTED', label: '불합격 처리', description: '검토 종료' },
   ];
 
@@ -291,6 +313,7 @@ function CompanyDashboardInner() {
                   <th className="px-4 py-2.5 text-left font-semibold">상태</th>
                   <th className="px-4 py-2.5 text-left font-semibold">지원일</th>
                   <th className="px-4 py-2.5 text-left font-semibold">열람일</th>
+                  <th className="px-4 py-2.5 text-left font-semibold">처리</th>
                   <th className="px-4 py-2.5 text-right font-semibold">이력서</th>
                 </tr>
               </thead>
@@ -313,6 +336,16 @@ function CompanyDashboardInner() {
                       <td className="px-4 py-3 text-m-subtle">{formatDateTime(a.applied_at)}</td>
                       <td className="px-4 py-3 text-m-subtle">
                         {a.viewed_at ? formatDateTime(a.viewed_at) : '미열람'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => handleReject(a)}
+                          disabled={statusMutation.isPending || a.status === 'REJECTED'}
+                          className="rounded-lg border border-m-border px-2.5 py-1 text-[12px] font-semibold text-m-danger transition-colors hover:bg-m-danger-soft disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          {a.status === 'REJECTED' ? '처리됨' : '탈락'}
+                        </button>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
