@@ -5,7 +5,7 @@ User 모델
 
 from datetime import date
 
-from sqlalchemy import JSON, BigInteger, Date, String
+from sqlalchemy import JSON, BigInteger, Date, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -107,6 +107,20 @@ class User(Base, AuditMixin, SoftDeleteMixin):
         nullable=True,
         comment="관리자 등급 (ADMIN 전용): A / B / C. "
         "A=B·C 권한부여+계정삭제, B=C 권한부여, C=기본 관리자",
+    )
+
+    # 조직(팀) — 휴가 결재선 계산용
+    team_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("teams.team_id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="소속 팀 team_id (결재선 계산용)",
+    )
+    team_role: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+        comment="팀 내 역할: LEAD / MEMBER",
     )
 
     def __repr__(self) -> str:

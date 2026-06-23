@@ -33,11 +33,14 @@ Next.js frontend for JobFit AI.
   - `/user/profile`
 - Company page:
   - `/company/dashboard`
+  - `/company/jobs`
 - Admin pages:
   - dashboard, jobs, users, categories, posts, mock jobs
 - Global toast host for network/server errors.
 - Resume interview practice UI on the resume page.
 - Address and tech-stack profile inputs.
+- Company job posting management for manual postings.
+- Account recovery pages for personal and company email/password recovery.
 
 ## API Configuration
 
@@ -79,4 +82,4 @@ npm run build
 
 - `/user/matches` still uses old mock matching stats.
 - Full vector-based matching UI/API is planned but not implemented.
-- Company self-signup and company job posting are not implemented.
+- Company self-signup is not implemented.

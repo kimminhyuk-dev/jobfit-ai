@@ -2,6 +2,79 @@
 
 Keep this file current after each agent task. Do not record `.env` values, API keys, tokens, or secrets.
 
+## ⏭️ RBAC + 휴가 결재 — 진행 상황 / 다음 작업 (Codex 인계)
+
+> 작업 지시서: "정식 RBAC + 휴가 결재" (NIST 표준 RBAC + 근로기준법 제60조 취지의 휴가 결재). Phase 0→3 단계별 승인 방식. 한국어 독스트링, 4-space PEP8, 한자 사용 금지.
+
+### 상태 스냅샷
+- **Phase 0 (조사)**: ✅ 완료 (사용자 승인).
+- **Phase 1 (RBAC 기반 구조)**: ✅ 완료 + DB 적용 + 검증 완료 (사용자 승인).
+- **Phase 2 (휴가 결재)**: ✅ 완료 + DB 적용 + 검증 완료.
+- **Phase 3 (화면/API 연결)**: ⏸ 대기 — 관리자 페이지 휴가 신청/결재 화면은 아직 구현 전.
+
+### Phase 1에서 한 일 (이미 DB 적용됨)
+- 신규 모델: [models/rbac.py](backend/app/models/rbac.py) (`Role`/`Permission`/`RolePermission`/`UserRole` + 역할/권한 코드 상수), [models/team.py](backend/app/models/team.py) (`Team` + `LEAD`/`MEMBER`).
+- 신규 리포지토리: [repositories/rbac_repository.py](backend/app/repositories/rbac_repository.py) — `user_roles→roles→role_permissions→permissions` 권한 조회.
+- 수정: [models/user.py](backend/app/models/user.py) (`team_id` FK + `team_role` 컬럼), [api/deps.py](backend/app/api/deps.py) (`require_permission("CODE")` + 호환 셰임 `_legacy_role_codes`/`get_user_permission_codes`), [alembic/env.py](backend/alembic/env.py) (신규 모델 import).
+- 마이그레이션(적용 완료, 단일 head = `r0s1t2u3v4w5`):
+  - `q9r0s1t2u3v4_add_rbac_and_team_tables.py` (DDL: 5테이블 + users.team_id/team_role)
+  - `r0s1t2u3v4w5_seed_rbac_and_backfill_admins.py` (시드 + 백필)
+- 시드된 역할/권한: 역할 `SUPER_ADMIN/TEAM_LEAD/ADMIN_STAFF/OPS_ADMIN`, 권한 `LEAVE_REQUEST/LEAVE_APPROVE/USER_MANAGE/JOB_MANAGE`. 매핑: SUPER_ADMIN=4개 전부, TEAM_LEAD=REQUEST+APPROVE, ADMIN_STAFF/OPS_ADMIN=REQUEST+JOB_MANAGE.
+- 무중단 이전: 기존 `users.role`/`admin_level` 컬럼·의존성(`get_current_admin_user`/`get_current_a_admin_user`) **그대로 유지**. 기존 엔드포인트는 RBAC로 이전하지 않음(회귀 0). 신규 기능만 `require_permission` 사용.
+- 검증(임시 스크립트로 확인 후 삭제): 권한 없는 USER/C-admin이 `LEAVE_APPROVE` 시도→403 차단, A-admin 통과, 셰임으로 user_roles 없는 ADMIN도 폴백, A-level ALIO 게이트 정상.
+
+### Phase 2 결정 및 적용 결과
+
+- (갱신됨) 데모 ADMIN 244명은 이후 사용자 승인하에 현업 규모 조직(활성 ADMIN 19명)으로 하드 삭제 정리 완료. 아래 "데모 관리자 조직 정리" 절 참고.
+- B등급 ADMIN은 `TEAM_LEAD + ADMIN_STAFF` 다중 역할로 보정 완료. B는 `LEAVE_APPROVE`, `LEAVE_REQUEST`, `JOB_MANAGE`를 모두 유지한다.
+- `_legacy_role_codes()`도 같은 정책으로 보정 완료: A→`SUPER_ADMIN`, B→`TEAM_LEAD + ADMIN_STAFF`, C/NULL→`ADMIN_STAFF`.
+- 데모 팀 3개를 시드하고 B등급 ADMIN을 `LEAD`, C등급 ADMIN을 `MEMBER`로 고르게 배정 완료. A등급은 `SUPER_ADMIN`으로 팀 결재선 밖에 둠.
+
+### 데모 관리자 조직 정리 (현업 규모로 재구성, 사용자 승인)
+
+- 결과 상태: 활성 ADMIN **19명** = SUPER_ADMIN 2 + OPS_ADMIN 1 + (팀 3개 × [TEAM_LEAD 1 + ADMIN_STAFF 4]) 15 + NULL등급 실관리자(`test@test.com`) 1.
+- 각 팀: LEAD 1 + MEMBER 4 (이전 27/27 → 1/4). `LEAVE_APPROVE` 보유 = SUPER_ADMIN 2 + TEAM_LEAD 3.
+- OPS_ADMIN(`admin007`)은 권한 계열이 `ADMIN_STAFF`와 동일(LEAVE_REQUEST+JOB_MANAGE)하여 레거시 셰임과 충돌하지 않도록 `admin_level='C'`로 둔다. 검증상 OPS는 SUPER 권한(USER_MANAGE/LEAVE_APPROVE)으로 새지 않는다.
+- 정리는 데모 관리자 225명 **하드 삭제**. `user_roles`/`refresh_tokens`는 FK `ON DELETE CASCADE`로 함께 정리(orphan 0). 데모 관리자는 공고/지원/게시글/이력서/휴가/회사 데이터에 엮여있지 않아 실데이터 무손상(공고 203·지원 5건 유지). USER/COMPANY 데모 243/243명·`test@test.com`은 미변경.
+- 재현/멱등: 두 스크립트가 동일 `ADMIN_ORG` 스펙 공유.
+  - [scripts/seed_demo_accounts.py](backend/app/scripts/seed_demo_accounts.py): 관리자는 고정 조직(`ADMIN_ORG`)으로만 시드(USER/COMPANY와 디커플). USER/COMPANY는 `--count-per-role`(기본 243)로 별도 시드. 역할/팀/등급을 목표값으로 동기화하여 재실행해도 중복 0.
+  - [scripts/cleanup_demo_admins.py](backend/app/scripts/cleanup_demo_admins.py): 기본 dry-run, `--apply`로만 실제 삭제. `seed_admin_org`로 남길 계정 정규화 후 목표 외 데모 관리자 하드 삭제. 재실행 시 삭제/생성/정규화 0으로 수렴.
+
+### Phase 2 구현 내용
+
+- 테이블: `admin_leave_requests`, `leave_balances`.
+- 상태: `PENDING/APPROVED/REJECTED/CANCELED/CANCEL_REQUESTED/CHANGE_REQUESTED`.
+- 종류: `ANNUAL`, `AM_HALF`, `PM_HALF`, `SICK`, `FAMILY_EVENT`, `OFFICIAL`, `COMPENSATORY`.
+- 결재선: MEMBER→같은 팀 LEAD, LEAD→SUPER_ADMIN, SUPER_ADMIN→다른 SUPER_ADMIN.
+- 본인 신청 본인 승인 금지, 정해진 결재자 외 승인 금지.
+- 잔여일: 신청 시 `pending_days` 증가/`remaining_days` 감소, 승인 시 `pending_days` 감소/`used_days` 증가, 반려·승인 전 취소 시 복구, 승인 후 취소 승인 시 `used_days` 감소/`remaining_days` 증가.
+- 일정 변경 요청(직무 분리 유지): 결재자가 PENDING 신청을 승인/반려 대신 `request-change`로 처리하면 별도 상태 `CHANGE_REQUESTED`로 전이하고 사유(`change_request_reason`)를 저장하되 예약 일수(`pending_days`)는 그대로 둔다. 신청자는 `resubmit`으로 날짜/종류/사유를 고쳐 다시 `PENDING`으로 올리거나(잔여 재계산: 기존 예약 환원 후 새 일수 재예약, 연도 교차도 처리), `cancel`로 종료(잔여 복구)한다.
+- API 경로는 `/admin/leave-requests/*`에서 `/admin/leave/*`로 통일했다.
+  - `POST /admin/leave`
+  - `GET /admin/leave/me`
+  - `GET /admin/leave/pending`
+  - `PATCH /admin/leave/{leave_request_id}/approve`
+  - `PATCH /admin/leave/{leave_request_id}/reject`
+  - `PATCH /admin/leave/{leave_request_id}/request-change`
+  - `PATCH /admin/leave/{leave_request_id}/cancel`
+  - `PATCH /admin/leave/{leave_request_id}/cancel-approve`
+  - `PATCH /admin/leave/{leave_request_id}/resubmit`
+- Phase 3(화면): 관리자 페이지에 신청 폼/결재함/내 신청내역. 기존 디자인시스템(button.tsx, Alert, Tailwind v4) 사용. 결재함에 "일정 변경 요청" 액션, 내 신청내역에 변경 요청 사유 표시 + 재신청 폼 필요.
+
+### 실행/검증 커맨드 (PowerShell)
+```powershell
+docker-compose up -d db
+cd backend; .\.venv\Scripts\Activate.ps1
+.\.venv\Scripts\alembic.exe heads          # 단일 head 확인
+.\.venv\Scripts\alembic.exe upgrade head
+.\.venv\Scripts\python.exe -m compileall app
+# 검증 임시 스크립트는 backend\ 루트에 만들고 실행 후 반드시 삭제(저장소에 남기지 말 것)
+```
+
+### 주의
+- 작업 시작 전부터 `README.md` / `ai_context/API_SPEC.md` / `ai_context/ARCHITECTURE.md` / `frontend/README.md`가 수정(M) 상태 — **이건 사용자 변경이므로 되돌리지 말 것**.
+- AGENTS.md/CLAUDE.md/GEMINI.md 동기화 규칙 유지. 한자 금지. 로그에 개인정보/사유 원문 남기지 말 것.
+
 ## Project
 
 - Name: `jobfit-ai`
@@ -141,6 +214,17 @@ Ported from `kimminhyuk-dev/JobFolio` (`/api/join/...` flows) into the jobfit-ai
 - Code/temp-password generation lives in `core/security.py` (`generate_numeric_code`, `generate_temporary_password`, secure-random based). No new dependency added (stdlib `smtplib`/`secrets` + existing `httpx`).
 - Reused logic: `account_recovery_service.py` handles both find-email and password reset; `interview_email_service.py` builds/sends the interview email.
 
+### RBAC + Org Structure (Phase 1)
+
+NIST-standard RBAC was introduced as the foundation for an upcoming leave-approval feature. Roll-out is non-breaking: the existing `users.role` / `users.admin_level` columns and their dependencies are kept, existing ADMINs are backfilled, a compatibility shim covers legacy accounts, and only new features use RBAC.
+
+- New tables: `roles`, `permissions`, `role_permissions` (many-to-many), `user_roles` (many-to-many), `teams`. New columns `users.team_id` (FK `teams`, `ON DELETE SET NULL`) and `users.team_role` (`LEAD`/`MEMBER`) for leave approval-line calculation.
+- Seeded roles: `SUPER_ADMIN`, `TEAM_LEAD`, `ADMIN_STAFF`, `OPS_ADMIN`. Seeded permissions: `LEAVE_REQUEST`, `LEAVE_APPROVE`, `USER_MANAGE`, `JOB_MANAGE`. Role→permission seed: SUPER_ADMIN=all 4; TEAM_LEAD=LEAVE_REQUEST+LEAVE_APPROVE; ADMIN_STAFF/OPS_ADMIN=LEAVE_REQUEST+JOB_MANAGE.
+- Permissions are granted only through roles (NIST principle — no direct user grants). `require_permission("CODE")` in `app/api/deps.py` is the common FastAPI dependency; `RbacRepository` resolves `user_roles → roles → role_permissions → permissions`.
+- Backfill migration first assigned existing ADMINs from `admin_level`; Phase 2 then corrected B-level admins to multi-role `TEAM_LEAD + ADMIN_STAFF`. Current mapping is `A → SUPER_ADMIN`, `B → TEAM_LEAD + ADMIN_STAFF`, `C`/`NULL → ADMIN_STAFF`. The compatibility shim (`_legacy_role_codes`) applies the same mapping at request time so ADMIN accounts work even without a `user_roles` row.
+- Existing `get_current_admin_user` / `get_current_a_admin_user` (A-level ALIO collection gate) are unchanged. No existing endpoint was migrated to `require_permission` in Phase 1; leave-approval endpoints in Phase 2 will use it.
+- Demo team rows are now seeded in Phase 2; B-level admins are team `LEAD`s and C-level admins are team `MEMBER`s.
+
 ## Database
 
 Current important migrations:
@@ -152,11 +236,18 @@ Current important migrations:
 - `m5n6o7p8q9r0_add_email_verifications_table.py`
 - `n6o7p8q9r0s1_add_company_address.py`
 - `o7p8q9r0s1t2_add_email_verification_rate_limits.py`
-- `p8q9r0s1t2u3_add_application_match_scores.py` (head)
+- `p8q9r0s1t2u3_add_application_match_scores.py`
+- `q9r0s1t2u3v4_add_rbac_and_team_tables.py`
+- `r0s1t2u3v4w5_seed_rbac_and_backfill_admins.py`
+- `s1t2u3v4w5x6_rebackfill_b_admin_team_lead.py`
+- `t2u3v4w5x6y7_seed_demo_admin_teams.py`
+- `u3v4w5x6y7z8_add_admin_leave_tables.py`
+- `v4w5x6y7z8a9_add_leave_change_request.py` (head, `admin_leave_requests.change_requested_at`/`change_request_reason`)
 
 Important tables:
 
 - Auth/users: `users`, `refresh_tokens`
+- RBAC/org/leave: `roles`, `permissions`, `role_permissions`, `user_roles`, `teams` (+ `users.team_id`, `users.team_role`), `admin_leave_requests`, `leave_balances`
 - Content: `categories`, `posts`
 - Jobs: `job_postings`, `job_sources`, `batch_job_runs`, `common_code_groups`, `common_codes`
 - Resume: `resumes`, `resume_projects`, `resume_cover_letter_sections`
@@ -170,6 +261,11 @@ Important tables:
 Backend:
 
 - `backend/alembic/versions/p8q9r0s1t2u3_add_application_match_scores.py`
+- `backend/alembic/versions/s1t2u3v4w5x6_rebackfill_b_admin_team_lead.py`
+- `backend/alembic/versions/t2u3v4w5x6y7_seed_demo_admin_teams.py`
+- `backend/alembic/versions/u3v4w5x6y7z8_add_admin_leave_tables.py`
+- `backend/alembic/versions/v4w5x6y7z8a9_add_leave_change_request.py`
+- `backend/app/api/admin_leave.py`
 - `backend/app/api/applications.py`
 - `backend/app/api/company.py`
 - `backend/app/api/resumes.py`
@@ -181,7 +277,9 @@ Backend:
 - `backend/app/models/company.py`
 - `backend/app/models/application.py`
 - `backend/app/models/application_match_score.py`
+- `backend/app/models/admin_leave.py`
 - `backend/app/models/user.py`
+- `backend/app/repositories/admin_leave_repository.py`
 - `backend/app/repositories/application_repository.py`
 - `backend/app/repositories/application_match_score_repository.py`
 - `backend/app/repositories/company_repository.py`
@@ -192,7 +290,9 @@ Backend:
 - `backend/app/schemas/auth.py`
 - `backend/app/schemas/company.py`
 - `backend/app/schemas/admin_user.py`
+- `backend/app/schemas/admin_leave.py`
 - `backend/app/schemas/user.py`
+- `backend/app/services/admin_leave_service.py`
 - `backend/app/services/account_recovery_service.py`
 - `backend/app/services/application_service.py`
 - `backend/app/services/match_score_constants.py`
@@ -203,6 +303,7 @@ Backend:
 - `backend/app/services/interview_email_service.py`
 - `backend/app/services/job_posting_service.py`
 - `backend/app/scripts/seed_demo_accounts.py`
+- `backend/app/scripts/cleanup_demo_admins.py`
 - `backend/app/scripts/generate_mock_work24_jobs.py`
 
 Frontend:
@@ -246,7 +347,56 @@ Frontend:
 - `frontend/src/styles/global.css`
 - `frontend/src/stores/authStore.tsx`
 
+Docs/context:
+
+- `README.md`
+- `frontend/README.md`
+- `ai_context/API_SPEC.md`
+- `ai_context/ARCHITECTURE.md`
+- `HANDOFF.md`
+
 ## Verification
+
+RBAC Phase 1 verified:
+
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app` and `from app.main import app` import OK.
+- `cd backend; .\.venv\Scripts\alembic.exe heads` shows a single head `r0s1t2u3v4w5`; `alembic upgrade head` applied `q9r0s1t2u3v4` (DDL) then `r0s1t2u3v4w5` (seed + backfill) cleanly.
+- DB inspection confirmed the 5 new tables + `users.team_id`/`users.team_role`, the role→permission seed, and the backfill (`A → SUPER_ADMIN` ×81, `B`/`C`/`NULL → ADMIN_STAFF`; 244/244 active ADMINs have a role).
+- A temporary script (created, run, then deleted) exercised the dependency: A-admin passes `LEAVE_APPROVE`/`USER_MANAGE`; C-admin passes `JOB_MANAGE` but is BLOCKED (403) on `LEAVE_APPROVE`; a plain USER is BLOCKED on all permissions. The compatibility shim grants SUPER_ADMIN permissions to an ADMIN(A) with no `user_roles` row.
+- Regression: `get_current_admin_user` still allows ADMIN / blocks USER; `get_current_a_admin_user` still allows A / blocks C (ALIO collection gate intact).
+
+RBAC + leave Phase 2 verified:
+
+- `cd backend; .\.venv\Scripts\alembic.exe upgrade head` applied `s1t2u3v4w5x6`, `t2u3v4w5x6y7`, and `u3v4w5x6y7z8` cleanly.
+- `cd backend; .\.venv\Scripts\alembic.exe heads` and `current` both show single head `u3v4w5x6y7z8`.
+- DB inspection confirmed B admins have both `TEAM_LEAD` and `ADMIN_STAFF` (81 each); B permissions include `LEAVE_APPROVE`, `LEAVE_REQUEST`, `JOB_MANAGE`; C permissions include `LEAVE_REQUEST` and not `LEAVE_APPROVE`.
+- DB inspection confirmed 3 demo teams, B admins as `LEAD` ×81, C admins as `MEMBER` ×81, A/null admins unassigned to team roles.
+- `admin_leave_requests` and `leave_balances` tables exist; temporary verification rows were cleaned after the test (`COUNT(*) = 0` for both in the local DB after cleanup).
+- API/service temporary verification covered: C cannot access pending approvals; C request routes to same-team B; B request routes to A; requester self-approval returns 403; other-team approval returns 403; insufficient balance returns 400; approval changes status to `APPROVED`; approval-after-cancel request changes `CANCEL_REQUESTED` -> `CANCELED`; A rejection of B request restores `pending_days`; existing `get_current_admin_user` and `get_current_a_admin_user` gates still pass/fail as expected.
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `git diff --check` (line-ending warnings only)
+
+휴가 결재 경로 통일 + 일정 변경 요청 verified (2026-06-23):
+
+- `alembic upgrade head`로 `v4w5x6y7z8a9` 적용, 단일 head 확인. `admin_leave_requests`에 `change_requested_at`/`change_request_reason` 추가 확인.
+- `from app.main import app`에서 `/admin/leave/*` 9개 라우트 등록 확인(`/admin/leave-requests/*` 잔존 0).
+- 임시 검증 스크립트(생성→실행→삭제)로 실제 Postgres + TestClient(라우터/권한/서비스/리포지토리/DB 전 경로) 16/16 PASS:
+  - 신청 시 pending↑·remaining↓ → 승인 시 pending→used 전환 → 반려/승인 전 취소 시 복구.
+  - 잔여 초과 신청 400 차단(잔여 무변동).
+  - MEMBER 신청 결재선=같은 팀 LEAD, LEAD 신청 결재선=SUPER.
+  - 본인 신청 본인 승인 403(LEAVE_APPROVE 보유 LEAD도 차단), ADMIN_STAFF/OPS_ADMIN 승인 403, 타 팀 LEAD 승인 403.
+  - 일정 변경 요청: PENDING→CHANGE_REQUESTED + 사유 저장 + 잔여 무변동, CHANGE_REQUESTED 직접 승인 400, resubmit으로 PENDING 복귀·잔여 재계산, 재신청 건 승인 used 전환.
+  - 기존 `get_current_admin_user`/`get_current_a_admin_user` 게이트 회귀 0(ADMIN 통과·USER 차단, A 통과·C 차단).
+  - 정리 후 `admin_leave_requests`/`leave_balances` COUNT 0 복원.
+
+데모 관리자 조직 정리 verified:
+
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app/scripts/seed_demo_accounts.py app/scripts/cleanup_demo_admins.py` 컴파일 OK; `from app.main import app` import OK(routes=70).
+- 정리 전 분류: 데모 관리자 243명을 참조하는 실데이터 0건(posts/applications/companies/resumes/interview/leave/job_postings/categories 모두 0), refresh_tokens 4건만 CASCADE 대상.
+- `python -m app.scripts.cleanup_demo_admins` (dry-run) → 삭제 225 / 유지 18 / 정규화 1 미리보기; `--apply`로 적용.
+- 적용 후 DB 확인: 활성 ADMIN 19(A2/B3/C13/NULL1), 역할 SUPER_ADMIN 2·TEAM_LEAD 3·OPS_ADMIN 1·ADMIN_STAFF 16(데모 15+test 1), 팀별 LEAD 1/MEMBER 4, LEAVE_APPROVE=SUPER 2+TEAM_LEAD 3, orphan user_roles/refresh_tokens 0, USER/COMPANY 243/243·공고 203·지원 5 무변경, `test@test.com` 보존.
+- 권한 경로(`get_user_permission_codes`) 검증: SUPER=4권한, TEAM_LEAD=LEAVE_APPROVE 보유, ADMIN_STAFF/OPS/test=LEAVE_REQUEST+JOB_MANAGE(LEAVE_APPROVE/USER_MANAGE 없음 → OPS가 SUPER로 새지 않음).
+- 멱등성: cleanup 재실행 dry-run = 삭제/생성/정규화 0; `seed_demo_accounts --skip-users` 재실행 = created/normalized 0.
 
 Most recent checks completed:
 
@@ -371,6 +521,21 @@ Latest application matching score work verified:
 - `cd frontend; npm run lint`
 - `cd frontend; npm run build`
 - `git diff --check` (line-ending warnings only)
+
+Latest repository status / AI-trace audit / docs sync verified:
+
+- `git status --short --untracked-files=all` showed no tracked changes before this audit, aside from Git's user-level ignore permission warning in this Windows sandbox.
+- `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` were compared and are still identical.
+- UTF-8 reads and fixed-string searches found no committed mojibake/replacement-character Korean corruption; the earlier garbled Korean display was PowerShell default encoding, not file content.
+- Searches found no committed `as an AI`, `AI-generated`, `Generated by`, `ChatGPT`, `Claude`, `Gemini`, or lorem-ipsum markers.
+- Docs were brought back in sync with implemented company job management, account recovery, application cancellation, company application status/interview-email APIs, match-score response notes, and the current resume upload policy.
+- `.tmp-*.png` screenshot artifacts exist at the repository root as local verification leftovers; they are not reported by `git status` and were left untouched.
+- Checks after the docs sync:
+  - `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+  - `cd backend; .\.venv\Scripts\alembic.exe heads`
+  - `cd frontend; npm run lint`
+  - `cd frontend; npm run build`
+  - `git diff --check`
 
 ## Known Remaining Work
 

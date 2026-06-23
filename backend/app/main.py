@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api import (
     admin_jobs_router,
+    admin_leave_router,
     admin_stats_router,
     admin_users_router,
     admin_categories_router,
@@ -45,6 +46,7 @@ app.include_router(auth_router)
 app.include_router(categories_router)
 app.include_router(posts_router)
 app.include_router(admin_jobs_router)
+app.include_router(admin_leave_router)
 app.include_router(admin_stats_router)
 app.include_router(admin_users_router)
 app.include_router(admin_categories_router)

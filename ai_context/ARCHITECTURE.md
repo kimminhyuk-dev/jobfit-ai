@@ -46,6 +46,7 @@ Important routes:
 - `/user/resumes`
 - `/user/profile`
 - `/company/dashboard`
+- `/company/jobs`
 - `/admin/dashboard`
 - `/admin/users`
 - `/admin/jobs`
@@ -78,6 +79,21 @@ Important routes:
 | `resume_interview_answers` | Evaluated answers |
 | `companies` | Company identity linked to `users.role = COMPANY` |
 | `applications` | User resume submissions to job postings/companies |
+| `application_match_scores` | Stored deterministic application match scores |
+| `email_verifications` | Account-recovery verification codes and rate-limit state |
+| `roles`, `permissions`, `role_permissions`, `user_roles` | RBAC role and permission graph |
+| `teams` | Admin team grouping for leave approval lines |
+| `admin_leave_requests` | Admin leave requests and approval state |
+| `leave_balances` | Per-admin yearly leave balance counters |
+
+## Admin RBAC And Leave Approval
+
+- Existing `users.role` and `users.admin_level` gates remain in place for existing admin features.
+- New leave APIs use `require_permission("LEAVE_REQUEST")` and `require_permission("LEAVE_APPROVE")`.
+- A-level admins map to `SUPER_ADMIN`; B-level admins map to both `TEAM_LEAD` and `ADMIN_STAFF`; C-level and null-level admins map to `ADMIN_STAFF`.
+- Demo admin teams are seeded so B-level admins are team `LEAD`s and C-level admins are team `MEMBER`s.
+- Approval lines are one step for now: `MEMBER` -> same-team `LEAD`, `LEAD` -> `SUPER_ADMIN`, `SUPER_ADMIN` -> another `SUPER_ADMIN`.
+- A requester can never approve their own leave request.
 
 ## Company Provisioning
 
@@ -87,3 +103,11 @@ Important routes:
 - Ingested postings ensure a company account after posting commit.
 - Application flow also ensures company account so old postings can receive applications.
 - Demo login uses synthetic email/domain and the demo password convention.
+
+## Company Platform
+
+- `/company/dashboard` shows received applications, unread counts, application status summaries, and stored match-score data.
+- `/company/jobs` lets companies manage their own manual postings and view linked external postings.
+- Manual company postings can be created, edited, hidden/deleted, and restored through company-owned APIs.
+- Externally collected postings are read-only for company users.
+- Companies can view applicant resume files, mark applications as `REJECTED`, and send interview invitation emails that move applications to `INTERVIEW` only after the email send succeeds.

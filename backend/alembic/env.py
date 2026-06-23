@@ -45,6 +45,9 @@ from app.models import resume_interview  # noqa: F401
 from app.models import company  # noqa: F401
 from app.models import application  # noqa: F401
 from app.models import email_verification  # noqa: F401
+from app.models import team  # noqa: F401
+from app.models import rbac  # noqa: F401
+from app.models import admin_leave  # noqa: F401
 
 # ─────────────────────────────────────────────
 # 3) alembic.ini 읽기
