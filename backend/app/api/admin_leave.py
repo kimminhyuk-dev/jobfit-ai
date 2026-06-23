@@ -1,5 +1,7 @@
 """관리자 휴가 신청/결재 API routes."""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
@@ -14,6 +16,7 @@ from app.schemas.admin_leave import (
     AdminLeaveRejectRequest,
     AdminLeaveRequestCreate,
     AdminLeaveRequestResponse,
+    LeaveBalanceResponse,
 )
 from app.services.admin_leave_service import (
     AdminLeaveService,
@@ -59,6 +62,17 @@ def create_leave_request(
         ) from exc
     except LeaveForbiddenError as exc:
         raise _leave_forbidden() from exc
+
+
+@router.get("/balance", response_model=LeaveBalanceResponse)
+def get_my_leave_balance(
+    year: int | None = None,
+    current_user: User = Depends(require_permission(PERM_LEAVE_REQUEST)),
+    leave_service: AdminLeaveService = Depends(get_admin_leave_service),
+) -> LeaveBalanceResponse:
+    """내 연도별 휴가 잔여일을 조회한다(year 미지정 시 올해)."""
+    target_year = year or datetime.now(timezone.utc).year
+    return leave_service.get_balance(user=current_user, year=target_year)
 
 
 @router.get("/me", response_model=list[AdminLeaveRequestResponse])
@@ -157,6 +171,28 @@ def approve_leave_cancel_request(
     """승인 후 취소 요청을 승인한다."""
     try:
         return leave_service.approve_cancel_request(
+            leave_request_id=leave_request_id,
+            approver=current_user,
+            request_ip=get_client_ip(request),
+        )
+    except LeaveRequestNotFoundError as exc:
+        raise _leave_not_found() from exc
+    except LeaveForbiddenError as exc:
+        raise _leave_forbidden() from exc
+    except LeaveInvalidStatusError as exc:
+        raise _invalid_status() from exc
+
+
+@router.patch("/{leave_request_id}/cancel-reject", response_model=AdminLeaveRequestResponse)
+def reject_leave_cancel_request(
+    leave_request_id: int,
+    request: Request,
+    current_user: User = Depends(require_permission(PERM_LEAVE_APPROVE)),
+    leave_service: AdminLeaveService = Depends(get_admin_leave_service),
+) -> AdminLeaveRequestResponse:
+    """승인 후 취소 요청을 반려하고 승인 상태를 유지한다."""
+    try:
+        return leave_service.reject_cancel_request(
             leave_request_id=leave_request_id,
             approver=current_user,
             request_ip=get_client_ip(request),

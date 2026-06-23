@@ -60,6 +60,16 @@ class AdminLeaveRepository:
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
+    def get_balance(self, *, user_id: int, year: int) -> LeaveBalance | None:
+        """연도별 잔여일을 잠금 없이 조회한다(조회 전용)."""
+        stmt = (
+            select(LeaveBalance)
+            .where(LeaveBalance.user_id == user_id)
+            .where(LeaveBalance.year == year)
+            .limit(1)
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
     def get_balance_for_update(self, *, user_id: int, year: int) -> LeaveBalance | None:
         """연도별 잔여일을 잠금 조회한다."""
         stmt = (

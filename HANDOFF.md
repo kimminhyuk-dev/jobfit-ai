@@ -47,7 +47,7 @@ Keep this file current after each agent task. Do not record `.env` values, API k
 - 종류: `ANNUAL`, `AM_HALF`, `PM_HALF`, `SICK`, `FAMILY_EVENT`, `OFFICIAL`, `COMPENSATORY`.
 - 결재선: MEMBER→같은 팀 LEAD, LEAD→SUPER_ADMIN, SUPER_ADMIN→다른 SUPER_ADMIN.
 - 본인 신청 본인 승인 금지, 정해진 결재자 외 승인 금지.
-- 잔여일: 신청 시 `pending_days` 증가/`remaining_days` 감소, 승인 시 `pending_days` 감소/`used_days` 증가, 반려·승인 전 취소 시 복구, 승인 후 취소 승인 시 `used_days` 감소/`remaining_days` 증가.
+- 잔여일: 신청 시 `pending_days` 증가/`remaining_days` 감소, 승인 시 `pending_days` 감소/`used_days` 증가, 반려·승인 전 취소 시 복구, 승인 후 취소 승인 시 `used_days` 감소/`remaining_days` 증가, 승인 후 취소 반려 시 `APPROVED`로 복귀하고 잔여일은 유지.
 - 일정 변경 요청(직무 분리 유지): 결재자가 PENDING 신청을 승인/반려 대신 `request-change`로 처리하면 별도 상태 `CHANGE_REQUESTED`로 전이하고 사유(`change_request_reason`)를 저장하되 예약 일수(`pending_days`)는 그대로 둔다. 신청자는 `resubmit`으로 날짜/종류/사유를 고쳐 다시 `PENDING`으로 올리거나(잔여 재계산: 기존 예약 환원 후 새 일수 재예약, 연도 교차도 처리), `cancel`로 종료(잔여 복구)한다.
 - API 경로는 `/admin/leave-requests/*`에서 `/admin/leave/*`로 통일했다.
   - `POST /admin/leave`
@@ -58,8 +58,9 @@ Keep this file current after each agent task. Do not record `.env` values, API k
   - `PATCH /admin/leave/{leave_request_id}/request-change`
   - `PATCH /admin/leave/{leave_request_id}/cancel`
   - `PATCH /admin/leave/{leave_request_id}/cancel-approve`
+  - `PATCH /admin/leave/{leave_request_id}/cancel-reject`
   - `PATCH /admin/leave/{leave_request_id}/resubmit`
-- Phase 3(화면): 관리자 페이지에 신청 폼/결재함/내 신청내역. 기존 디자인시스템(button.tsx, Alert, Tailwind v4) 사용. 결재함에 "일정 변경 요청" 액션, 내 신청내역에 변경 요청 사유 표시 + 재신청 폼 필요.
+- Phase 3(화면): 관리자 페이지에 신청 폼/결재함/내 신청내역. 기존 디자인시스템(button.tsx, Alert, Tailwind v4) 사용. 결재함에 "일정 변경 요청", "취소 승인", "취소 반려" 액션, 내 신청내역에 변경 요청 사유 표시 + 재신청 폼 필요.
 
 ### 실행/검증 커맨드 (PowerShell)
 ```powershell
@@ -388,6 +389,22 @@ RBAC + leave Phase 2 verified:
   - 일정 변경 요청: PENDING→CHANGE_REQUESTED + 사유 저장 + 잔여 무변동, CHANGE_REQUESTED 직접 승인 400, resubmit으로 PENDING 복귀·잔여 재계산, 재신청 건 승인 used 전환.
   - 기존 `get_current_admin_user`/`get_current_a_admin_user` 게이트 회귀 0(ADMIN 통과·USER 차단, A 통과·C 차단).
   - 정리 후 `admin_leave_requests`/`leave_balances` COUNT 0 복원.
+
+관리자 휴가 화면 3종 + 취소 반려 보강 verified (2026-06-23):
+
+- 백엔드: `GET /admin/leave/balance`와 `PATCH /admin/leave/{leave_request_id}/cancel-reject` 추가. 취소 반려는 `CANCEL_REQUESTED`를 `APPROVED`로 되돌리고 잔여일은 변경하지 않는다.
+- 프론트: `/admin/leave/request`, `/admin/leave/approvals`, `/admin/leave/my` 화면과 `frontend/src/api/leave.ts` 연결. 결재함의 취소 요청 건에는 "취소 승인"과 "취소 반려" 버튼을 모두 노출한다.
+- 임시 검증 스크립트(생성→실행→삭제)로 실제 Postgres + TestClient 22/22 PASS:
+  - `CANCEL_REQUESTED -> cancel-reject -> APPROVED`, 잔여 스냅샷 `granted=15.00`, `used=2.00`, `pending=0.00`, `remaining=13.00` 유지.
+  - 본인 취소 반려, 타 팀 LEAD 취소 반려, ADMIN_STAFF/OPS_ADMIN 취소 반려는 403 차단.
+  - `PENDING` 상태에서 `cancel-reject`는 400 차단.
+  - 검증용 임시 사용자/팀 잔존 0건 확인.
+- 확인:
+  - `cd backend; .\.venv\Scripts\alembic.exe upgrade head`
+  - `cd backend; .\.venv\Scripts\python.exe -m py_compile app\api\admin_leave.py app\services\admin_leave_service.py app\repositories\admin_leave_repository.py app\schemas\admin_leave.py app\models\admin_leave.py`
+  - `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+  - `cd frontend; npm run lint`
+  - `cd frontend; npm run build`
 
 데모 관리자 조직 정리 verified:
 

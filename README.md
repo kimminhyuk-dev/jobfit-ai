@@ -70,7 +70,7 @@ api (router) -> service -> repository -> model
 - Applications: `POST /applications`, `GET /applications/me`, `DELETE /applications/{application_id}`
 - Company: `GET /company/dashboard`, `/company/applications/{id}/resume`, `/company/applications/{id}/resume/file`, `/company/applications/{id}/status`, `/company/applications/{id}/interview-email`
 - Company jobs: `GET/POST /company/jobs`, `GET/PATCH/DELETE /company/jobs/{job_id}`
-- Admin leave: `POST /admin/leave`, `GET /admin/leave/me`, `GET /admin/leave/pending`, and approve/reject/request-change/cancel/cancel-approve/resubmit endpoints under `/admin/leave/{id}`
+- Admin leave: `POST /admin/leave`, `GET /admin/leave/me`, `GET /admin/leave/pending`, and approve/reject/request-change/cancel/cancel-approve/cancel-reject/resubmit endpoints under `/admin/leave/{id}`
 - Resumes: `POST /resumes`, `GET /resumes`, `GET /resumes/{id}`, `GET /resumes/{id}/file`, `DELETE /resumes/{id}`
 - Interview practice:
   - `POST /resumes/{resume_id}/interview-sessions`

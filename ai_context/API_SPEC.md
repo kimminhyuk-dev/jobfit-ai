@@ -186,6 +186,7 @@ RBAC is applied only to the new leave APIs. Existing admin-level gates remain un
 | PATCH | `/admin/leave/{id}/request-change` | `LEAVE_APPROVE` | Ask the requester to change the schedule (keeps the days reserved) |
 | PATCH | `/admin/leave/{id}/cancel` | `LEAVE_REQUEST` | Cancel a pending/change-requested request or request cancellation after approval |
 | PATCH | `/admin/leave/{id}/cancel-approve` | `LEAVE_APPROVE` | Approve a cancellation request |
+| PATCH | `/admin/leave/{id}/cancel-reject` | `LEAVE_APPROVE` | Reject a cancellation request and keep the approved leave active |
 | PATCH | `/admin/leave/{id}/resubmit` | `LEAVE_REQUEST` | Resubmit after a change request (recomputes days, returns to `PENDING`) |
 
 Leave types:
@@ -207,6 +208,7 @@ Schedule-change flow:
 
 - An approver can answer a `PENDING` request with `request-change` instead of approve/reject; status becomes `CHANGE_REQUESTED`, the reason is stored, and the reserved days stay in `pending_days`.
 - The requester then `resubmit`s with revised dates/type/reason (days are recomputed and the request returns to `PENDING` for re-approval) or `cancel`s it (reserved days are restored).
+- When an approved request is canceled by the requester, an approver can `cancel-approve` to restore used days or `cancel-reject` to return it to `APPROVED` without changing balances.
 
 Balance rules:
 

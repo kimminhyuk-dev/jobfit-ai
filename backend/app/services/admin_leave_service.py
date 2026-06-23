@@ -27,6 +27,7 @@ from app.schemas.admin_leave import (
     AdminLeaveRejectRequest,
     AdminLeaveRequestCreate,
     AdminLeaveRequestResponse,
+    LeaveBalanceResponse,
 )
 
 DECIMAL_STEP = Decimal("0.01")
@@ -109,6 +110,25 @@ class AdminLeaveService:
         self.db.commit()
         self.db.refresh(leave_request)
         return self._to_response(leave_request)
+
+    def get_balance(self, *, user: User, year: int) -> LeaveBalanceResponse:
+        """내 연도별 휴가 잔여일을 조회한다(없으면 기본 부여 기준값을 반환).
+
+        조회 시점에 행을 생성하지 않고, 아직 신청 이력이 없으면 기본 부여일수
+        기준의 임시 응답을 돌려준다. 실제 행은 첫 신청에서 생성된다.
+        """
+        balance = self.repository.get_balance(user_id=user.user_id, year=year)
+        if balance is None:
+            return LeaveBalanceResponse(
+                leave_balance_id=0,
+                user_id=user.user_id,
+                year=year,
+                granted_days=DEFAULT_GRANTED_DAYS,
+                used_days=Decimal("0.00"),
+                pending_days=Decimal("0.00"),
+                remaining_days=DEFAULT_GRANTED_DAYS,
+            )
+        return LeaveBalanceResponse.model_validate(balance)
 
     def list_my_requests(self, requester_id: int) -> list[AdminLeaveRequestResponse]:
         """내 휴가 신청 목록을 조회한다."""
@@ -224,6 +244,26 @@ class AdminLeaveService:
 
         leave_request.status = LEAVE_STATUS_CANCELED
         leave_request.canceled_at = self._now()
+        self._touch(leave_request, approver.user_id, request_ip)
+        self.db.commit()
+        self.db.refresh(leave_request)
+        return self._to_response(leave_request)
+
+    def reject_cancel_request(
+        self,
+        *,
+        leave_request_id: int,
+        approver: User,
+        request_ip: str | None,
+    ) -> AdminLeaveRequestResponse:
+        """승인 후 취소 요청을 반려하고 기존 승인 상태로 되돌린다."""
+        leave_request = self._get_request_or_raise(leave_request_id)
+        self._ensure_assigned_approver(leave_request, approver.user_id)
+        if leave_request.status != LEAVE_STATUS_CANCEL_REQUESTED:
+            raise LeaveInvalidStatusError
+
+        leave_request.status = LEAVE_STATUS_APPROVED
+        leave_request.cancel_requested_at = None
         self._touch(leave_request, approver.user_id, request_ip)
         self.db.commit()
         self.db.refresh(leave_request)

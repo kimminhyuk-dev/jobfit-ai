@@ -47,6 +47,7 @@ const iconPaths = {
   'dollar': <><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></>,
   'credit-card': <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></>,
   'shield': <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></>,
+  'calendar': <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>,
   'trash': <><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></>,
   google: (
     <>

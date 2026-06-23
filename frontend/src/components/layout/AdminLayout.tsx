@@ -13,6 +13,7 @@ const adminNav = [
   { to: '/admin/posts', label: 'Q&A 게시글', icon: 'file' as const },
   { to: '/admin/jobs', label: '채용공고', icon: 'briefcase' as const },
   { to: '/admin/mock-jobs', label: 'Mock 공고', icon: 'grid' as const },
+  { to: '/admin/leave/request', label: '휴가', icon: 'calendar' as const, match: '/admin/leave' },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
@@ -61,7 +62,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             관리 메뉴
           </p>
           {adminNav.map((item) => {
-            const isActive = pathname === item.to;
+            const isActive = item.match ? pathname.startsWith(item.match) : pathname === item.to;
             return (
               <Link
                 key={item.to}
