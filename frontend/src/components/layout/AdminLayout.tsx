@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import Icon from '../ui/Icon';
+import { adminMenuApi, type AdminMenuTree } from '../../api/menus';
+import Icon, { type IconName } from '../ui/Icon';
 import { useAuth } from '../../stores/authContext';
 
 const adminNav = [
@@ -17,10 +19,34 @@ const adminNav = [
   { to: '/admin/audit-logs', label: '감사 로그', icon: 'shield' as const },
 ];
 
+const knownIconNames: IconName[] = [
+  'home',
+  'user',
+  'layers',
+  'file',
+  'briefcase',
+  'grid',
+  'calendar',
+  'shield',
+  'list',
+  'settings',
+];
+
+function resolveIconName(icon: string | null): IconName {
+  if (icon && knownIconNames.includes(icon as IconName)) {
+    return icon as IconName;
+  }
+  return 'file';
+}
+
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const { data: dynamicMenus = [] } = useQuery({
+    queryKey: ['admin', 'menus', 'tree'],
+    queryFn: adminMenuApi.tree,
+  });
 
   const handleLogout = async () => {
     await logout();
@@ -81,6 +107,14 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
+          {dynamicMenus.length > 0 && (
+            <p className="text-[10px] font-semibold px-2 mb-1.5 mt-3 tracking-widest" style={{ color: '#475569' }}>
+              동적 메뉴
+            </p>
+          )}
+          {dynamicMenus.map((item) => (
+            <DynamicMenuItem key={item.id} item={item} pathname={pathname} depth={0} />
+          ))}
         </nav>
 
         {/* User switch + logout */}
@@ -140,5 +174,60 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </main>
       </div>
     </div>
+  );
+}
+
+function DynamicMenuItem({
+  item,
+  pathname,
+  depth,
+}: {
+  item: AdminMenuTree;
+  pathname: string;
+  depth: number;
+}) {
+  const href = item.menu_url ?? '#';
+  const isActive = item.menu_url ? pathname === item.menu_url || pathname.startsWith(`${item.menu_url}/`) : false;
+  const iconName = resolveIconName(item.icon);
+  const content = (
+    <>
+      <Icon name={iconName} size={16} color={isActive ? '#93c5fd' : '#64748b'} />
+      <span className="truncate">{item.menu_name}</span>
+    </>
+  );
+
+  return (
+    <>
+      {item.menu_url ? (
+        <Link
+          href={href}
+          className="flex items-center h-9 rounded-lg text-[13px] gap-2.5 transition-colors font-medium"
+          style={{
+            paddingLeft: 12 + depth * 12,
+            paddingRight: 12,
+            background: isActive ? '#1e3a8a' : 'transparent',
+            color: isActive ? '#93c5fd' : '#94a3b8',
+          }}
+          onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.background = '#1e293b'; }}
+          onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          {content}
+        </Link>
+      ) : (
+        <div
+          className="flex items-center h-9 rounded-lg text-[13px] gap-2.5 font-medium"
+          style={{
+            paddingLeft: 12 + depth * 12,
+            paddingRight: 12,
+            color: '#94a3b8',
+          }}
+        >
+          {content}
+        </div>
+      )}
+      {item.children.map((child) => (
+        <DynamicMenuItem key={child.id} item={child} pathname={pathname} depth={depth + 1} />
+      ))}
+    </>
   );
 }

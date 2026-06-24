@@ -1,5 +1,7 @@
 from app.api.admin_audit_logs import router as admin_audit_logs_router
+from app.api.admin_common_codes import router as admin_common_codes_router
 from app.api.admin_leave import router as admin_leave_router
+from app.api.admin_menus import router as admin_menus_router
 from app.api.admin_jobs import router as admin_jobs_router
 from app.api.admin_stats import router as admin_stats_router
 from app.api.admin_users import router as admin_users_router
@@ -15,7 +17,9 @@ from app.api.resumes import router as resumes_router
 __all__ = [
     "admin_jobs_router",
     "admin_audit_logs_router",
+    "admin_common_codes_router",
     "admin_leave_router",
+    "admin_menus_router",
     "admin_stats_router",
     "admin_users_router",
     "admin_categories_router",

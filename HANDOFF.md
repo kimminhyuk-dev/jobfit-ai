@@ -243,12 +243,14 @@ Current important migrations:
 - `s1t2u3v4w5x6_rebackfill_b_admin_team_lead.py`
 - `t2u3v4w5x6y7_seed_demo_admin_teams.py`
 - `u3v4w5x6y7z8_add_admin_leave_tables.py`
-- `v4w5x6y7z8a9_add_leave_change_request.py` (head, `admin_leave_requests.change_requested_at`/`change_request_reason`)
+- `v4w5x6y7z8a9_add_leave_change_request.py` (`admin_leave_requests.change_requested_at`/`change_request_reason`)
+- `w5x6y7z8a9b0_add_audit_logs_and_reg_mod_columns.py` (`audit_logs`, `AUDIT_VIEW`, selected reg/mod columns)
+- `x6y7z8a9b0c1_add_common_code_admin_and_menus.py` (head, common-code admin columns, `menus`, `CODE_MANAGE`/`MENU_MANAGE`)
 
 Important tables:
 
 - Auth/users: `users`, `refresh_tokens`
-- RBAC/org/leave: `roles`, `permissions`, `role_permissions`, `user_roles`, `teams` (+ `users.team_id`, `users.team_role`), `admin_leave_requests`, `leave_balances`
+- RBAC/org/leave: `roles`, `permissions`, `role_permissions`, `user_roles`, `teams` (+ `users.team_id`, `users.team_role`), `admin_leave_requests`, `leave_balances`, `audit_logs`, `menus`
 - Content: `categories`, `posts`
 - Jobs: `job_postings`, `job_sources`, `batch_job_runs`, `common_code_groups`, `common_codes`
 - Resume: `resumes`, `resume_projects`, `resume_cover_letter_sections`
@@ -565,6 +567,18 @@ Latest admin audit columns / audit logs work verified:
 - `cd frontend; npm run lint`
 - `cd frontend; npm run build`
 - `git diff --check` (line-ending warnings only)
+
+Latest admin common-code / dynamic-menu work verified:
+
+- Extended the existing ALIO common-code tables instead of replacing them: `common_code_groups` and `common_codes` now include `RegModAuditMixin` columns plus admin-facing `sort_order`, `use_yn`, and item `attr1`/`attr2`.
+- Added `CODE_MANAGE`, `MENU_MANAGE`, `/admin/common-codes/*`, `/admin/menus/*`, and self-referencing `menus` with `required_permission` filtering. SUPER_ADMIN receives both new permissions in migration seed.
+- Admin sidebar keeps the fixed `adminNav` list and appends DB-driven menu tree results from `GET /admin/menus/tree`; new screens are `/admin/common-codes` and `/admin/menus`.
+- Common-code and menu create/update/delete paths write `audit_logs` rows with focused before/after data and no password fields.
+- `cd backend; .\.venv\Scripts\python.exe -m alembic upgrade head` and `current` confirmed `x6y7z8a9b0c1`.
+- Temporary FastAPI `TestClient` verification against real local PostgreSQL passed: CODE/MENU manage missing user got 403, authenticated code read worked, group/item create-update-disable worked, duplicate `(group_code, code)` returned 409, reg/mod columns captured `X-Forwarded-For`, parent-child menu tree was correct, cycle update returned 400, permission-filtered tree hid a `CODE_MANAGE` child from an ADMIN_STAFF user, audit-log API returned menu audit rows, and temporary users/groups/menus were cleaned to 0 rows.
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
 
 ## Known Remaining Work
 

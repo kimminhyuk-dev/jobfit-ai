@@ -15,10 +15,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
-from app.models.base import AuditMixin, SoftDeleteMixin
+from app.models.base import AuditMixin, RegModAuditMixin, SoftDeleteMixin
 
 
-class CommonCodeGroup(Base, AuditMixin, SoftDeleteMixin):
+class CommonCodeGroup(Base, AuditMixin, RegModAuditMixin, SoftDeleteMixin):
     """공통코드 그룹 테이블."""
 
     __tablename__ = "common_code_groups"
@@ -59,6 +59,20 @@ class CommonCodeGroup(Base, AuditMixin, SoftDeleteMixin):
         nullable=True,
         comment="설명",
     )
+    sort_order: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="정렬 순서",
+    )
+    use_yn: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="사용 여부",
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -68,7 +82,7 @@ class CommonCodeGroup(Base, AuditMixin, SoftDeleteMixin):
     )
 
 
-class CommonCode(Base, AuditMixin, SoftDeleteMixin):
+class CommonCode(Base, AuditMixin, RegModAuditMixin, SoftDeleteMixin):
     """공통상세코드 테이블."""
 
     __tablename__ = "common_codes"
@@ -117,6 +131,23 @@ class CommonCode(Base, AuditMixin, SoftDeleteMixin):
         default=0,
         server_default="0",
         comment="정렬 순서",
+    )
+    use_yn: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="사용 여부",
+    )
+    attr1: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="여분 속성 1",
+    )
+    attr2: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="여분 속성 2",
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean,
