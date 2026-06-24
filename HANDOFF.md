@@ -669,6 +669,21 @@ RAG v2 STEP 2 이력서 청킹 + 임베딩 저장 완료:
   - `git diff --check` (line-ending warnings only)
 - 주의: 이 작업부터 Alembic 실행은 `.\.venv\Scripts\python.exe -m alembic ...` 형태로 검증했다. 이 환경의 `alembic.exe` 런처는 오래된 경로를 참조해 신규 `pgvector` 패키지를 찾지 못할 수 있다.
 
+RAG v2 STEP 3 공고 요구 기반 이력서 chunk 검색 진행:
+
+- `feat/rag-retrieval-v2-step3` 분기에서 진행 중이다.
+- STEP3 전 점검 결과, STEP2의 `rebuild_resume_chunks`는 기존 chunk 삭제 뒤 OpenAI 임베딩을 호출하고 있었다. 삭제와 삽입은 한 트랜잭션이었지만 네트워크 호출 중 트랜잭션을 점유하고, 임베딩 실패 때 기존 chunk 보존 요구를 만족하지 못했다.
+- 이를 먼저 별도 커밋 `1b343ed fix(rag): rebuild를 임베딩 후 원자적 교체로 변경`으로 고쳤다. 새 순서는 chunk 분리와 임베딩을 먼저 끝낸 뒤, 기존 chunk 삭제와 새 chunk 삽입만 한 트랜잭션으로 묶는다.
+- `app/services/rag/retrieval.py`를 추가했다. `build_job_query_text(job_posting)`는 `parsed_skills`, 제목, 경력, 학력, 고용 형태, NCS, `raw_content`의 요구 관련 줄을 검색 쿼리로 합친다. `retrieve_resume_chunks(...)`는 `embed_texts([query_text])`로 쿼리 임베딩을 만들고 `resume_chunks.embedding <=> :qvec` 코사인 거리순으로 같은 `resume_id` chunk만 반환한다. 지금 단계는 단일 이력서 안의 작은 검색이라 HNSW 강제나 튜닝은 하지 않는다.
+- `app/schemas/rag.py`를 추가했다. 요청은 `{job_posting_id, query_text, top_k, sections}`이며 공고 ID나 직접 쿼리 중 하나가 필요하다. 응답은 `{resume_id, query_preview, top_k, results}`이고 결과에는 `chunk_id`, `section`, `content`, `distance`, `similarity`가 들어간다.
+- `POST /resumes/{resume_id}/retrieve`를 기존 이력서 라우터에 추가했다. `/api/v1` prefix는 현재 앱 컨벤션에 없어서 붙이지 않았다. 권한은 기존 rebuild와 같이 본인 또는 `ADMIN`만 허용하며, 비소유자는 `404 RESUME_001` 흐름을 따른다.
+- `job_posting_id`가 있으면 `JobPostingRepository.get_by_id()`로 공고를 읽고, 없으면 `query_text`를 사용한다. 둘 다 없거나 공고 기반 쿼리가 비면 422를 반환한다. 없는 공고는 `404 JOB_001`, 임베딩 설정 없음은 503, 임베딩 실패는 `502 RESUME_008`이다.
+- 로컬 검증:
+  - `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+  - 새로 건드린 `backend/app/api/resumes.py`, `backend/app/schemas/rag.py`, `backend/app/services/rag/retrieval.py` 범위에서 한자 코드포인트 없음 확인.
+  - 더미 설정으로 SQLAlchemy PostgreSQL dialect 컴파일을 확인했고, 검색 정렬식이 `resume_chunks.embedding <=> %(embedding_1)s AS distance`로 생성됨을 확인했다.
+- 제한: 실제 Postgres DB와 OpenAI API를 쓰는 `resume_id=35` rebuild/retrieve 검증 및 `git commit`/`git push`는 환경 승인 단계에서 사용량 제한으로 거절되어 완료하지 못했다. 다음 실행자는 실제 DB 검증 뒤 선택 스테이징으로 STEP3 커밋 `feat(rag): 공고 요구 기반 이력서 chunk retrieve (v2 STEP3)`와 push를 이어가면 된다.
+
 ## Known Remaining Work
 
 - Account recovery UI now lives on `/find-account` and `/reset-password`, with personal and company find-email/password-reset wired. Interview-email sending is wired from the company resume modal. A real send still requires valid Gmail app-password credentials in `.env` (and `GOOGLE_MAPS_API_KEY` for the interview map; without it the email sends with the Maps link but no inline map image). Inbox rendering for the recovery/interview templates still needs a user-approved real recipient/send test outside sandbox restrictions.

@@ -12,6 +12,11 @@ from app.core.database import get_db
 from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
 from app.models.user import User
+from app.repositories.job_posting_repository import JobPostingRepository
+from app.schemas.rag import (
+    ResumeChunkRetrieveRequest,
+    ResumeChunkRetrieveResponse,
+)
 from app.schemas.resume import ResumeDetail, ResumeListItem
 from app.schemas.resume_interview import (
     InterviewAnswerRequest,
@@ -26,6 +31,11 @@ from app.services.rag.embedding import (
 from app.services.rag.resume_chunk_service import (
     ResumeChunkRebuildError,
     rebuild_resume_chunks,
+)
+from app.services.rag.retrieval import (
+    build_job_query_text,
+    query_preview,
+    retrieve_resume_chunks,
 )
 from app.services.interview_practice_service import (
     InterviewPracticeEvaluationError,
@@ -182,6 +192,65 @@ def rebuild_resume_chunks_endpoint(
             code=ErrorCode.RESUME_CHUNK_EMBEDDING_FAILED,
             message="Failed to rebuild resume chunks. Please try again later.",
         )
+
+
+@router.post("/{resume_id}/retrieve", response_model=ResumeChunkRetrieveResponse)
+def retrieve_resume_chunks_endpoint(
+    resume_id: int,
+    payload: ResumeChunkRetrieveRequest,
+    current_user: User = Depends(get_current_user),
+    resume_service: ResumeService = Depends(get_resume_service),
+    db: Session = Depends(get_db),
+) -> ResumeChunkRetrieveResponse:
+    """이력서 chunk를 공고 요구나 직접 쿼리로 검색한다."""
+
+    try:
+        if current_user.role == "ADMIN":
+            resume_service.get_resume_for_admin(resume_id)
+        else:
+            resume_service.get_resume(resume_id, current_user.user_id)
+    except ResumeNotFoundError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.RESUME_NOT_FOUND,
+            message="Resume not found.",
+        )
+
+    query_text = _resolve_resume_chunk_query_text(db, payload)
+    if not query_text.strip():
+        raise AppException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code=ErrorCode.VALIDATION_ERROR,
+            message="Search query must not be empty.",
+        )
+
+    try:
+        results = retrieve_resume_chunks(
+            db,
+            resume_id,
+            query_text,
+            top_k=payload.top_k,
+            sections=payload.sections,
+        )
+    except EmbeddingNotConfiguredError:
+        raise AppException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code=ErrorCode.OPENAI_API_KEY_MISSING,
+            message="OpenAI API configuration is required.",
+        )
+    except EmbeddingGenerationError:
+        raise AppException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code=ErrorCode.RESUME_CHUNK_RETRIEVAL_FAILED,
+            message="Failed to retrieve resume chunks. Please try again later.",
+        )
+
+    return ResumeChunkRetrieveResponse(
+        resume_id=resume_id,
+        query_preview=query_preview(query_text),
+        top_k=payload.top_k,
+        results=results,
+    )
 
 
 @router.post(
@@ -365,6 +434,25 @@ def delete_resume(
             message="Resume not found.",
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _resolve_resume_chunk_query_text(
+    db: Session,
+    payload: ResumeChunkRetrieveRequest,
+) -> str:
+    """검색에 사용할 공고 요구나 직접 쿼리를 얻는다."""
+
+    if payload.job_posting_id is None:
+        return payload.query_text or ""
+
+    job_posting = JobPostingRepository(db).get_by_id(payload.job_posting_id)
+    if job_posting is None:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.JOB_NOT_FOUND,
+            message="Job posting not found.",
+        )
+    return build_job_query_text(job_posting)
 
 
 async def _read_upload_file_limited(file: UploadFile) -> bytes:
