@@ -236,3 +236,15 @@ ai_context/WORK_LOG.md
 # Google Drive temp files
 .tmp.driveupload/
 **/.tmp.driveupload/
+
+# --- v1.0 housekeeping ---
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Env files — ignore concrete env files, keep .env.example tracked
+.env.*
+!.env.example
+
+# Local override files
+*.local

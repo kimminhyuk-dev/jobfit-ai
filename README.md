@@ -4,6 +4,11 @@ AI-assisted resume and job-posting matching platform built as a portfolio/demo p
 
 JobFit AI helps job seekers manage resumes, browse job postings, send a resume to a posting, track applications, and practice interview questions generated from their parsed resume. It also ships company and admin areas so the demo can show a full end-to-end application flow across three roles.
 
+## Version & Roadmap
+
+- **v1.0 (current)** — Resume-based interview question generation: parse an uploaded resume and generate/practice interview questions from the parsed content.
+- **v2.0 (planned)** — RAG-based matching: pgvector + chunking + embeddings + LangChain to cross-reference a job posting's requirements against a resume for tailored questions and posting–resume matching. This is a roadmap item only and is not yet implemented.
+
 ## Roles
 
 | Role | What it does |
