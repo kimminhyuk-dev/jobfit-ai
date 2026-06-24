@@ -48,10 +48,16 @@ def rebuild_resume_chunks(
     chunks = split_resume_into_chunks(resume)
     by_section = dict(Counter(chunk["section"] for chunk in chunks))
 
+    vectors: list[list[float]] = []
+    if chunks:
+        # 조회 트랜잭션을 끝낸 뒤 외부 OpenAI 호출을 수행한다.
+        # 실패하면 기존 resume_chunks는 아직 건드리지 않은 상태로 보존된다.
+        db.rollback()
+        vectors = embed_texts([chunk["content"] for chunk in chunks])
+
     try:
         db.execute(delete(ResumeChunk).where(ResumeChunk.resume_id == resume_id))
         if chunks:
-            vectors = embed_texts([chunk["content"] for chunk in chunks])
             rows = [
                 ResumeChunk(
                     resume_id=resume_id,
