@@ -29,6 +29,7 @@ mdurl==0.1.2
 openai==2.41.0
 pandas==2.2.3
 passlib==1.7.4
+pgvector==0.4.2
 psycopg==3.3.3
 psycopg-binary==3.3.3
 pyasn1==0.6.3

@@ -616,6 +616,31 @@ Admin screen permission/loading fix + demo login accounts:
 - `cd frontend; npm run lint`
 - `cd frontend; npm run build`
 
+pgvector 도입 v2.0 STEP 1 완료:
+
+- 현재 브랜치가 `main`이라 작업 브랜치 `feat/pgvector-v2-step1`을 만들어 진행했다.
+- `docker-compose.yml`의 PostgreSQL 이미지를 `postgres:16-alpine`에서 `pgvector/pgvector:pg16`으로 교체했다. 기존 named volume `jobfit_postgres_data`는 그대로 유지했고, `down -v`나 볼륨 삭제는 사용하지 않았다.
+- `backend/requirements.txt`에 `pgvector==0.4.2`를 추가했다. 로컬 venv 설치 확인 결과 `pgvector 0.4.2`와 런타임 의존성 `numpy 2.5.0`이 설치됐고 `pip check`는 정상이다.
+- 신규 Alembic migration `y7z8a9b0c1d2_enable_pgvector_extension.py`를 추가했다. `upgrade()`는 `CREATE EXTENSION IF NOT EXISTS vector`, `downgrade()`는 `DROP EXTENSION IF EXISTS vector`만 수행한다. 이번 단계에서는 벡터 컬럼과 임베딩 테이블을 만들지 않았다.
+- 교체 전 기준: table_count 29, users 564, roles 4, user_roles 25, admin_leave_requests 0, applications 5.
+- 이미지 교체 후, migration 전 기준도 같은 count였고 `vector` extension은 0건이었다.
+- 최종 검증: Alembic head/current `y7z8a9b0c1d2`, `pg_extension`의 `vector` extversion `0.8.3`, `SELECT '[1,2,3]'::vector` 결과 `[1,2,3]`.
+- Downgrade/upgrade 검증 완료: `alembic downgrade -1` 후 current `x6y7z8a9b0c1`, extension 0건 확인, 다시 `alembic upgrade head`로 최종 head 복구.
+- 최종 row count는 table_count 29, users 564, roles 4, user_roles 25, admin_leave_requests 0, applications 5로 교체 전과 동일하다.
+- 검증:
+  - `docker compose up -d postgres`
+  - `docker compose ps postgres`
+  - `cd backend; .\.venv\Scripts\python.exe -m pip install pgvector==0.4.2`
+  - `cd backend; .\.venv\Scripts\python.exe -m pip check`
+  - `cd backend; .\.venv\Scripts\alembic.exe upgrade head`
+  - `cd backend; .\.venv\Scripts\alembic.exe downgrade -1`
+  - `cd backend; .\.venv\Scripts\alembic.exe upgrade head`
+  - `cd backend; .\.venv\Scripts\alembic.exe heads`
+  - `cd backend; .\.venv\Scripts\alembic.exe current`
+  - `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+  - `cd backend; .\.venv\Scripts\python.exe -c "from pgvector.sqlalchemy import Vector; from app.main import app; print(Vector(3)); print(len(app.routes)); print(any(route.path == '/admin/menus/tree' for route in app.routes)); print(any(route.path == '/admin/leave/pending' for route in app.routes))"`
+  - `git diff --check` (line-ending warnings only)
+
 ## Known Remaining Work
 
 - Account recovery UI now lives on `/find-account` and `/reset-password`, with personal and company find-email/password-reset wired. Interview-email sending is wired from the company resume modal. A real send still requires valid Gmail app-password credentials in `.env` (and `GOOGLE_MAPS_API_KEY` for the interview map; without it the email sends with the Maps link but no inline map image). Inbox rendering for the recovery/interview templates still needs a user-approved real recipient/send test outside sandbox restrictions.
