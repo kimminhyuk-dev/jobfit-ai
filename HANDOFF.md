@@ -641,6 +641,34 @@ pgvector 도입 v2.0 STEP 1 완료:
   - `cd backend; .\.venv\Scripts\python.exe -c "from pgvector.sqlalchemy import Vector; from app.main import app; print(Vector(3)); print(len(app.routes)); print(any(route.path == '/admin/menus/tree' for route in app.routes)); print(any(route.path == '/admin/leave/pending' for route in app.routes))"`
   - `git diff --check` (line-ending warnings only)
 
+RAG v2 STEP 2 이력서 청킹 + 임베딩 저장 완료:
+
+- STEP1 브랜치에서 `feat/rag-resume-chunks-v2-step2` 브랜치를 만들어 진행했다.
+- 신규 모델 `ResumeChunk`를 추가했다. 테이블은 `resume_chunks`, PK는 `id`, `resume_id`는 `resumes.resume_id`를 `ON DELETE CASCADE`로 참조하며, `embedding`은 `Vector(1536)`이다. `AuditMixin`과 `RegModAuditMixin`을 함께 적용했다.
+- 신규 migration `z8a9b0c1d2e3_create_resume_chunks.py`를 추가했다. `resume_chunks` 생성 후 `ix_resume_chunks_embedding_hnsw` HNSW 인덱스를 `vector_cosine_ops`로 만든다. 공고 chunk 테이블은 만들지 않았다.
+- `app/services/rag/chunking.py`: `split_resume_into_chunks(resume)`가 `parsed_data`, `resume_projects`, `resume_cover_letter_sections`를 섹션별 텍스트로 모으고, 500자를 넘는 섹션은 문단과 문장 경계를 우선해 나눈다. 인접 chunk에는 약 10%인 50자 overlap을 둔다.
+- `app/services/rag/embedding.py`: `embed_texts(texts)`는 `settings.openai_api_key`를 사용해 `text-embedding-3-small`로 한 번에 배치 임베딩을 요청한다. `dimensions` 파라미터는 보내지 않고, 응답 벡터가 1536차원인지 검증한다.
+- `app/services/rag/resume_chunk_service.py`: `rebuild_resume_chunks(db, resume_id, ...)`는 같은 `resume_id`의 기존 chunk를 전부 삭제하고, 새 chunk와 embedding을 삽입한 뒤 `{"resume_id", "total", "by_section"}`를 반환한다. 임베딩 또는 DB 실패 시 rollback한다.
+- 신규 endpoint는 기존 라우터 컨벤션에 맞춰 `POST /resumes/{resume_id}/chunks/rebuild`로 등록했다. `/api/v1` prefix는 현재 앱에 없어서 추가하지 않았다. 본인 이력서 또는 `ADMIN`만 허용한다.
+- 실제 DB 검증:
+  - `resume_id=35` 소유자 토큰으로 rebuild 호출 1회차 200, 20 chunks 생성.
+  - 같은 이력서 rebuild 2회차도 200, 20 chunks로 동일해 중복이 없음을 확인.
+  - 섹션별 결과: 기본정보 1, 기술스택 1, 학력 1, 교육 1, 경력 1, 자격증 1, 프로젝트 5, 자소서 9.
+  - `vector_dims(embedding)` 결과 1536.
+  - `ORDER BY embedding <=> (SELECT embedding FROM resume_chunks ... LIMIT 1) LIMIT 5` 정상 동작.
+  - 검증용 `resume_id=35` chunk는 삭제했고 최종 `resume_chunks` row 수는 0이다.
+  - 일반 비소유자 `USER` 토큰으로 같은 rebuild 호출 시 404 `RESUME_001` 확인.
+- Migration 검증:
+  - `cd backend; .\.venv\Scripts\python.exe -m alembic upgrade head`
+  - `cd backend; .\.venv\Scripts\python.exe -m alembic downgrade -1`
+  - `cd backend; .\.venv\Scripts\python.exe -m alembic upgrade head`
+  - 최종 head/current `z8a9b0c1d2e3`, HNSW 인덱스 존재, `resume_chunks=0`.
+- 정적 검증:
+  - `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+  - `cd backend; .\.venv\Scripts\python.exe -m alembic heads`
+  - `git diff --check` (line-ending warnings only)
+- 주의: 이 작업부터 Alembic 실행은 `.\.venv\Scripts\python.exe -m alembic ...` 형태로 검증했다. 이 환경의 `alembic.exe` 런처는 오래된 경로를 참조해 신규 `pgvector` 패키지를 찾지 못할 수 있다.
+
 ## Known Remaining Work
 
 - Account recovery UI now lives on `/find-account` and `/reset-password`, with personal and company find-email/password-reset wired. Interview-email sending is wired from the company resume modal. A real send still requires valid Gmail app-password credentials in `.env` (and `GOOGLE_MAPS_API_KEY` for the interview map; without it the email sends with the Maps link but no inline map image). Inbox rendering for the recovery/interview templates still needs a user-approved real recipient/send test outside sandbox restrictions.

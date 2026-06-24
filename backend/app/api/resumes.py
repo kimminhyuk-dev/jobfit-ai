@@ -19,6 +19,14 @@ from app.schemas.resume_interview import (
     InterviewSessionCreateResponse,
     InterviewSessionDetailResponse,
 )
+from app.services.rag.embedding import (
+    EmbeddingGenerationError,
+    EmbeddingNotConfiguredError,
+)
+from app.services.rag.resume_chunk_service import (
+    ResumeChunkRebuildError,
+    rebuild_resume_chunks,
+)
 from app.services.interview_practice_service import (
     InterviewPracticeEvaluationError,
     InterviewPracticeGenerationError,
@@ -125,6 +133,55 @@ def get_resume(
             message="Resume not found.",
         )
     return ResumeDetail.model_validate(resume)
+
+
+@router.post("/{resume_id}/chunks/rebuild")
+def rebuild_resume_chunks_endpoint(
+    resume_id: int,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    resume_service: ResumeService = Depends(get_resume_service),
+    db: Session = Depends(get_db),
+) -> dict:
+    """이력서 섹션 청크와 임베딩을 재생성한다."""
+
+    try:
+        if current_user.role == "ADMIN":
+            resume_service.get_resume_for_admin(resume_id)
+        else:
+            resume_service.get_resume(resume_id, current_user.user_id)
+    except ResumeNotFoundError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.RESUME_NOT_FOUND,
+            message="Resume not found.",
+        )
+
+    try:
+        return rebuild_resume_chunks(
+            db,
+            resume_id,
+            actor_id=current_user.user_id,
+            request_ip=get_client_ip(request),
+        )
+    except ResumeNotFoundError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.RESUME_NOT_FOUND,
+            message="Resume not found.",
+        )
+    except EmbeddingNotConfiguredError:
+        raise AppException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code=ErrorCode.OPENAI_API_KEY_MISSING,
+            message="OpenAI API configuration is required.",
+        )
+    except (EmbeddingGenerationError, ResumeChunkRebuildError):
+        raise AppException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code=ErrorCode.RESUME_CHUNK_EMBEDDING_FAILED,
+            message="Failed to rebuild resume chunks. Please try again later.",
+        )
 
 
 @router.post(

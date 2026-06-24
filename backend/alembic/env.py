@@ -39,6 +39,7 @@ from app.models import common_code  # noqa: F401
 from app.models import job_source  # noqa: F401
 from app.models import refresh_token  # noqa: F401
 from app.models import resume  # noqa: F401
+from app.models import resume_chunk  # noqa: F401
 from app.models import resume_project  # noqa: F401
 from app.models import resume_cover_letter_section  # noqa: F401
 from app.models import resume_interview  # noqa: F401
