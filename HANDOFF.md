@@ -591,6 +591,21 @@ Latest final security/error audit verified:
 - `cd frontend; npm run lint`
 - `cd frontend; npm run build`
 
+User role grant/revoke (RBAC management) added on top of existing `user_roles`:
+
+- New endpoints on `admin_users` router, all gated by `require_permission("USER_MANAGE")`:
+  - `GET /admin/users/{user_id}/roles` — assigned role codes + every assignable active role with its permission list + `super_admin_count`.
+  - `POST /admin/users/{user_id}/roles` body `{role_code}` — assign; duplicate assignment returns 409 `ROLE_002`.
+  - `DELETE /admin/users/{user_id}/roles/{role_code}` — revoke.
+- Safety guards in `RbacService`: self `SUPER_ADMIN` revoke blocked (403 `ROLE_004`), last `SUPER_ADMIN` revoke blocked (409 `ROLE_005`).
+- `RbacRepository` gained write methods (`assign_role`/`revoke_role`) plus role/permission/count reads; no new RBAC tables. Grant/revoke audit rows are written automatically by the existing `UserRole` ORM event listener (actor/role_code/before·after, no sensitive fields).
+- Added missing `ErrorCode.USER_NOT_FOUND` (`USER_001`); it was referenced in `admin_users.get_user_detail` but undefined, which would have raised `AttributeError` on a missing-user lookup.
+- Frontend: `/admin/users/roles` screen (search → user list → role detail with per-role permission chips, assign/revoke buttons, emphasized `SUPER_ADMIN` confirm dialog, guard-disabled buttons with reason text, success toast + refetch), `userRoles` API client, and a `역할 관리` adminNav item.
+- Temporary `TestClient` + DB verification passed 17/17: non-`USER_MANAGE` user 403 / `SUPER_ADMIN` 200, assign reflects in `user_roles` and permission set (`JOB_MANAGE` gained), duplicate assign 409, revoke reflects, self-`SUPER_ADMIN` revoke blocked, last-`SUPER_ADMIN` revoke blocked (isolated rolled-back tx), audit `CREATE`/`DELETE` rows carry `role_code`/actor with no sensitive data; all temporary users/roles/audit rows cleaned to 0.
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
+
 ## Known Remaining Work
 
 - Account recovery UI now lives on `/find-account` and `/reset-password`, with personal and company find-email/password-reset wired. Interview-email sending is wired from the company resume modal. A real send still requires valid Gmail app-password credentials in `.env` (and `GOOGLE_MAPS_API_KEY` for the interview map; without it the email sends with the Maps link but no inline map image). Inbox rendering for the recovery/interview templates still needs a user-approved real recipient/send test outside sandbox restrictions.

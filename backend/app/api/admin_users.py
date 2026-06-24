@@ -6,13 +6,19 @@ from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_client_ip, get_current_admin_user
+from app.api.deps import (
+    get_client_ip,
+    get_current_admin_user,
+    require_permission,
+)
 from app.core.database import get_db
 from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
+from app.models.rbac import PERM_USER_MANAGE
 from app.models.user import User
 from app.repositories.company_repository import CompanyRepository
 from app.repositories.user_repository import UserRepository
+from app.schemas.admin_role import RoleAssignRequest, UserRolesResponse
 from app.schemas.admin_user import AdminCompanySummary, AdminUserDetail, AdminUserListItem
 from app.schemas.resume import (
     ResumeCoverLetterSectionResponse,
@@ -20,6 +26,15 @@ from app.schemas.resume import (
     ResumeListItem,
     ResumeProjectResponse,
     ResumeUpdate,
+)
+from app.services.rbac_service import (
+    LastSuperAdminError,
+    RbacService,
+    RoleAlreadyAssignedError,
+    RoleNotAssignedError,
+    RoleNotFoundError,
+    SelfSuperAdminRevokeError,
+    TargetUserNotFoundError,
 )
 from app.services.resume_service import ResumeNotFoundError, ResumeService
 from app.services.user_service import UserService
@@ -33,6 +48,10 @@ def get_user_service(db: Session = Depends(get_db)) -> UserService:
 
 def get_resume_service(db: Session = Depends(get_db)) -> ResumeService:
     return ResumeService(db)
+
+
+def get_rbac_service(db: Session = Depends(get_db)) -> RbacService:
+    return RbacService(db)
 
 
 def _to_admin_user_item(user: User, company=None) -> AdminUserListItem:
@@ -193,6 +212,83 @@ def get_user_resume_file(
     )
 
 
+@router.get("/{user_id}/roles", response_model=UserRolesResponse)
+def get_user_roles(
+    user_id: int,
+    _current_admin: User = Depends(require_permission(PERM_USER_MANAGE)),
+    rbac_service: RbacService = Depends(get_rbac_service),
+) -> UserRolesResponse:
+    """사용자의 보유 역할과 부여 가능한 전체 역할(권한 포함)을 조회한다."""
+    try:
+        return rbac_service.get_user_roles(user_id)
+    except TargetUserNotFoundError as exc:
+        raise _user_not_found() from exc
+
+
+@router.post("/{user_id}/roles", response_model=UserRolesResponse)
+def assign_user_role(
+    user_id: int,
+    payload: RoleAssignRequest,
+    current_admin: User = Depends(require_permission(PERM_USER_MANAGE)),
+    rbac_service: RbacService = Depends(get_rbac_service),
+) -> UserRolesResponse:
+    """사용자에게 역할을 부여한다. 이미 보유한 경우 차단한다."""
+    try:
+        return rbac_service.assign_role(
+            user_id,
+            payload.role_code,
+            actor_id=current_admin.user_id,
+        )
+    except TargetUserNotFoundError as exc:
+        raise _user_not_found() from exc
+    except RoleNotFoundError as exc:
+        raise _role_not_found() from exc
+    except RoleAlreadyAssignedError as exc:
+        raise AppException(
+            status_code=status.HTTP_409_CONFLICT,
+            code=ErrorCode.ROLE_ALREADY_ASSIGNED,
+            message="이미 보유한 역할입니다.",
+        ) from exc
+
+
+@router.delete("/{user_id}/roles/{role_code}", response_model=UserRolesResponse)
+def revoke_user_role(
+    user_id: int,
+    role_code: str,
+    current_admin: User = Depends(require_permission(PERM_USER_MANAGE)),
+    rbac_service: RbacService = Depends(get_rbac_service),
+) -> UserRolesResponse:
+    """사용자의 역할을 회수한다. 최고관리자 안전장치를 강제한다."""
+    try:
+        return rbac_service.revoke_role(
+            user_id,
+            role_code,
+            actor_id=current_admin.user_id,
+        )
+    except TargetUserNotFoundError as exc:
+        raise _user_not_found() from exc
+    except RoleNotFoundError as exc:
+        raise _role_not_found() from exc
+    except RoleNotAssignedError as exc:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.ROLE_NOT_ASSIGNED,
+            message="보유하지 않은 역할입니다.",
+        ) from exc
+    except SelfSuperAdminRevokeError as exc:
+        raise AppException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code=ErrorCode.ROLE_SELF_SUPER_ADMIN_REVOKE,
+            message="본인의 최고관리자 역할은 회수할 수 없습니다.",
+        ) from exc
+    except LastSuperAdminError as exc:
+        raise AppException(
+            status_code=status.HTTP_409_CONFLICT,
+            code=ErrorCode.ROLE_LAST_SUPER_ADMIN,
+            message="시스템의 마지막 최고관리자는 회수할 수 없습니다.",
+        ) from exc
+
+
 @router.get("/{user_id}", response_model=AdminUserDetail)
 def get_user_detail(
     user_id: int,
@@ -215,4 +311,20 @@ def get_user_detail(
     return AdminUserDetail(
         user=_to_admin_user_item(user, company),
         resumes=[ResumeListItem.model_validate(r) for r in resumes],
+    )
+
+
+def _user_not_found() -> AppException:
+    return AppException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        code=ErrorCode.USER_NOT_FOUND,
+        message="사용자를 찾을 수 없습니다.",
+    )
+
+
+def _role_not_found() -> AppException:
+    return AppException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        code=ErrorCode.ROLE_NOT_FOUND,
+        message="역할을 찾을 수 없습니다.",
     )
