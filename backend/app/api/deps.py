@@ -7,6 +7,7 @@ from collections.abc import Callable
 from fastapi import Depends, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.audit_context import get_client_ip_from_request, set_audit_context
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.error_codes import ErrorCode
@@ -36,6 +37,7 @@ def get_current_user(
     user = UserRepository(db).get_by_id(user_id)
     if user is None or user.status != "ACTIVE":
         raise _unauthorized()
+    set_audit_context(user_id=user.user_id, ip=get_client_ip(request))
     return user
 
 
@@ -114,12 +116,7 @@ def require_permission(permission_code: str) -> Callable[..., User]:
 
 def get_client_ip(request: Request) -> str | None:
     """프록시 환경을 고려해 요청 클라이언트 IP를 얻는다."""
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return None
+    return get_client_ip_from_request(request)
 
 
 def _unauthorized() -> AppException:

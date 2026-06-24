@@ -14,6 +14,7 @@ const adminNav = [
   { to: '/admin/jobs', label: '채용공고', icon: 'briefcase' as const },
   { to: '/admin/mock-jobs', label: 'Mock 공고', icon: 'grid' as const },
   { to: '/admin/leave/request', label: '휴가', icon: 'calendar' as const, match: '/admin/leave' },
+  { to: '/admin/audit-logs', label: '감사 로그', icon: 'shield' as const },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {

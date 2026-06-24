@@ -7,7 +7,7 @@ from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, Numeric,
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
-from app.models.base import AuditMixin, SoftDeleteMixin
+from app.models.base import AuditMixin, RegModAuditMixin, SoftDeleteMixin
 
 LEAVE_TYPE_ANNUAL = "ANNUAL"
 LEAVE_TYPE_AM_HALF = "AM_HALF"
@@ -50,7 +50,7 @@ HALF_DAY_VALUES = {HALF_DAY_AM, HALF_DAY_PM}
 DEFAULT_GRANTED_DAYS = Decimal("15.00")
 
 
-class LeaveBalance(Base, AuditMixin):
+class LeaveBalance(Base, AuditMixin, RegModAuditMixin):
     """관리자별 연도별 휴가 잔여일."""
 
     __tablename__ = "leave_balances"
@@ -110,7 +110,7 @@ class LeaveBalance(Base, AuditMixin):
         return f"<LeaveBalance(user_id={self.user_id}, year={self.year})>"
 
 
-class AdminLeaveRequest(Base, AuditMixin, SoftDeleteMixin):
+class AdminLeaveRequest(Base, AuditMixin, RegModAuditMixin, SoftDeleteMixin):
     """관리자 휴가 신청."""
 
     __tablename__ = "admin_leave_requests"

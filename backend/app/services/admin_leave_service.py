@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.models.audit_log import AUDIT_ACTION_UPDATE
 from app.models.admin_leave import (
     AdminLeaveRequest,
     DEFAULT_GRANTED_DAYS,
@@ -22,6 +24,7 @@ from app.models.admin_leave import (
 from app.models.team import TEAM_ROLE_LEAD, TEAM_ROLE_MEMBER
 from app.models.user import User
 from app.repositories.admin_leave_repository import AdminLeaveRepository
+from app.repositories.audit_log_repository import record_audit
 from app.schemas.admin_leave import (
     AdminLeaveChangeRequest,
     AdminLeaveRejectRequest,
@@ -151,6 +154,7 @@ class AdminLeaveService:
         if leave_request.status != LEAVE_STATUS_PENDING:
             raise LeaveInvalidStatusError
 
+        before_data = self._leave_audit_data(leave_request)
         balance = self._get_request_balance(leave_request)
         days = self._decimal(leave_request.requested_days)
         balance.pending_days = self._decimal(balance.pending_days) - days
@@ -160,6 +164,13 @@ class AdminLeaveService:
         leave_request.status = LEAVE_STATUS_APPROVED
         leave_request.approved_at = self._now()
         self._touch(leave_request, approver.user_id, request_ip)
+        self._record_leave_audit(
+            leave_request=leave_request,
+            actor_id=approver.user_id,
+            request_ip=request_ip,
+            before_data=before_data,
+            summary="휴가 신청 승인",
+        )
         self.db.commit()
         self.db.refresh(leave_request)
         return self._to_response(leave_request)
@@ -178,6 +189,7 @@ class AdminLeaveService:
         if leave_request.status != LEAVE_STATUS_PENDING:
             raise LeaveInvalidStatusError
 
+        before_data = self._leave_audit_data(leave_request)
         balance = self._get_request_balance(leave_request)
         days = self._decimal(leave_request.requested_days)
         balance.pending_days = self._decimal(balance.pending_days) - days
@@ -188,6 +200,13 @@ class AdminLeaveService:
         leave_request.rejected_at = self._now()
         leave_request.reject_reason = payload.reject_reason
         self._touch(leave_request, approver.user_id, request_ip)
+        self._record_leave_audit(
+            leave_request=leave_request,
+            actor_id=approver.user_id,
+            request_ip=request_ip,
+            before_data=before_data,
+            summary="휴가 신청 반려",
+        )
         self.db.commit()
         self.db.refresh(leave_request)
         return self._to_response(leave_request)
@@ -204,6 +223,8 @@ class AdminLeaveService:
         if leave_request.requester_id != requester.user_id:
             raise LeaveForbiddenError
 
+        before_data = self._leave_audit_data(leave_request)
+        before_status = leave_request.status
         if leave_request.status in {LEAVE_STATUS_PENDING, LEAVE_STATUS_CHANGE_REQUESTED}:
             balance = self._get_request_balance(leave_request)
             days = self._decimal(leave_request.requested_days)
@@ -219,6 +240,13 @@ class AdminLeaveService:
             raise LeaveInvalidStatusError
 
         self._touch(leave_request, requester.user_id, request_ip)
+        self._record_leave_audit(
+            leave_request=leave_request,
+            actor_id=requester.user_id,
+            request_ip=request_ip,
+            before_data=before_data,
+            summary="휴가 취소 요청" if before_status == LEAVE_STATUS_APPROVED else "휴가 신청 취소",
+        )
         self.db.commit()
         self.db.refresh(leave_request)
         return self._to_response(leave_request)
@@ -236,6 +264,7 @@ class AdminLeaveService:
         if leave_request.status != LEAVE_STATUS_CANCEL_REQUESTED:
             raise LeaveInvalidStatusError
 
+        before_data = self._leave_audit_data(leave_request)
         balance = self._get_request_balance(leave_request)
         days = self._decimal(leave_request.requested_days)
         balance.used_days = self._decimal(balance.used_days) - days
@@ -245,6 +274,13 @@ class AdminLeaveService:
         leave_request.status = LEAVE_STATUS_CANCELED
         leave_request.canceled_at = self._now()
         self._touch(leave_request, approver.user_id, request_ip)
+        self._record_leave_audit(
+            leave_request=leave_request,
+            actor_id=approver.user_id,
+            request_ip=request_ip,
+            before_data=before_data,
+            summary="휴가 취소 승인",
+        )
         self.db.commit()
         self.db.refresh(leave_request)
         return self._to_response(leave_request)
@@ -262,9 +298,17 @@ class AdminLeaveService:
         if leave_request.status != LEAVE_STATUS_CANCEL_REQUESTED:
             raise LeaveInvalidStatusError
 
+        before_data = self._leave_audit_data(leave_request)
         leave_request.status = LEAVE_STATUS_APPROVED
         leave_request.cancel_requested_at = None
         self._touch(leave_request, approver.user_id, request_ip)
+        self._record_leave_audit(
+            leave_request=leave_request,
+            actor_id=approver.user_id,
+            request_ip=request_ip,
+            before_data=before_data,
+            summary="휴가 취소 반려",
+        )
         self.db.commit()
         self.db.refresh(leave_request)
         return self._to_response(leave_request)
@@ -287,10 +331,18 @@ class AdminLeaveService:
         if leave_request.status != LEAVE_STATUS_PENDING:
             raise LeaveInvalidStatusError
 
+        before_data = self._leave_audit_data(leave_request)
         leave_request.status = LEAVE_STATUS_CHANGE_REQUESTED
         leave_request.change_requested_at = self._now()
         leave_request.change_request_reason = payload.change_reason
         self._touch(leave_request, approver.user_id, request_ip)
+        self._record_leave_audit(
+            leave_request=leave_request,
+            actor_id=approver.user_id,
+            request_ip=request_ip,
+            before_data=before_data,
+            summary="휴가 일정 변경 요청",
+        )
         self.db.commit()
         self.db.refresh(leave_request)
         return self._to_response(leave_request)
@@ -314,6 +366,7 @@ class AdminLeaveService:
         if leave_request.status != LEAVE_STATUS_CHANGE_REQUESTED:
             raise LeaveInvalidStatusError
 
+        before_data = self._leave_audit_data(leave_request)
         new_days = self._calculate_requested_days(payload)
         approver = self._determine_approver(requester)
         if approver.user_id == requester.user_id:
@@ -359,6 +412,13 @@ class AdminLeaveService:
         leave_request.change_requested_at = None
         leave_request.change_request_reason = None
         self._touch(leave_request, requester.user_id, request_ip)
+        self._record_leave_audit(
+            leave_request=leave_request,
+            actor_id=requester.user_id,
+            request_ip=request_ip,
+            before_data=before_data,
+            summary="휴가 일정 변경 반영",
+        )
         self.db.commit()
         self.db.refresh(leave_request)
         return self._to_response(leave_request)
@@ -513,3 +573,52 @@ class AdminLeaveService:
     def _touch(target, actor_id: int, request_ip: str | None) -> None:
         target.updated_by = actor_id
         target.updated_ip = request_ip
+
+    def _record_leave_audit(
+        self,
+        *,
+        leave_request: AdminLeaveRequest,
+        actor_id: int,
+        request_ip: str | None,
+        before_data: dict[str, Any],
+        summary: str,
+    ) -> None:
+        """휴가 상태 변경 감사 로그를 남긴다."""
+        record_audit(
+            self.db,
+            table_name="admin_leave_requests",
+            record_id=leave_request.leave_request_id,
+            action=AUDIT_ACTION_UPDATE,
+            actor_user_id=actor_id,
+            actor_ip=request_ip,
+            before_data=before_data,
+            after_data=self._leave_audit_data(leave_request),
+            summary=summary,
+        )
+
+    @staticmethod
+    def _leave_audit_data(leave_request: AdminLeaveRequest) -> dict[str, Any]:
+        """사유 원문 없이 휴가 상태 변경에 필요한 값만 담는다."""
+        return {
+            "leave_request_id": leave_request.leave_request_id,
+            "requester_id": leave_request.requester_id,
+            "approver_id": leave_request.approver_id,
+            "leave_type": leave_request.leave_type,
+            "requested_days": str(leave_request.requested_days),
+            "status": leave_request.status,
+            "approved_at": AdminLeaveService._serialize_dt(leave_request.approved_at),
+            "rejected_at": AdminLeaveService._serialize_dt(leave_request.rejected_at),
+            "canceled_at": AdminLeaveService._serialize_dt(leave_request.canceled_at),
+            "cancel_requested_at": AdminLeaveService._serialize_dt(
+                leave_request.cancel_requested_at
+            ),
+            "change_requested_at": AdminLeaveService._serialize_dt(
+                leave_request.change_requested_at
+            ),
+        }
+
+    @staticmethod
+    def _serialize_dt(value: datetime | None) -> str | None:
+        if value is None:
+            return None
+        return value.isoformat()

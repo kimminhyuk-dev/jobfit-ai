@@ -71,3 +71,41 @@ class SoftDeleteMixin:
         nullable=False,
         comment="삭제 여부 (소프트 삭제)",
     )
+
+
+class RegModAuditMixin:
+    """생성·수정 주체와 요청 위치를 남기는 감사 칼럼."""
+
+    reg_user_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+        comment="생성한 user_id",
+    )
+    reg_ip: Mapped[str | None] = mapped_column(
+        String(45),
+        nullable=True,
+        comment="생성 요청 IP",
+    )
+    reg_dt: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=True,
+        comment="생성 일시",
+    )
+    mod_user_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+        comment="마지막 수정 user_id",
+    )
+    mod_ip: Mapped[str | None] = mapped_column(
+        String(45),
+        nullable=True,
+        comment="마지막 수정 요청 IP",
+    )
+    mod_dt: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=True,
+        comment="마지막 수정 일시",
+    )

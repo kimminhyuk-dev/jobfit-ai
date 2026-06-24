@@ -554,6 +554,18 @@ Latest repository status / AI-trace audit / docs sync verified:
   - `cd frontend; npm run build`
   - `git diff --check`
 
+Latest admin audit columns / audit logs work verified:
+
+- Added `RegModAuditMixin` and request audit context for `reg_user_id`, `reg_ip`, `reg_dt`, `mod_user_id`, `mod_ip`, and `mod_dt`; attached it only to `user_roles`, `leave_balances`, and `admin_leave_requests`.
+- Added `audit_logs`, `AUDIT_VIEW`, `GET /admin/audit-logs`, and an admin audit log screen at `/admin/audit-logs`.
+- `user_roles` ORM inserts/deletes now write audit log rows; admin leave status transitions write before/after audit data without request reasons or password fields.
+- `cd backend; .\.venv\Scripts\alembic.exe upgrade head` and `current` confirmed `w5x6y7z8a9b0`.
+- Temporary FastAPI `TestClient` verification against real local PostgreSQL passed: X-Forwarded-For was captured, reg/mod columns were populated, role grant audit log was written with role code, leave approval audit log had `PENDING -> APPROVED`, `AUDIT_VIEW` missing user got 403, SUPER_ADMIN got filtered audit-log results, and temporary rows were cleaned (`tmp.audit.*` users/teams = 0).
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
+- `git diff --check` (line-ending warnings only)
+
 ## Known Remaining Work
 
 - Account recovery UI now lives on `/find-account` and `/reset-password`, with personal and company find-email/password-reset wired. Interview-email sending is wired from the company resume modal. A real send still requires valid Gmail app-password credentials in `.env` (and `GOOGLE_MAPS_API_KEY` for the interview map; without it the email sends with the Maps link but no inline map image). Inbox rendering for the recovery/interview templates still needs a user-approved real recipient/send test outside sandbox restrictions.

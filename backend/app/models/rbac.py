@@ -18,7 +18,7 @@ from sqlalchemy import BigInteger, Boolean, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
-from app.models.base import AuditMixin
+from app.models.base import AuditMixin, RegModAuditMixin
 
 # ─────────────────────────────────────────────
 # 역할 코드 (시드/백필/호환 셰임에서 공유)
@@ -35,6 +35,7 @@ PERM_LEAVE_REQUEST = "LEAVE_REQUEST"
 PERM_LEAVE_APPROVE = "LEAVE_APPROVE"
 PERM_USER_MANAGE = "USER_MANAGE"
 PERM_JOB_MANAGE = "JOB_MANAGE"
+PERM_AUDIT_VIEW = "AUDIT_VIEW"
 
 
 class Role(Base, AuditMixin):
@@ -148,7 +149,7 @@ class RolePermission(Base):
         return f"<RolePermission(role_id={self.role_id}, permission_id={self.permission_id})>"
 
 
-class UserRole(Base):
+class UserRole(Base, RegModAuditMixin):
     """사용자-역할 매핑 테이블 (다대다)."""
 
     __tablename__ = "user_roles"

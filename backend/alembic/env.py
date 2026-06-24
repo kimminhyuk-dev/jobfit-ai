@@ -48,6 +48,7 @@ from app.models import email_verification  # noqa: F401
 from app.models import team  # noqa: F401
 from app.models import rbac  # noqa: F401
 from app.models import admin_leave  # noqa: F401
+from app.models import audit_log  # noqa: F401
 
 # ─────────────────────────────────────────────
 # 3) alembic.ini 읽기
