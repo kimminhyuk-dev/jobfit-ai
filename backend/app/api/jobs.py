@@ -76,7 +76,7 @@ def get_filter_options(db: Session = Depends(get_db)) -> JobFilterOptionsRespons
 def get_job(job_id: int, db: Session = Depends(get_db)) -> JobPostingResponse:
     """채용공고 단건 상세를 조회한다."""
     posting = JobPostingRepository(db).get_by_id(job_id)
-    if posting is None:
+    if posting is None or (posting.status or "").strip().upper() == "HIDDEN":
         raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,
             code=ErrorCode.JOB_NOT_FOUND,

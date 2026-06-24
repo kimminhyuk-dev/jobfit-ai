@@ -42,7 +42,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             code=ErrorCode.VALIDATION_ERROR,
             message="요청 값이 올바르지 않습니다.",
-            details=jsonable_encoder(exc.errors()),
+            details=_sanitize_validation_errors(exc.errors()),
         )
 
     @app.exception_handler(StarletteHTTPException)
@@ -117,3 +117,14 @@ def _error_response(
     if details is not None:
         content["details"] = details
     return JSONResponse(status_code=status_code, content=content, headers=headers)
+
+
+def _sanitize_validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """검증 오류 응답에서 요청 입력 원문을 제거한다."""
+    sanitized: list[dict[str, Any]] = []
+    for error in jsonable_encoder(errors):
+        if isinstance(error, dict):
+            sanitized.append(
+                {key: value for key, value in error.items() if key != "input"}
+            )
+    return sanitized

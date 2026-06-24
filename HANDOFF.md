@@ -580,6 +580,17 @@ Latest admin common-code / dynamic-menu work verified:
 - `cd frontend; npm run lint`
 - `cd frontend; npm run build`
 
+Latest final security/error audit verified:
+
+- Public `GET /jobs/{job_id}` now returns 404 for `status='HIDDEN'`, matching list behavior and preventing direct-id access to hidden company postings.
+- Request validation error responses no longer include raw `input` values, so malformed password/code/token-like fields are not echoed in API 422 bodies.
+- Security sweep checked route dependency gates, ownership checks on user/company data, raw SQL usage, secret patterns (`sk-`, `AIza`, API key names), token/password/code logging, and RBAC shim paths.
+- Alembic `heads` and `current` confirmed single head `x6y7z8a9b0c1`.
+- Temporary FastAPI `TestClient` verification passed: validation error details omit input values and direct hidden job detail returns 404; temporary hidden job row was deleted.
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
+
 ## Known Remaining Work
 
 - Account recovery UI now lives on `/find-account` and `/reset-password`, with personal and company find-email/password-reset wired. Interview-email sending is wired from the company resume modal. A real send still requires valid Gmail app-password credentials in `.env` (and `GOOGLE_MAPS_API_KEY` for the interview map; without it the email sends with the Maps link but no inline map image). Inbox rendering for the recovery/interview templates still needs a user-approved real recipient/send test outside sandbox restrictions.
