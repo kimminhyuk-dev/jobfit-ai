@@ -45,6 +45,10 @@ from app.models.user import User
 DEMO_PASSWORD = "admin1234"
 EMAIL_DOMAIN = "demo.jobfit.local"
 
+# 로컬 로그인 테스트 전용 데모 계정(@test.com) 공통 비밀번호.
+# 데모/포트폴리오 로컬 검증 전용이며 운영 비밀번호가 아니다. 평문은 해시로만 저장한다.
+LOGIN_TEST_PASSWORD = "12341234"  # demo-only — 로컬 로그인 테스트 전용
+
 # 데모 팀 이름/순서 (t2 마이그레이션과 동일하게 유지).
 DEMO_TEAM_NAMES = ["채용운영팀", "회원지원팀", "플랫폼관리팀"]
 DEMO_TEAM_DESCRIPTIONS = {
@@ -156,6 +160,28 @@ ADMIN_ORG: list[AdminSpec] = _build_admin_org()
 ADMIN_ORG_EMAILS: set[str] = {spec.email for spec in ADMIN_ORG}
 
 
+@dataclass(frozen=True)
+class LoginTestSpec:
+    """로컬 로그인 테스트 전용 @test.com 데모 계정의 목표 상태."""
+
+    email: str
+    admin_level: str
+    role_codes: tuple[str, ...]
+    name: str
+    # 기존 비밀번호를 보존할지 여부. test@test.com 은 개발자가 직접 쓰는 계정이라 보존한다.
+    reset_password: bool
+
+
+# 로컬 로그인 테스트 전용 데모 관리자 계정(@test.com).
+# 운영 계정이 아니며, 비밀번호는 LOGIN_TEST_PASSWORD(데모 공통값)로만 통일한다.
+LOGIN_TEST_ACCOUNTS: list[LoginTestSpec] = [
+    LoginTestSpec("test@test.com", "A", (ROLE_SUPER_ADMIN,), "최고관리자(test)", False),
+    LoginTestSpec("testb@test.com", "B", (ROLE_TEAM_LEAD,), "팀장(testb)", True),
+    LoginTestSpec("testc@test.com", "C", (ROLE_ADMIN_STAFF,), "담당자(testc)", True),
+    LoginTestSpec("testd@test.com", "C", (ROLE_OPS_ADMIN,), "운영관리자(testd)", True),
+]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -169,14 +195,38 @@ def main() -> None:
         action="store_true",
         help="USER/COMPANY 시드를 건너뛰고 관리자 조직만 시드.",
     )
+    parser.add_argument(
+        "--login-test",
+        action="store_true",
+        help="@test.com 로그인 테스트 계정(test/testb/testc/testd)도 함께 시드.",
+    )
+    parser.add_argument(
+        "--only-login-test",
+        action="store_true",
+        help="로그인 테스트 계정만 시드(관리자 조직/USER/COMPANY는 생략).",
+    )
     args = parser.parse_args()
 
     db = SessionLocal()
     try:
+        if args.only_login_test:
+            login_test_result = seed_login_test_accounts(db)
+            db.commit()
+            print(
+                "login-test accounts seeded: "
+                f"created={login_test_result['created']}, "
+                f"normalized={login_test_result['normalized']}, "
+                f"total_spec={len(LOGIN_TEST_ACCOUNTS)}"
+            )
+            return
+
         admin_result = seed_admin_org(db)
         user_result = {"users": 0, "companies": 0}
         if not args.skip_users:
             user_result = seed_demo_users_companies(db, count=args.count_per_role)
+        login_test_result = {"created": 0, "normalized": 0}
+        if args.login_test:
+            login_test_result = seed_login_test_accounts(db)
         db.commit()
         print(
             "demo admin org seeded: "
@@ -187,11 +237,65 @@ def main() -> None:
             "demo accounts seeded: "
             f"users={user_result['users']}, companies={user_result['companies']}"
         )
+        if args.login_test:
+            print(
+                "login-test accounts seeded: "
+                f"created={login_test_result['created']}, "
+                f"normalized={login_test_result['normalized']}"
+            )
     except IntegrityError:
         db.rollback()
         raise
     finally:
         db.close()
+
+
+def seed_login_test_accounts(db: Session) -> dict[str, int]:
+    """로컬 로그인 테스트용 @test.com 데모 관리자 계정을 목표 상태로 보장한다(멱등).
+
+    포트폴리오/로컬 검증 전용이며 운영 비밀번호가 아니다. commit은 호출자가 수행한다.
+    test@test.com 은 기존 비밀번호/이름을 보존하고 등급(A)과 SUPER_ADMIN 역할만 맞춘다.
+    testb/testc/testd 는 데모 공통 비밀번호(LOGIN_TEST_PASSWORD)로 통일한다.
+    """
+    role_ids = _resolve_role_ids(
+        db, {code for spec in LOGIN_TEST_ACCOUNTS for code in spec.role_codes}
+    )
+    hashed_password = hash_password(LOGIN_TEST_PASSWORD)
+
+    created = 0
+    normalized = 0
+    for spec in LOGIN_TEST_ACCOUNTS:
+        user = _get_user_by_email(db, spec.email)
+        if user is None:
+            user = User(
+                email=spec.email,
+                password=hashed_password,
+                name=spec.name,
+                role="ADMIN",
+                admin_level=spec.admin_level,
+                status="ACTIVE",
+                created_ip="127.0.0.1",
+                updated_ip="127.0.0.1",
+            )
+            db.add(user)
+            db.flush()
+            created += 1
+        else:
+            changed = False
+            if user.role != "ADMIN" or user.admin_level != spec.admin_level:
+                user.role = "ADMIN"
+                user.admin_level = spec.admin_level
+                changed = True
+            if spec.reset_password:
+                # 데모 전용 계정만 공통 비밀번호로 통일(해시 저장).
+                user.password = hashed_password
+                changed = True
+            if changed:
+                normalized += 1
+
+        _sync_user_roles(db, user.user_id, {role_ids[code] for code in spec.role_codes})
+
+    return {"created": created, "normalized": normalized}
 
 
 def seed_admin_org(db: Session) -> dict[str, int]:

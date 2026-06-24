@@ -25,9 +25,10 @@ export default function AdminUserRolesPage() {
     const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
     const [confirmRole, setConfirmRole] = useState<AssignableRole | null>(null);
 
+    // RBAC 역할은 관리자(직원) 대상이므로 역할 부여 후보는 ADMIN 계정으로 제한한다.
     const { data: users = [], isLoading: usersLoading } = useQuery({
         queryKey: ['admin', 'user-roles', 'search', appliedKeyword],
-        queryFn: () => adminApi.listUsers({ q: appliedKeyword || undefined, limit: 30 }),
+        queryFn: () => adminApi.listUsers({ q: appliedKeyword || undefined, role: 'ADMIN', limit: 30 }),
     });
 
     const {
@@ -102,7 +103,7 @@ export default function AdminUserRolesPage() {
             <div className="mb-5 flex items-center justify-between gap-4">
                 <div>
                     <h1 className="text-[22px] font-bold text-m-text">역할 관리</h1>
-                    <p className="mt-1 text-[13px] text-m-muted">사용자를 검색해 RBAC 역할을 부여하거나 회수합니다.</p>
+                    <p className="mt-1 text-[13px] text-m-muted">관리자(ADMIN) 계정을 검색해 RBAC 역할을 부여하거나 회수합니다.</p>
                 </div>
                 <div className="flex h-10 items-center gap-2 rounded-full border border-m-border bg-m-surface px-4 text-[13px] font-semibold text-m-muted">
                     <Icon name="lock" size={16} />

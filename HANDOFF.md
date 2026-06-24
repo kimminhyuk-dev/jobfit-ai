@@ -606,6 +606,16 @@ User role grant/revoke (RBAC management) added on top of existing `user_roles`:
 - `cd frontend; npm run lint`
 - `cd frontend; npm run build`
 
+Admin screen permission/loading fix + demo login accounts:
+
+- Diagnosis: the `/admin/users/roles`, audit-log, and dynamic-menu screens all failed for `test@test.com` because it only held `ADMIN_STAFF` (perms `{JOB_MANAGE, LEAVE_REQUEST}`), so it lacked `USER_MANAGE` (roles 403), `AUDIT_VIEW` (audit 403), and `MENU_MANAGE`/`CODE_MANAGE` (dynamic menus `메뉴 관리`/`공통코드 관리` hidden). No endpoint/path bug — pure permission shortfall.
+- `seed_demo_accounts.py` gained `seed_login_test_accounts` + `--login-test` / `--only-login-test` flags (idempotent). It normalizes the local `@test.com` login accounts: `test@test.com` → admin_level A + `SUPER_ADMIN` (password preserved), `testb` → B + `TEAM_LEAD`, `testc` → C + `ADMIN_STAFF`, `testd` → C + `OPS_ADMIN`. `testb/testc/testd` use demo-only common password `12341234` (hashed, never logged); run `python -m app.scripts.seed_demo_accounts --only-login-test` to apply.
+- `/admin/users/roles` search now filters to `role=ADMIN` (RBAC roles target admins/staff, so COMPANY/USER no longer clutter the assignment list).
+- Verified with `TestClient` (minted token for `test@test.com`): role list 200 + ADMIN-only, role detail 200, audit-logs 200, menu tree exposes `/admin/common-codes` + `/admin/menus`; regression — `testc` (ADMIN_STAFF) still 403 on roles/audit and dynamic menus stay hidden (least privilege intact). 7/7 passed.
+- `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+- `cd frontend; npm run lint`
+- `cd frontend; npm run build`
+
 ## Known Remaining Work
 
 - Account recovery UI now lives on `/find-account` and `/reset-password`, with personal and company find-email/password-reset wired. Interview-email sending is wired from the company resume modal. A real send still requires valid Gmail app-password credentials in `.env` (and `GOOGLE_MAPS_API_KEY` for the interview map; without it the email sends with the Maps link but no inline map image). Inbox rendering for the recovery/interview templates still needs a user-approved real recipient/send test outside sandbox restrictions.
