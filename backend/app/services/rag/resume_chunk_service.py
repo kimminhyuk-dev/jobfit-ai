@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
 from collections import Counter
 from typing import Any
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.core.database import SessionLocal
+from app.models.resume import Resume
 from app.models.resume_chunk import ResumeChunk
 from app.repositories.resume_repository import ResumeRepository
 from app.services.rag.chunking import split_resume_into_chunks
@@ -18,6 +23,9 @@ from app.services.rag.embedding import (
     embed_texts,
 )
 from app.services.resume_service import ResumeNotFoundError
+
+
+logger = logging.getLogger(__name__)
 
 
 class ResumeChunkRebuildError(Exception):
@@ -30,6 +38,7 @@ def rebuild_resume_chunks(
     *,
     actor_id: int | None = None,
     request_ip: str | None = None,
+    skip_if_unchanged: bool = False,
 ) -> dict[str, Any]:
     """이력서 청크를 삭제 후 재생성하고 pgvector에 저장한다."""
 
@@ -47,6 +56,16 @@ def rebuild_resume_chunks(
 
     chunks = split_resume_into_chunks(resume)
     by_section = dict(Counter(chunk["section"] for chunk in chunks))
+    content_hash = _chunks_content_hash(chunks)
+
+    if skip_if_unchanged and _existing_chunks_match(db, resume_id, chunks):
+        return {
+            "resume_id": resume_id,
+            "total": len(chunks),
+            "by_section": by_section,
+            "skipped": True,
+            "content_hash": content_hash,
+        }
 
     vectors: list[list[float]] = []
     if chunks:
@@ -89,4 +108,95 @@ def rebuild_resume_chunks(
         "resume_id": resume_id,
         "total": len(chunks),
         "by_section": by_section,
+        "skipped": False,
+        "content_hash": content_hash,
     }
+
+
+def should_auto_rebuild_resume_chunks(resume: Resume) -> bool:
+    """자동 청크 재생성이 필요한 이력서인지 판단한다."""
+
+    return resume.parse_status == "COMPLETED" and bool(
+        resume.raw_text or resume.parsed_data
+    )
+
+
+def rebuild_resume_chunks_background(
+    resume_id: int,
+    *,
+    actor_id: int | None = None,
+    request_ip: str | None = None,
+) -> None:
+    """업로드 응답을 막지 않고 이력서 청크를 자동 재생성한다."""
+
+    db = SessionLocal()
+    try:
+        result = rebuild_resume_chunks(
+            db,
+            resume_id,
+            actor_id=actor_id,
+            request_ip=request_ip,
+            skip_if_unchanged=True,
+        )
+        logger.info(
+            "Automatic resume chunk rebuild completed: resume_id=%s total=%s skipped=%s",
+            resume_id,
+            result["total"],
+            result["skipped"],
+        )
+    except (
+        ResumeNotFoundError,
+        EmbeddingNotConfiguredError,
+        EmbeddingGenerationError,
+        ResumeChunkRebuildError,
+    ) as exc:
+        logger.warning(
+            "Automatic resume chunk rebuild failed: resume_id=%s error=%s",
+            resume_id,
+            exc.__class__.__name__,
+        )
+    except Exception:
+        logger.exception(
+            "Unexpected automatic resume chunk rebuild failure: resume_id=%s",
+            resume_id,
+        )
+    finally:
+        db.close()
+
+
+def _existing_chunks_match(
+    db: Session,
+    resume_id: int,
+    chunks: list[dict[str, Any]],
+) -> bool:
+    stmt = (
+        select(ResumeChunk.section, ResumeChunk.chunk_index, ResumeChunk.content)
+        .where(ResumeChunk.resume_id == resume_id)
+        .order_by(ResumeChunk.chunk_index)
+    )
+    existing = [
+        (row.section, row.chunk_index, row.content)
+        for row in db.execute(stmt).all()
+    ]
+    current = [
+        (chunk["section"], chunk["chunk_index"], chunk["content"])
+        for chunk in chunks
+    ]
+    return existing == current
+
+
+def _chunks_content_hash(chunks: list[dict[str, Any]]) -> str:
+    payload = [
+        {
+            "section": chunk["section"],
+            "chunk_index": chunk["chunk_index"],
+            "content": chunk["content"],
+        }
+        for chunk in chunks
+    ]
+    raw = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()

@@ -701,6 +701,42 @@ RAG v2 STEP 1~3 실DB+OpenAI end-to-end 검증 완료 (2026-06-25):
 - 데이터 상태: resume_id=35의 20개 chunk는 STEP 4(retrieve 소비)에서 바로 쓰일 정상 데이터라 유지한다. (STEP2 절의 "resume_chunks=0"은 이 검증으로 갱신된 옛 기록이며, 필요 시 `POST /resumes/{id}/chunks/rebuild`로 언제든 재생성 가능.)
 - 다음: STEP 4(LangChain — 공고+이력서 교차 맞춤 질문)로 진입 가능. retrieve가 입력 컨텍스트로 검증되어 안전하다.
 
+RAG v2 STEP 4 자동 청킹 + 공고 맞춤 면접질문 완료 (2026-06-25):
+
+- 작업 브랜치: `feat/rag-job-interview-v2-step4`.
+- 자동 청킹:
+  - `POST /resumes` 업로드 성공 뒤 `BackgroundTasks`로 `rebuild_resume_chunks_background()`를 예약한다. 업로드 응답은 막지 않고, 실패해도 로그만 남기며 기존 수동 `POST /resumes/{id}/chunks/rebuild`는 유지한다.
+  - 관리자 이력서 갱신 `PATCH /admin/users/resumes/{resume_id}` 뒤에도 같은 background rebuild를 예약한다.
+  - `rebuild_resume_chunks(..., skip_if_unchanged=True)`를 추가했다. 현재 split 결과의 `(section, chunk_index, content)`가 기존 `resume_chunks`와 같으면 OpenAI 임베딩 호출 없이 `skipped=True`로 반환한다. 내용이 바뀌면 기존 chunk 삭제 후 재삽입 흐름은 기존 STEP2 로직을 재사용한다.
+- 공고 맞춤 질문:
+  - 신규 endpoint: `POST /resumes/{resume_id}/interview-questions/job-based`, body `{ "job_id": number | null }`.
+  - 권한은 기존 `ResumeService.get_resume(resume_id, user_id)`로 본인 이력서만 허용한다. 타인 이력서는 404로 차단된다.
+  - `job_id`가 없으면 해당 이력서로 지원한 최신 활성 application의 공고를 사용한다. `job_id`가 있으면 지정 공고를 사용하며, 숨김 공고는 본인 활성 application이 있을 때만 허용한다.
+  - 생성 전 `rebuild_resume_chunks(..., skip_if_unchanged=True)`를 한 번 보장 호출해 background가 늦어도 최신 chunk를 사용한다. unchanged면 임베딩 비용 없이 스킵된다.
+  - `build_job_query_text(job)` + `retrieve_resume_chunks(top_k=7)` 결과를 LangChain `PromptTemplate | ChatOpenAI | PydanticOutputParser` 체인에 넣어 1회 LLM 호출로 질문 5개를 만든다.
+  - 응답은 `{ resume_id, job_id, job_title, company_name, model, chunk_count, questions: [{ question, based_on_resume, related_to_job }] }`.
+  - 신규 의존성: `langchain==1.3.11`, `langchain-openai==1.3.3`; `pip check` 통과. LangChain 의존성 때문에 `websockets`는 `15.0.1`로 핀 조정했다.
+- 프론트:
+  - `/user/resumes`의 기존 v1 "면접 연습" 패널은 그대로 두고, 별도 "공고 맞춤 면접질문" 패널을 추가했다.
+  - `GET /applications/me` 결과 중 현재 이력서의 비취소 지원 공고만 선택지로 보여준다. 기본값은 최신 지원 공고다.
+  - 생성 결과는 질문, 이력서 근거, 공고 연결점을 카드에 분리 표시한다.
+- 실제 검증:
+  - Alembic head/current `z8a9b0c1d2e3`.
+  - Docker 상태 조회는 로컬 Docker 권한 문제로 실패했지만, Alembic과 TestClient 검증은 실제 PostgreSQL에 연결해 통과했다.
+  - 임시 PDF 업로드로 수동 rebuild 없이 자동 chunk 3개 생성 확인.
+  - 같은 임시 이력서에 `rebuild_resume_chunks(skip_if_unchanged=True)` 재호출 시 `skipped=True`, chunk count 유지 확인.
+  - 관리자 갱신 endpoint로 raw/parsed/project 내용을 바꾼 뒤 자동 chunk 6개로 갱신되고 새 내용(`Updated Spring Boot JWT`) 반영 확인.
+  - `resume_id=35`, `job_id=92`로 job-based endpoint 실제 OpenAI 호출 200, 질문 5개, retrieve chunk 7개 사용. 현재 DB의 resume 35에는 `JWT`, `Spring`, `Java` 근거가 있고 `JobFolio` 문자열은 없음(요청 문맥과 달리 현재 데이터 기준).
+  - 타인 이력서로 같은 endpoint 호출 시 404 차단 확인.
+  - 기존 v1 면접질문 endpoint는 임시 세션 생성 방식으로 201, 질문 5개 확인 후 세션 삭제.
+  - 임시 검증 user/resume/chunk/file 모두 정리: `codex_step4_users=0`, `debug_step4_users=0`, `codex_step4_resumes=0`; `resume_id=35` chunk 20개 유지.
+- 정적 검증:
+  - `cd backend; .\.venv\Scripts\python.exe -m pip check`
+  - `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+  - `cd frontend; npm run lint`
+  - `cd frontend; npm run build`
+  - `git diff --check` (line-ending warnings only)
+
 ## Known Remaining Work
 
 - Account recovery UI now lives on `/find-account` and `/reset-password`, with personal and company find-email/password-reset wired. Interview-email sending is wired from the company resume modal. A real send still requires valid Gmail app-password credentials in `.env` (and `GOOGLE_MAPS_API_KEY` for the interview map; without it the email sends with the Maps link but no inline map image). Inbox rendering for the recovery/interview templates still needs a user-approved real recipient/send test outside sandbox restrictions.

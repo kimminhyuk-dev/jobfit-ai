@@ -2,7 +2,17 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -11,11 +21,16 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
+from app.models.resume import Resume
 from app.models.user import User
 from app.repositories.job_posting_repository import JobPostingRepository
 from app.schemas.rag import (
     ResumeChunkRetrieveRequest,
     ResumeChunkRetrieveResponse,
+)
+from app.schemas.job_interview import (
+    JobBasedInterviewQuestionRequest,
+    JobBasedInterviewQuestionResponse,
 )
 from app.schemas.resume import ResumeDetail, ResumeListItem
 from app.schemas.resume_interview import (
@@ -31,6 +46,8 @@ from app.services.rag.embedding import (
 from app.services.rag.resume_chunk_service import (
     ResumeChunkRebuildError,
     rebuild_resume_chunks,
+    rebuild_resume_chunks_background,
+    should_auto_rebuild_resume_chunks,
 )
 from app.services.rag.retrieval import (
     build_job_query_text,
@@ -45,6 +62,14 @@ from app.services.interview_practice_service import (
     InterviewPracticeQuestionNotFoundError,
     InterviewPracticeService,
     InterviewPracticeSessionNotFoundError,
+)
+from app.services.job_based_interview_service import (
+    JobBasedInterviewGenerationError,
+    JobBasedInterviewInvalidResumeError,
+    JobBasedInterviewJobNotFoundError,
+    JobBasedInterviewNoJobError,
+    JobBasedInterviewProviderNotConfiguredError,
+    JobBasedInterviewService,
 )
 from app.services.resume_service import (
     ResumeFileTooLargeError,
@@ -71,6 +96,14 @@ def get_interview_practice_service(
     return InterviewPracticeService(db)
 
 
+def get_job_based_interview_service(
+    db: Session = Depends(get_db),
+) -> JobBasedInterviewService:
+    """공고 맞춤 면접질문 서비스 의존성."""
+
+    return JobBasedInterviewService(db)
+
+
 @router.get("", response_model=list[ResumeListItem])
 def list_resumes(
     current_user: User = Depends(get_current_user),
@@ -84,6 +117,7 @@ def list_resumes(
 @router.post("", response_model=ResumeDetail, status_code=status.HTTP_201_CREATED)
 async def create_resume(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
     is_default: bool = Form(default=False),
@@ -92,6 +126,7 @@ async def create_resume(
 ) -> ResumeDetail:
     """Upload a resume file and parse its content."""
     content_type = file.content_type or "application/octet-stream"
+    request_ip = get_client_ip(request)
     try:
         file_bytes = await _read_upload_file_limited(file)
     except ResumeFileTooLargeError:
@@ -109,7 +144,7 @@ async def create_resume(
             file_bytes=file_bytes,
             title=title,
             is_default=is_default,
-            request_ip=get_client_ip(request),
+            request_ip=request_ip,
         )
     except ResumeFileTooLargeError:
         raise AppException(
@@ -124,6 +159,12 @@ async def create_resume(
             message="등록 가능한 파일 형식 및 확장자 : PDF,PNG,JPG,JPEG,GIF",
         )
 
+    _schedule_auto_chunk_rebuild(
+        background_tasks,
+        resume,
+        actor_id=current_user.user_id,
+        request_ip=request_ip,
+    )
     return ResumeDetail.model_validate(resume)
 
 
@@ -299,6 +340,67 @@ def create_resume_interview_session(
         )
 
 
+@router.post(
+    "/{resume_id}/interview-questions/job-based",
+    response_model=JobBasedInterviewQuestionResponse,
+)
+def create_job_based_interview_questions(
+    resume_id: int,
+    payload: JobBasedInterviewQuestionRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    job_based_interview_service: JobBasedInterviewService = Depends(
+        get_job_based_interview_service
+    ),
+) -> JobBasedInterviewQuestionResponse:
+    """공고 요구와 이력서 RAG 근거를 교차해 맞춤 질문을 생성한다."""
+
+    try:
+        return job_based_interview_service.generate_questions(
+            resume_id=resume_id,
+            user_id=current_user.user_id,
+            job_id=payload.job_id,
+            actor_id=current_user.user_id,
+            request_ip=get_client_ip(request),
+        )
+    except ResumeNotFoundError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.RESUME_NOT_FOUND,
+            message="Resume not found.",
+        )
+    except JobBasedInterviewInvalidResumeError:
+        raise AppException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code=ErrorCode.RESUME_NOT_PARSED,
+            message="Resume parsing and chunking must be completed first.",
+        )
+    except JobBasedInterviewNoJobError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.APPLICATION_NOT_FOUND,
+            message="No applied job was found for this resume.",
+        )
+    except JobBasedInterviewJobNotFoundError:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.JOB_NOT_FOUND,
+            message="Job posting not found.",
+        )
+    except JobBasedInterviewProviderNotConfiguredError:
+        raise AppException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code=ErrorCode.OPENAI_API_KEY_MISSING,
+            message="OpenAI API configuration is required.",
+        )
+    except JobBasedInterviewGenerationError:
+        raise AppException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code=ErrorCode.INTERVIEW_QUESTION_GENERATION_FAILED,
+            message="Failed to generate job-based interview questions.",
+        )
+
+
 @router.get(
     "/{resume_id}/interview-sessions/{session_id}",
     response_model=InterviewSessionDetailResponse,
@@ -453,6 +555,25 @@ def _resolve_resume_chunk_query_text(
             message="Job posting not found.",
         )
     return build_job_query_text(job_posting)
+
+
+def _schedule_auto_chunk_rebuild(
+    background_tasks: BackgroundTasks,
+    resume: Resume,
+    *,
+    actor_id: int,
+    request_ip: str | None,
+) -> None:
+    """이력서 저장 응답 뒤에 RAG 청크 자동 생성을 예약한다."""
+
+    if not should_auto_rebuild_resume_chunks(resume):
+        return
+    background_tasks.add_task(
+        rebuild_resume_chunks_background,
+        resume.resume_id,
+        actor_id=actor_id,
+        request_ip=request_ip,
+    )
 
 
 async def _read_upload_file_limited(file: UploadFile) -> bytes:

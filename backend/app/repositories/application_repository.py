@@ -36,6 +36,44 @@ class ApplicationRepository:
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
+    def get_active_by_resume_job_for_user(
+        self,
+        *,
+        resume_id: int,
+        job_id: int,
+        user_id: int,
+    ) -> Application | None:
+        """이력서와 공고가 연결된 본인 활성 지원 건을 조회한다."""
+
+        stmt = (
+            select(Application)
+            .where(Application.resume_id == resume_id)
+            .where(Application.job_id == job_id)
+            .where(Application.user_id == user_id)
+            .where(Application.is_deleted.is_(False))
+            .order_by(Application.applied_at.desc())
+            .limit(1)
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def get_latest_active_by_resume_for_user(
+        self,
+        *,
+        resume_id: int,
+        user_id: int,
+    ) -> Application | None:
+        """본인 이력서로 지원한 최신 활성 지원 건을 조회한다."""
+
+        stmt = (
+            select(Application)
+            .where(Application.resume_id == resume_id)
+            .where(Application.user_id == user_id)
+            .where(Application.is_deleted.is_(False))
+            .order_by(Application.applied_at.desc())
+            .limit(1)
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
     def get_active_by_id_for_user(
         self, application_id: int, user_id: int
     ) -> Application | None:

@@ -1,5 +1,10 @@
 import { apiClient } from './client';
-import type { InterviewAnswerResponse, InterviewSessionResponse, Resume } from './types';
+import type {
+  InterviewAnswerResponse,
+  InterviewSessionResponse,
+  JobBasedInterviewResponse,
+  Resume,
+} from './types';
 
 export interface UploadResumeParams {
   file: File;
@@ -65,6 +70,20 @@ export const resumesApi = {
     const res = await apiClient.post<InterviewAnswerResponse>(
       `/resumes/${resumeId}/interview-questions/${questionId}/answer`,
       { answer },
+    );
+    return res.data;
+  },
+
+  createJobBasedInterviewQuestions: async ({
+    resumeId,
+    jobId,
+  }: {
+    resumeId: number;
+    jobId?: number | null;
+  }): Promise<JobBasedInterviewResponse> => {
+    const res = await apiClient.post<JobBasedInterviewResponse>(
+      `/resumes/${resumeId}/interview-questions/job-based`,
+      jobId ? { job_id: jobId } : {},
     );
     return res.data;
   },

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Icon from "../../components/ui/Icon";
+import { applicationsApi } from "../../api/applications";
 import { resumesApi, type UploadResumeParams } from "../../api/resumes";
 import type {
   ApiError,
@@ -12,6 +13,8 @@ import type {
   InterviewQuestionSource,
   InterviewSessionStatus,
   InterviewSessionResponse,
+  JobBasedInterviewResponse,
+  MyApplication,
   Resume,
 } from "../../api/types";
 
@@ -132,6 +135,9 @@ export default function ResumesPage() {
   const [selected, setSelected] = useState<Resume | null>(null);
   const [interviewSession, setInterviewSession] =
     useState<InterviewSessionResponse | null>(null);
+  const [jobInterviewResult, setJobInterviewResult] =
+    useState<JobBasedInterviewResponse | null>(null);
+  const [preferredJobId, setPreferredJobId] = useState<number | null>(null);
   const [answerDrafts, setAnswerDrafts] = useState<Record<number, string>>({});
   const [uploadFlow, setUploadFlow] = useState<UploadFlow>({
     status: "idle",
@@ -143,6 +149,11 @@ export default function ResumesPage() {
   const { data: resumes = [], isLoading } = useQuery({
     queryKey: ["resumes"],
     queryFn: resumesApi.getResumes,
+  });
+
+  const { data: applications = [] } = useQuery({
+    queryKey: ["applications", "me"],
+    queryFn: applicationsApi.getMyApplications,
   });
 
   const selectedId = selected?.resume_id ?? resumes[0]?.resume_id ?? null;
@@ -160,6 +171,8 @@ export default function ResumesPage() {
       setError(null);
       setSelected(resume);
       setInterviewSession(null);
+      setJobInterviewResult(null);
+      setPreferredJobId(null);
       setAnswerDrafts({});
       setUploadFlow((prev) => ({
         ...prev,
@@ -184,6 +197,8 @@ export default function ResumesPage() {
     onSuccess: (_, deletedResumeId) => {
       setSelected(null);
       setInterviewSession(null);
+      setJobInterviewResult(null);
+      setPreferredJobId(null);
       setAnswerDrafts({});
       queryClient.removeQueries({ queryKey: ["resume", deletedResumeId] });
       queryClient.invalidateQueries({ queryKey: ["resumes"] });
@@ -242,6 +257,22 @@ export default function ResumesPage() {
     },
   });
 
+  const createJobInterviewMutation = useMutation<
+    JobBasedInterviewResponse,
+    ApiError,
+    { resumeId: number; jobId?: number | null }
+  >({
+    mutationFn: resumesApi.createJobBasedInterviewQuestions,
+    onSuccess: (result) => {
+      setError(null);
+      setJobInterviewResult(result);
+      setPreferredJobId(result.job_id);
+    },
+    onError: (err: ApiError) => {
+      setError(err.message || "공고 맞춤 면접질문을 생성하지 못했습니다.");
+    },
+  });
+
   const activeResume = selectedDetail ?? selected ?? resumes[0] ?? null;
   const previewResumeId = activeResume?.resume_id ?? null;
   const canPreviewOriginalFile = activeResume
@@ -254,6 +285,25 @@ export default function ResumesPage() {
   const visibleInterviewSession =
     activeResume && interviewSession?.resume_id === activeResume.resume_id
       ? interviewSession
+      : null;
+  const activeResumeApplications = useMemo(() => {
+    if (!activeResume) return [];
+    return applications.filter(
+      (application) =>
+        application.resume_id === activeResume.resume_id &&
+        application.status !== "CANCELED",
+    );
+  }, [activeResume, applications]);
+  const selectedJobId = useMemo(() => {
+    if (activeResumeApplications.length === 0) return null;
+    const selected = activeResumeApplications.find(
+      (application) => application.job_id === preferredJobId,
+    );
+    return selected?.job_id ?? activeResumeApplications[0].job_id;
+  }, [activeResumeApplications, preferredJobId]);
+  const visibleJobInterviewResult =
+    activeResume && jobInterviewResult?.resume_id === activeResume.resume_id
+      ? jobInterviewResult
       : null;
 
   const {
@@ -485,6 +535,8 @@ export default function ResumesPage() {
                     onClick={() => {
                       setSelected(resume);
                       setInterviewSession(null);
+                      setJobInterviewResult(null);
+                      setPreferredJobId(null);
                       setAnswerDrafts({});
                     }}
                     className={`bg-m-surface border rounded-xl p-4 flex items-center gap-4 text-left transition-colors ${
@@ -594,6 +646,24 @@ export default function ResumesPage() {
                     answer,
                   });
                 }}
+              />
+
+              <JobBasedInterviewPanel
+                resume={activeResume}
+                applications={activeResumeApplications}
+                selectedJobId={selectedJobId}
+                result={visibleJobInterviewResult}
+                isCreating={createJobInterviewMutation.isPending}
+                onJobChange={(jobId) => {
+                  setPreferredJobId(jobId);
+                  setJobInterviewResult(null);
+                }}
+                onGenerate={() =>
+                  createJobInterviewMutation.mutate({
+                    resumeId: activeResume.resume_id,
+                    jobId: selectedJobId,
+                  })
+                }
               />
 
               <div className="mb-4">
@@ -791,6 +861,155 @@ function InterviewPracticePanel({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function JobBasedInterviewPanel({
+  resume,
+  applications,
+  selectedJobId,
+  result,
+  isCreating,
+  onJobChange,
+  onGenerate,
+}: {
+  resume: Resume;
+  applications: MyApplication[];
+  selectedJobId: number | null;
+  result: JobBasedInterviewResponse | null;
+  isCreating: boolean;
+  onJobChange: (jobId: number) => void;
+  onGenerate: () => void;
+}) {
+  const canStart =
+    resume.parse_status === "COMPLETED" &&
+    Boolean(resume.raw_text || resume.parsed_data?.text_length);
+  const disabled =
+    isCreating || !canStart || applications.length === 0 || selectedJobId === null;
+
+  return (
+    <div className="mb-5 rounded-2xl border border-m-border bg-m-surface-alt p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-4">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[14px] font-semibold text-m-text">
+            공고 맞춤 면접질문
+          </h3>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-semibold text-m-subtle">
+                지원 공고
+              </span>
+              <select
+                value={selectedJobId ?? ""}
+                onChange={(event) => onJobChange(Number(event.target.value))}
+                disabled={isCreating || applications.length === 0}
+                className="h-9 w-full rounded-lg border border-m-border bg-m-surface px-3 text-[12px] text-m-text focus:outline-none focus:border-m-primary focus:ring-1 focus:ring-m-primary disabled:opacity-60"
+              >
+                {applications.length === 0 ? (
+                  <option value="">지원한 공고 없음</option>
+                ) : (
+                  applications.map((application) => (
+                    <option key={application.application_id} value={application.job_id}>
+                      {application.job_title} · {application.company_name ?? "기업명 미상"}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={disabled}
+              className="h-9 px-3 rounded-lg bg-m-primary text-white text-[12px] font-semibold hover:bg-m-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
+            >
+              <Icon
+                name="target"
+                size={14}
+                className={isCreating ? "animate-spin" : undefined}
+              />
+              {isCreating ? "생성 중" : "질문 생성"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {!canStart && (
+        <div className="rounded-xl border border-dashed border-m-border bg-m-surface p-4 text-[13px] text-m-muted">
+          텍스트 분석이 완료된 이력서에서 공고 맞춤 질문을 만들 수 있습니다.
+        </div>
+      )}
+
+      {canStart && applications.length === 0 && (
+        <div className="rounded-xl border border-dashed border-m-border bg-m-surface p-4 text-[13px] text-m-muted">
+          이 이력서로 지원한 공고가 아직 없습니다.
+        </div>
+      )}
+
+      {canStart && isCreating && (
+        <div className="rounded-xl border border-m-border bg-m-surface p-6 flex flex-col items-center justify-center gap-3 text-center">
+          <Icon
+            name="sparkle"
+            size={24}
+            className="animate-spin text-m-primary"
+          />
+          <p className="text-[13px] font-semibold text-m-text">
+            공고와 이력서 근거를 맞춰보고 있어요
+          </p>
+        </div>
+      )}
+
+      {result && !isCreating && (
+        <div className="grid grid-cols-1 gap-3">
+          <div className="flex flex-wrap items-center gap-2 text-[12px] text-m-muted">
+            <span className="px-2 py-1 rounded-full bg-m-surface text-m-text font-semibold">
+              {result.model}
+            </span>
+            <span>{result.chunk_count}개 이력서 근거 사용</span>
+            <span className="truncate">
+              {result.job_title ?? "선택 공고"} · {result.company_name ?? "기업명 미상"}
+            </span>
+          </div>
+          {result.questions.map((item, index) => (
+            <div
+              key={`${result.job_id}-${index}-${item.question}`}
+              className="rounded-xl border border-m-border bg-m-surface p-3"
+            >
+              <div className="flex items-start gap-3">
+                <span className="w-7 h-7 rounded-full bg-m-primary-soft text-m-primary text-[12px] font-bold flex items-center justify-center flex-shrink-0">
+                  {index + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold leading-relaxed text-m-text break-words">
+                    {item.question}
+                  </p>
+                  <div className="mt-3 grid grid-cols-1 gap-2">
+                    <EvidenceBlock
+                      label="이력서 근거"
+                      value={item.based_on_resume}
+                    />
+                    <EvidenceBlock
+                      label="공고 연결점"
+                      value={item.related_to_job}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EvidenceBlock({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-m-surface-alt px-3 py-2">
+      <p className="text-[11px] font-semibold text-m-subtle mb-1">{label}</p>
+      <p className="text-[12px] leading-relaxed text-m-muted break-words">
+        {value}
+      </p>
     </div>
   );
 }

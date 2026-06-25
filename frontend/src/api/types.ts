@@ -223,6 +223,22 @@ export interface InterviewSessionResponse {
   questions: InterviewQuestionResponse[];
 }
 
+export interface JobBasedInterviewQuestion {
+  question: string;
+  based_on_resume: string;
+  related_to_job: string;
+}
+
+export interface JobBasedInterviewResponse {
+  resume_id: number;
+  job_id: number;
+  job_title: string | null;
+  company_name: string | null;
+  model: string;
+  chunk_count: number;
+  questions: JobBasedInterviewQuestion[];
+}
+
 // 채용공고 (mock UI용)
 export interface Job {
   id: string;

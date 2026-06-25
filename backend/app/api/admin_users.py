@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,7 @@ from app.core.database import get_db
 from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppException
 from app.models.rbac import PERM_USER_MANAGE
+from app.models.resume import Resume
 from app.models.user import User
 from app.repositories.company_repository import CompanyRepository
 from app.repositories.user_repository import UserRepository
@@ -35,6 +36,10 @@ from app.services.rbac_service import (
     RoleNotFoundError,
     SelfSuperAdminRevokeError,
     TargetUserNotFoundError,
+)
+from app.services.rag.resume_chunk_service import (
+    rebuild_resume_chunks_background,
+    should_auto_rebuild_resume_chunks,
 )
 from app.services.resume_service import ResumeNotFoundError, ResumeService
 from app.services.user_service import UserService
@@ -137,6 +142,7 @@ def update_user_resume_detail(
     resume_id: int,
     payload: ResumeUpdate,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_admin: User = Depends(get_current_admin_user),
     resume_service: ResumeService = Depends(get_resume_service),
 ) -> ResumeDetail:
@@ -179,6 +185,12 @@ def update_user_resume_detail(
     detail.structured_cover_letter_sections = [
         ResumeCoverLetterSectionResponse.model_validate(s) for s in structured_cls_rows
     ]
+    _schedule_auto_chunk_rebuild(
+        background_tasks,
+        resume,
+        actor_id=current_admin.user_id,
+        request_ip=get_client_ip(request),
+    )
     return detail
 
 
@@ -311,6 +323,25 @@ def get_user_detail(
     return AdminUserDetail(
         user=_to_admin_user_item(user, company),
         resumes=[ResumeListItem.model_validate(r) for r in resumes],
+    )
+
+
+def _schedule_auto_chunk_rebuild(
+    background_tasks: BackgroundTasks,
+    resume: Resume,
+    *,
+    actor_id: int,
+    request_ip: str | None,
+) -> None:
+    """이력서 갱신 응답 뒤에 RAG 청크 자동 생성을 예약한다."""
+
+    if not should_auto_rebuild_resume_chunks(resume):
+        return
+    background_tasks.add_task(
+        rebuild_resume_chunks_background,
+        resume.resume_id,
+        actor_id=actor_id,
+        request_ip=request_ip,
     )
 
 
