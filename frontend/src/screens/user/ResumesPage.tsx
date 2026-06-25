@@ -954,22 +954,13 @@ function JobBasedInterviewPanel({
             className="animate-spin text-m-primary"
           />
           <p className="text-[13px] font-semibold text-m-text">
-            공고와 이력서 근거를 맞춰보고 있어요
+            면접 질문을 준비하고 있어요
           </p>
         </div>
       )}
 
       {result && !isCreating && (
         <div className="grid grid-cols-1 gap-3">
-          <div className="flex flex-wrap items-center gap-2 text-[12px] text-m-muted">
-            <span className="px-2 py-1 rounded-full bg-m-surface text-m-text font-semibold">
-              {result.model}
-            </span>
-            <span>{result.chunk_count}개 이력서 근거 사용</span>
-            <span className="truncate">
-              {result.job_title ?? "선택 공고"} · {result.company_name ?? "기업명 미상"}
-            </span>
-          </div>
           {result.questions.map((item, index) => (
             <div
               key={`${result.job_id}-${index}-${item.question}`}
@@ -983,33 +974,12 @@ function JobBasedInterviewPanel({
                   <p className="text-[13px] font-semibold leading-relaxed text-m-text break-words">
                     {item.question}
                   </p>
-                  <div className="mt-3 grid grid-cols-1 gap-2">
-                    <EvidenceBlock
-                      label="이력서 근거"
-                      value={item.based_on_resume}
-                    />
-                    <EvidenceBlock
-                      label="공고 연결점"
-                      value={item.related_to_job}
-                    />
-                  </div>
                 </div>
               </div>
             </div>
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function EvidenceBlock({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-m-surface-alt px-3 py-2">
-      <p className="text-[11px] font-semibold text-m-subtle mb-1">{label}</p>
-      <p className="text-[12px] leading-relaxed text-m-muted break-words">
-        {value}
-      </p>
     </div>
   );
 }

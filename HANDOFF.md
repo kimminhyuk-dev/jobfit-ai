@@ -719,7 +719,8 @@ RAG v2 STEP 4 자동 청킹 + 공고 맞춤 면접질문 완료 (2026-06-25):
 - 프론트:
   - `/user/resumes`의 기존 v1 "면접 연습" 패널은 그대로 두고, 별도 "공고 맞춤 면접질문" 패널을 추가했다.
   - `GET /applications/me` 결과 중 현재 이력서의 비취소 지원 공고만 선택지로 보여준다. 기본값은 최신 지원 공고다.
-  - 생성 결과는 질문, 이력서 근거, 공고 연결점을 카드에 분리 표시한다.
+  - 생성 결과는 사용자 화면에서 질문만 표시한다. 응답에는 개발 검증용 `model`, `chunk_count`, `based_on_resume`, `related_to_job`가 남아 있지만 `/user/resumes`에는 모델명, chunk 수, 이력서 근거, 공고 연결점을 노출하지 않는다.
+  - 프롬프트는 실제 면접 흐름처럼 1번 소개형 워밍업, 2번 직무 기초, 3~4번 경험 기반, 5번 심화 질문 순서로 생성하도록 조정했다.
 - 실제 검증:
   - Alembic head/current `z8a9b0c1d2e3`.
   - Docker 상태 조회는 로컬 Docker 권한 문제로 실패했지만, Alembic과 TestClient 검증은 실제 PostgreSQL에 연결해 통과했다.
@@ -730,6 +731,8 @@ RAG v2 STEP 4 자동 청킹 + 공고 맞춤 면접질문 완료 (2026-06-25):
   - 타인 이력서로 같은 endpoint 호출 시 404 차단 확인.
   - 기존 v1 면접질문 endpoint는 임시 세션 생성 방식으로 201, 질문 5개 확인 후 세션 삭제.
   - 임시 검증 user/resume/chunk/file 모두 정리: `codex_step4_users=0`, `debug_step4_users=0`, `codex_step4_resumes=0`; `resume_id=35` chunk 20개 유지.
+  - UX 개선 후 `resume_id=35`, `job_id=213` 실제 OpenAI 호출 200. 질문 순서: 1번 프로젝트/업무 소개, 2번 Spring REST 계층 기초, 3번 JPA/QueryDSL 선택 경험, 4번 JWT 인증 구현 경험, 5번 MySQL/AWS 성능·확장성 심화. 기존 v1 면접질문 endpoint도 201, 질문 5개 확인 후 세션 삭제.
+  - `/user/resumes` 렌더 코드에서 job-based 결과의 `model`, `chunk_count`, `based_on_resume`, `related_to_job` 표시를 제거했다. `frontend/src/api/types.ts`에는 API 호환을 위해 필드를 유지한다.
 - 정적 검증:
   - `cd backend; .\.venv\Scripts\python.exe -m pip check`
   - `cd backend; .\.venv\Scripts\python.exe -m compileall app`
