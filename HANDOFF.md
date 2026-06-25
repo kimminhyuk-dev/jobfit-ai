@@ -682,7 +682,24 @@ RAG v2 STEP 3 공고 요구 기반 이력서 chunk 검색 진행:
   - `cd backend; .\.venv\Scripts\python.exe -m compileall app`
   - 새로 건드린 `backend/app/api/resumes.py`, `backend/app/schemas/rag.py`, `backend/app/services/rag/retrieval.py` 범위에서 한자 코드포인트 없음 확인.
   - 더미 설정으로 SQLAlchemy PostgreSQL dialect 컴파일을 확인했고, 검색 정렬식이 `resume_chunks.embedding <=> %(embedding_1)s AS distance`로 생성됨을 확인했다.
-- 제한: 실제 Postgres DB와 OpenAI API를 쓰는 `resume_id=35` rebuild/retrieve 검증 및 `git commit`/`git push`는 환경 승인 단계에서 사용량 제한으로 거절되어 완료하지 못했다. 다음 실행자는 실제 DB 검증 뒤 선택 스테이징으로 STEP3 커밋 `feat(rag): 공고 요구 기반 이력서 chunk retrieve (v2 STEP3)`와 push를 이어가면 된다.
+- (해소됨) 이전엔 실제 Postgres + OpenAI를 쓰는 `resume_id=35` rebuild/retrieve 검증이 사용량 제한으로 미완이었으나, 아래 "RAG v2 STEP 1~3 실DB+OpenAI end-to-end 검증" 절에서 17/17 PASS로 닫았다. STEP3 코드는 이미 `a7e63ba`로 커밋되어 있다.
+
+RAG v2 STEP 1~3 실DB+OpenAI end-to-end 검증 완료 (2026-06-25):
+
+- 목적: 코드(`552251b`/`c2ba92c`/`a7e63ba`, 브랜치 `feat/rag-retrieval-v2-step3`)가 실제로 도는지 닫는 검증. 새 기능 추가 없음. 검증 결과 코드 결함 0건이라 코드 보정도 없음.
+- STEP A(환경/무손상): `docker-compose up -d`로 `pgvector/pgvector:pg16` healthy. 단일 head/current `z8a9b0c1d2e3`. `pg_extension` `vector` 0.8.3 활성, `SELECT '[1,2,3]'::vector` 정상. 기존 데이터 무손상: users 564, user_roles 25, applications 5, job_postings 203, resumes 34 (admin_leave_requests 0은 데모 검증 정리 후 정상 베이스라인).
+- STEP B(청킹+임베딩, `POST /resumes/35/chunks/rebuild`, 실제 OpenAI `text-embedding-3-small`):
+  - 1회차 200, total 20. 섹션별: 기본정보 1·기술스택 1·학력 1·교육 1·경력 1·자격증 1·프로젝트 5·자소서 9.
+  - `vector_dims(embedding)` 전부 1536, embedding NULL 0건. 응답 total == DB count(20).
+  - 멱등: 2회차도 200·total 20·섹션 분포 동일(삭제 후 원자적 재삽입이라 중복 0).
+- STEP C(검색, `POST /resumes/35/retrieve`, 실제 OpenAI 쿼리 임베딩):
+  - 직접 쿼리("백엔드 개발자 채용. Java, Spring Boot, REST API, JPA, MySQL, ..."): distance 오름차순 [0.4139, 0.4341, 0.4879, 0.4918, 0.5091], 1위가 기술스택 chunk(Java/SpringBoot/JPA/QueryDSL/RESTAPI...), 이어 Back-End 자소서·프로젝트 chunk. `similarity == 1 - distance` 일치. 의미 검색 정상.
+  - 공고 기반(`job_posting_id=92`, "신입 백엔드 개발자 (Java/Spring Boot)"): 200, 1위 동일하게 기술스택 chunk. `build_job_query_text` 경로 정상.
+  - `sections=["기술스택"]` 필터: 해당 섹션만 반환.
+- HNSW/EXPLAIN: `ix_resume_chunks_embedding_hnsw`(`hnsw (embedding vector_cosine_ops)`) 존재. 실제 retrieve는 `WHERE resume_id=:r` + cosine `ORDER BY ... LIMIT`이라 ~36행 대상 Seq Scan + Sort로 계획된다(소량 단일 이력서 스코프에서 정상·최적). 같은 정렬식을 필터 없이 `enable_seqscan=off`로 돌리면 `Index Scan using ix_resume_chunks_embedding_hnsw`로 HNSW를 사용함을 확인 → 인덱스 자체는 유효. 즉 per-resume 필터에서 HNSW 미사용은 버그가 아니라 의도된 계획이다. (전 이력서 글로벌 ANN이 필요해질 때 별도 전략 고려.)
+- 검증 방식: 실제 Postgres + FastAPI `TestClient`(라우터→권한→service→repository→DB→OpenAI 전 경로). `get_current_user`만 resume_id=35 소유자(user 794)로 오버라이드. 임시 스크립트는 저장소 밖 scratchpad에서 실행, DB에 임시 사용자/공고/휴가행 생성 없음.
+- 데이터 상태: resume_id=35의 20개 chunk는 STEP 4(retrieve 소비)에서 바로 쓰일 정상 데이터라 유지한다. (STEP2 절의 "resume_chunks=0"은 이 검증으로 갱신된 옛 기록이며, 필요 시 `POST /resumes/{id}/chunks/rebuild`로 언제든 재생성 가능.)
+- 다음: STEP 4(LangChain — 공고+이력서 교차 맞춤 질문)로 진입 가능. retrieve가 입력 컨텍스트로 검증되어 안전하다.
 
 ## Known Remaining Work
 
