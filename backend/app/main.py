@@ -21,6 +21,7 @@ from app.api import (
     categories_router,
     company_router,
     jobs_router,
+    mock_interview_router,
     posts_router,
     resumes_router,
 )
@@ -88,6 +89,7 @@ app.include_router(admin_stats_router)
 app.include_router(admin_users_router)
 app.include_router(admin_categories_router)
 app.include_router(jobs_router)
+app.include_router(mock_interview_router)
 app.include_router(resumes_router)
 app.include_router(applications_router)
 app.include_router(company_router)

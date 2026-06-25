@@ -239,6 +239,57 @@ export interface JobBasedInterviewResponse {
   questions: JobBasedInterviewQuestion[];
 }
 
+export type MockInterviewStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED';
+export type MockInterviewStage = 'WARMUP' | 'EXPERIENCE' | 'DEEP' | 'COMPLETED';
+
+export interface MockInterviewReport {
+  total_score: number;
+  summary: string;
+  strengths: string[];
+  improvements: string[];
+  next_steps: string[];
+}
+
+export interface MockInterviewTurn {
+  turn_id: number;
+  turn_index: number;
+  stage: MockInterviewStage;
+  question: string;
+  user_answer: string | null;
+  feedback: string | null;
+}
+
+export interface MockInterviewSession {
+  session_id: number;
+  resume_id: number;
+  job_id: number;
+  status: MockInterviewStatus;
+  stage: MockInterviewStage;
+  question_count: number;
+  total_score: number | null;
+  summary: MockInterviewReport | null;
+  created_at: string;
+  completed_at: string | null;
+  turns: MockInterviewTurn[];
+}
+
+export interface MockInterviewStartResponse {
+  session: MockInterviewSession;
+  current_turn: MockInterviewTurn;
+}
+
+export interface MockInterviewAnswerResponse {
+  session: MockInterviewSession;
+  answered_turn: MockInterviewTurn;
+  next_turn: MockInterviewTurn | null;
+  ready_to_finish: boolean;
+}
+
+export interface MockInterviewFinishResponse {
+  session: MockInterviewSession;
+  report: MockInterviewReport;
+}
+
 // 채용공고 (mock UI용)
 export interface Job {
   id: string;

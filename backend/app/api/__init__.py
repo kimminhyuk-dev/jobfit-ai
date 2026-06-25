@@ -11,6 +11,7 @@ from app.api.categories import admin_router as admin_categories_router
 from app.api.categories import router as categories_router
 from app.api.company import router as company_router
 from app.api.jobs import router as jobs_router
+from app.api.mock_interview import router as mock_interview_router
 from app.api.posts import router as posts_router
 from app.api.resumes import router as resumes_router
 
@@ -28,6 +29,7 @@ __all__ = [
     "categories_router",
     "company_router",
     "jobs_router",
+    "mock_interview_router",
     "posts_router",
     "resumes_router",
 ]

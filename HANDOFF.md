@@ -740,6 +740,38 @@ RAG v2 STEP 4 자동 청킹 + 공고 맞춤 면접질문 완료 (2026-06-25):
   - `cd frontend; npm run build`
   - `git diff --check` (line-ending warnings only)
 
+RAG v3 채팅형 모의면접 완료 (2026-06-25):
+
+- 작업 브랜치: `feat/chat-mock-interview-v3`.
+- 신규 테이블:
+  - `mock_interview_sessions`: `user_id`, `resume_id`, `job_id`, `status`, `stage`, `question_count`, 종료 후 `total_score`와 `summary`, `completed_at`, 감사 칼럼.
+  - `mock_interview_turns`: `session_id`, `turn_index`, `stage`, `question`, `user_answer`, `feedback`, 내부 점수 `score`, 내부 RAG 근거 `based_on_chunk`, 감사 칼럼.
+  - 마이그레이션 `a9b0c1d2e3f4_add_mock_interview_tables.py` 적용 완료. 최종 Alembic current/head는 `a9b0c1d2e3f4`.
+- 백엔드:
+  - 신규 API: `POST /mock-interview/start`, `POST /mock-interview/{session_id}/answer`, `POST /mock-interview/{session_id}/finish`, `GET /mock-interview/{session_id}`.
+  - 본인 이력서와 본인 세션만 접근 가능. `job_id`가 없으면 기존 v2 규칙처럼 해당 이력서의 최신 활성 지원 공고를 사용하고, 지정 `job_id`는 숨김 공고가 아니면 허용한다.
+  - 시작 시 `rebuild_resume_chunks(..., skip_if_unchanged=True)`와 `retrieve_resume_chunks(top_k=7)`를 보장 호출해 공고 요구와 이력서 chunk를 최신 상태로 맞춘다.
+  - 질문은 총 6문항: 1~2번 `WARMUP`, 3~4번 `EXPERIENCE`, 5~6번 `DEEP`. 답변 제출 시 피드백과 다음 질문을 한 번의 LangChain 호출로 생성한다. 종료 시 별도 리포트 호출로 종합 점수, 총평, 강점, 보완점, 다음 연습을 저장한다.
+  - 사용자 응답에는 모델명, chunk 수, RAG 근거를 노출하지 않는다. `based_on_chunk`와 턴별 `score`는 DB 내부 기록용이다.
+- 프론트:
+  - 사용자 네비에 `모의면접` 메뉴와 `/user/mock-interview` 페이지 추가.
+  - 시작 화면은 분석 완료 이력서와 해당 이력서의 비취소 지원 공고를 선택한다.
+  - 진행 화면은 AI 질문, 사용자 답변, 짧은 피드백을 채팅 말풍선으로 표시하고, 진행 중에는 점수를 크게 노출하지 않는다.
+  - 종료 후 종합 점수, 총평, 강점, 보완점, 다음 연습을 리포트 패널로 보여준다.
+- 실제 검증:
+  - `resume_id=35`, `job_id=213`으로 start 201, answer 6회 200, finish 200.
+  - 질문 단계 순서: `WARMUP`, `WARMUP`, `EXPERIENCE`, `EXPERIENCE`, `DEEP`, `DEEP`.
+  - 실제 질문 흐름: 1번 백엔드 업무·프로젝트 소개, 2번 Spring Boot 요청 처리 흐름 기초, 3번 Spring Boot/JWT 프로젝트 역할, 4번 JWT 액세스·리프레시 토큰 구현 경험, 5번 토큰 무효화와 재발급 설계, 6번 리프레시 토큰 회전과 Redis 블랙리스트 심화.
+  - 종료 리포트는 총점 58, 종합 총평, 강점 3개, 보완점 4개, 다음 연습 4개 생성 확인.
+  - 다른 USER로 `GET /mock-interview/{session_id}` 호출 시 404로 차단 확인.
+  - 검증용 v3 세션은 삭제 후 `mock_interview_sessions` 0건 확인.
+  - 기존 v1 `POST /resumes/35/interview-sessions` 201, 질문 5개 확인 후 세션 삭제. 기존 v2 `POST /resumes/35/interview-questions/job-based` 200, 질문 5개 확인.
+- 정적 검증:
+  - `cd backend; .\.venv\Scripts\python.exe -m compileall app`
+  - `cd backend; .\.venv\Scripts\python.exe -m alembic current`
+  - `cd frontend; npm run lint`
+  - `cd frontend; npm run build`
+
 ## Known Remaining Work
 
 - Account recovery UI now lives on `/find-account` and `/reset-password`, with personal and company find-email/password-reset wired. Interview-email sending is wired from the company resume modal. A real send still requires valid Gmail app-password credentials in `.env` (and `GOOGLE_MAPS_API_KEY` for the interview map; without it the email sends with the Maps link but no inline map image). Inbox rendering for the recovery/interview templates still needs a user-approved real recipient/send test outside sandbox restrictions.

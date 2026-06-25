@@ -12,6 +12,7 @@ const navItems = [
   { to: '/user/jobs', label: '추천 공고', icon: 'briefcase' as const },
   { to: '/user/applications', label: '지원 현황', icon: 'flag' as const },
   { to: '/user/matches', label: 'AI 매칭', icon: 'sparkle' as const },
+  { to: '/user/mock-interview', label: '모의면접', icon: 'target' as const },
   { to: '/user/resumes', label: '내 이력서', icon: 'file' as const },
   { to: '/user/profile', label: '내 정보', icon: 'user' as const },
   { to: '/user/payment', label: '요금제', icon: 'credit-card' as const },
